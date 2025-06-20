@@ -22,9 +22,11 @@ console.log('🤖 Bot is running and listening for new messages...');
 
 const botName = '무뚝뚝이봇';
 
+const apiLimitMs = 3600000; // 1시간 (3600초 * 1000밀리초)
 let isFirstSnapshot = true;
 let isWaiting = false;
 let apiCallCount = 0; // API 호출 횟수 추적
+let lastMessageDate = Date.now(); // 마지막 메시지 시간 추적
 
 const messagesRef = db.collection('chat_rooms').doc('anonymous_room').collection('messages');
 
@@ -65,26 +67,22 @@ messagesRef
           const messageId = uuidv4();  // npm install uuid 필요
 
           const messages = [];
-          let lastDate = null;
           snapshot.forEach(doc => {
             const text = doc.data().text;
             const sender = doc.data().sender === botName ? '무뚝뚝이봇' :  doc.data().authorId;
-            if (lastDate === null)
-              lastDate = doc.data().createdAt;
             messages.push({sender: sender, text: text})
           });
 
           messages.reverse(); // 최신 메시지가 마지막에 오도록 역순 정렬
 
-          const lastMessageDate = lastDate.toDate();
-          // 현재 시간과 마지막 메시지 시간 차이 계산
-          const timeDiff = Date.now() - lastMessageDate.getTime();
-          console.log(`[Bot] 마지막 메시지 시간 차이: ${timeDiff}ms`);
-
+          // 5회 이상 API 호출 횟수 초과 방지
           if (apiCallCount >= 5) {
             console.log('[Bot] API 호출 횟수 5회 초과');
 
-            if (timeDiff < 3600000) {
+            const timeDiff = Date.now() - lastMessageDate;
+            console.log(`[Bot] 마지막 메시지 시간 차이: ${timeDiff}ms`);
+
+            if (timeDiff < apiLimitMs) {
               console.log('[Bot] 1시간 이내에는 API 호출 횟수 초과로 응답하지 않음');
               return; 
             } else {
@@ -94,15 +92,16 @@ messagesRef
           }
 
           const messagesText = JSON.stringify(messages, null, 2);
+          lastMessageDate = Date.now();
+          apiCallCount++;
 
           console.log(`[Bot] 메시지 목록: ${messagesText}`);
+          console.log(`[Bot] 마지막 메시지 시간: ${lastMessageDate}`);
+          console.log(`[Bot] OpenAI API 호출 횟수: ${apiCallCount}`);
 
           // 여기서 OpenAI API를 호출하는 로직을 추가해야 합니다.
           askOpenAI(messagesText)
             .then(aiResponse => {
-              apiCallCount++;
-              console.log(`[Bot] OpenAI API 호출 횟수: ${apiCallCount}`);
-
               if (aiResponse) {
                 console.log(`[Bot] OpenAI 응답: "${aiResponse}"`);
                 db.collection('chat_rooms')
