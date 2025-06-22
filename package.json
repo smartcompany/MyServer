@@ -3,6 +3,7 @@
     "axios": "^1.10.0",
     "dotenv": "^16.5.0",
     "firebase-admin": "^13.4.0",
+    "jsonwebtoken": "^9.0.2",
     "uuid": "^11.1.0"
   }
 }
