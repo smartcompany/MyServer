@@ -11,7 +11,7 @@ const ACCESS_KEY = process.env.UPBIT_ACC_KEY;
 const SECRET_KEY = process.env.UPBIT_SEC_KEY;
 const EXCHANGE_RATE_KEY = process.env.EXCHANGE_RATE_KEY;
 const SERVER_URL = 'https://api.upbit.com';
-const EXCHANGE_RATE_URL = 'https://v6.exchangerate-api.com/v6';
+const EXCHANGE_RATE_URL = 'https://rate-history.vercel.app/api/rate-history';
 
 async function getAccountInfo() {
   try {
@@ -178,16 +178,16 @@ async function getActiveOrders() {
   }
 }
 
-async function getExchangeRate(baseCurrency, targetCurrency) {
+async function getExchangeRate() {
   try {
-    // API 호출 URL
-    const url = `${EXCHANGE_RATE_URL}/${EXCHANGE_RATE_KEY}/pair/${baseCurrency}/${targetCurrency}`;
-
     // API 호출
-    const response = await axios.get(url);
-
+    const response = await axios.get(EXCHANGE_RATE_URL);
     if (response.status === 200) {
-      return response.data.conversion_rate;
+      console.log('환율 데이터:', response.data);
+      // 날짜가 가장 최근인 환율을 찾기 response.data의 key는 날짜 형식
+      const latestDate = Object.keys(response.data).sort().pop();
+      const latestRate = response.data[latestDate];
+      return latestRate;
     } else {
       console.error(`Error: ${response.status}, ${response.data}`);
       return null;
@@ -234,9 +234,9 @@ async function main() {
       );
     });
 
-    const rate = await getExchangeRate('USD', 'KRW');
+    const rate = await getExchangeRate();
     if (rate) {
-      console.log(`현재 환율 (USD -> KRW): ${rate}`);
+      console.log(`현재 환율: ${rate}`);
     }
 
     const tetherPrice = await getTetherPrice();
@@ -275,7 +275,7 @@ async function main() {
       }
     }
 
-    await buyTether(1370, 1); // 테스트 매수 
+    await buyTether(1370, 10); // 테스트 매수 
   }
 }
 
