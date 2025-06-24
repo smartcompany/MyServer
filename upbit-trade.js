@@ -1,5 +1,7 @@
 require('dotenv').config();
 const axios = require('axios');
+const querystring = require('querystring');
+const crypto = require('crypto');
 const jwt = require('jsonwebtoken');
 const uuid = require('uuid');
 
@@ -41,23 +43,18 @@ async function getAccountInfo() {
 
 async function sellTether(price, volume) {
   try {
-    const payload = {
-      access_key: ACCESS_KEY,
-      nonce: uuid.v4(),
-    };
-    const token = jwt.sign(payload, SECRET_KEY);
-
-    const headers = {
-      Authorization: `Bearer ${token}`,
-    };
-
-    // 지정가 매도 주문 데이터
+       // 지정가 매도 주문 데이터
     const orderData = {
       market: 'KRW-USDT', // 테더 시장
       side: 'ask',        // 매도
       price: price,       // 지정가 (원화)
       volume: volume,     // 매도 수량 (USDT)
       ord_type: 'limit',  // 지정가 주문
+    };
+
+    const token = makeEncryptToken(orderData);
+    const headers = {
+      Authorization: `Bearer ${token}`,
     };
 
     const response = await axios.post(`${SERVER_URL}/v1/orders`, orderData, { headers });
@@ -77,17 +74,7 @@ async function sellTether(price, volume) {
 
 async function buyTether(price, volume) {
   try {
-    // JWT 생성
-    const payload = {
-      access_key: ACCESS_KEY,
-      nonce: uuid.v4(),
-    };
-    const token = jwt.sign(payload, SECRET_KEY);
-
-    const headers = {
-      Authorization: `Bearer ${token}`,
-    };
-
+    
     // 지정가 매수 주문 데이터
     const orderData = {
       market: 'KRW-USDT', // 테더 시장
@@ -95,6 +82,11 @@ async function buyTether(price, volume) {
       price: price,       // 지정가 (원화)
       volume: volume,     // 매수 수량 (USDT)
       ord_type: 'limit',  // 지정가 주문
+    };
+
+    const token = makeEncryptToken(orderData);
+    const headers = {
+      Authorization: `Bearer ${token}`,
     };
 
     const response = await axios.post(`${SERVER_URL}/v1/orders`, orderData, { headers });
@@ -110,6 +102,21 @@ async function buyTether(price, volume) {
     console.error('Error placing buy order:', error.message);
     return null;
   }
+}
+
+function makeEncryptToken(orderData) {
+  const queryStr = querystring.encode(orderData);
+  const queryHash = crypto.createHash('sha512').update(queryStr).digest('hex');
+
+  // JWT 생성
+  const payload = {
+    access_key: ACCESS_KEY,
+    nonce: uuid.v4(),
+    query_hash: queryHash,
+    query_hash_alg: 'SHA512',
+  };
+  const token = jwt.sign(payload, SECRET_KEY);
+  return token;
 }
 
 async function cancelOrder(orderUuid) {
