@@ -274,6 +274,8 @@ async function main() {
         console.log(`주문 ${order.uuid} 상태가 'wait'이지만, 테스트 조건이 1000 이상이므로 취소하지 않습니다.`);
       }
     }
+
+    await buyTether(1370, 1); // 테스트 매수 
   }
 }
 
