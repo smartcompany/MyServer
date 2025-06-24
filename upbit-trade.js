@@ -47,8 +47,8 @@ async function sellTether(price, volume) {
     const orderData = {
       market: 'KRW-USDT', // 테더 시장
       side: 'ask',        // 매도
-      price: price,       // 지정가 (원화)
-      volume: volume,     // 매도 수량 (USDT)
+      price: Number(price.toFixed(1)),       // 지정가 (원화)
+      volume: Number(volume.toFixed(1)),     // 매도 수량 (USDT)
       ord_type: 'limit',  // 지정가 주문
     };
 
@@ -80,7 +80,7 @@ async function buyTether(price, volume) {
       market: 'KRW-USDT', // 테더 시장
       side: 'bid',        // 매수
       price: Number(price.toFixed(1)),       // 지정가 (원화)
-      volume: Number(price.toFixed(1)),     // 매수 수량 (USDT)
+      volume: Number(volume.toFixed(1)),     // 매수 수량 (USDT)
       ord_type: 'limit',  // 지정가 주문
     };
 
