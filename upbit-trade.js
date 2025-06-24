@@ -67,7 +67,7 @@ async function sellTether(price, volume) {
       return null;
     }
   } catch (error) {
-    console.error('Error placing limit sell order:', error.message);
+    console.error('Error placing limit sell order:', error.response?.data || error.message);
     return null;
   }
 }
@@ -79,8 +79,8 @@ async function buyTether(price, volume) {
     const orderData = {
       market: 'KRW-USDT', // 테더 시장
       side: 'bid',        // 매수
-      price: price,       // 지정가 (원화)
-      volume: volume,     // 매수 수량 (USDT)
+      price: Number(price.toFixed(1)),       // 지정가 (원화)
+      volume: Number(price.toFixed(1)),     // 매수 수량 (USDT)
       ord_type: 'limit',  // 지정가 주문
     };
 
@@ -99,7 +99,7 @@ async function buyTether(price, volume) {
       return null;
     }
   } catch (error) {
-    console.error('Error placing buy order:', error.message);
+    console.error('Error placing limit buy order:', error.response?.data || error.message);
     return null;
   }
 }
