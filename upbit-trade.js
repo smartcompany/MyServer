@@ -251,7 +251,7 @@ async function main() {
     if (orders) {
       console.log('현재 활성화된 주문:');
       orders.forEach((order) => {
-        const orderType = "";
+        let orderType = "";
         if (order.side == 'bid') 
           orderType = "매수";
         else if (order.side == 'ask')
