@@ -250,13 +250,12 @@ async function main() {
     
     if (orders) {
       console.log('현재 활성화된 주문:');
-      const orderType = "";
-      if (order.side == 'bid') 
-        orderType = "매수";
-      else if (order.side == 'ask')
-        orderType = "매도";
-
       orders.forEach((order) => {
+        const orderType = "";
+        if (order.side == 'bid') 
+          orderType = "매수";
+        else if (order.side == 'ask')
+          orderType = "매도";
         console.log(`주문 UUID: ${order.uuid}, ${orderType} 상태: ${order.state}, 가격: ${order.price}, 수량: ${order.volume}`);
       });
     }
