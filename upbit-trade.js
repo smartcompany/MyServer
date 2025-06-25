@@ -296,4 +296,17 @@ async function main() {
   }
 }
 
-main();
+async function loop() {
+  while (true) {
+    try {
+      await main(); // 너가 만든 로직 수행
+    } catch (e) {
+      console.error('Loop error:', e);
+    }
+    await new Promise((resolve) => setTimeout(resolve, 10000)); // 10초 대기
+  }
+}
+
+loop(); // 루프 시작
+
+//main();
