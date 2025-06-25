@@ -29,7 +29,6 @@ async function getAccountInfo() {
     const response = await axios.get(`${SERVER_URL}/v1/accounts`, { headers });
 
     if (response.status === 200) {
-      console.log('응답 JSON:', JSON.stringify(response.data, null, 2)); // JSON 데이터를 출력
       return response.data;
     } else {
       console.error(`Error: ${response.status}, ${response.data}`);
@@ -245,7 +244,7 @@ async function main() {
     }
 
     // 김치 프리미엄 계산
-    const kimchiPremium = tetherPrice/rate;
+    const kimchiPremium = ((tetherPrice - rate)/rate) * 100;
     console.log(`현재 김치 프리미엄: ${kimchiPremium}`);
 
     // 예시: 테더 매도// 현재 주문 확인 
@@ -275,7 +274,21 @@ async function main() {
       }
     }
 
-    await buyTether(1370, 10); // 테스트 매수 
+    if (kimchiPremium > 2.5) {
+      // 김치 프리미엄이 2.5% 이상인 경우 매도
+      const sellPrice = tetherPrice * (1 + kimchiPremium / 100);
+      const volumeToSell = 10; // 예시로 10 USDT 매도
+      console.log(`김치 프리미엄이 ${kimchiPremium}%이므로, ${sellPrice} 원에 ${volumeToSell} 매도 주문`);
+      //await sellTether(sellPrice, volumeToSell);
+    } else if (kimchiPremium <= 0.5) {
+      const buyPrice = tetherPrice * (1 + kimchiPremium / 100);
+      const volumeToBuy = 10; // 예시로 10 USDT 매수
+      console.log(`김치 프리미엄이 ${kimchiPremium}%이므로, ${buyPrice} 원에 ${volumeToBuy} 매수 주문`);
+      // 매수
+      //await buyTether(buyPrice, volumeToBuy);
+    } else {
+      console.log(`김치 프리미엄이 ${kimchiPremium}%로, 매도/매수 조건을 만족하지 않습니다.`);
+    }
   }
 }
 
