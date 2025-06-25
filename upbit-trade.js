@@ -165,7 +165,6 @@ async function getActiveOrders() {
     const response = await axios.get(`${SERVER_URL}/v1/orders`, { headers });
 
     if (response.status === 200) {
-      console.log('활성화된 주문 목록:', response.data);
       return response.data;
     } else {
       console.error(`Error: ${response.status}, ${response.data}`);
@@ -182,7 +181,6 @@ async function getExchangeRate() {
     // API 호출
     const response = await axios.get(EXCHANGE_RATE_URL);
     if (response.status === 200) {
-      console.log('환율 데이터:', response.data);
       // 날짜가 가장 최근인 환율을 찾기 response.data의 key는 날짜 형식
       const latestDate = Object.keys(response.data).sort().pop();
       const latestRate = response.data[latestDate];
@@ -249,10 +247,17 @@ async function main() {
 
     // 예시: 테더 매도// 현재 주문 확인 
     const orders = await getActiveOrders();
+    
     if (orders) {
       console.log('현재 활성화된 주문:');
+      const orderType = "";
+      if (order.side == 'bid') 
+        orderType = "매수";
+      else if (order.side == 'ask')
+        orderType = "매도";
+
       orders.forEach((order) => {
-        console.log(`주문 UUID: ${order.uuid}, 상태: ${order.state}, 가격: ${order.price}`);
+        console.log(`주문 UUID: ${order.uuid}, ${orderType} 상태: ${order.state}, 가격: ${order.price}, 수량: ${order.volume}`);
       });
     }
     
