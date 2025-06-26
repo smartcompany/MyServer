@@ -1,4 +1,6 @@
 require('dotenv').config();
+require('./log');
+
 const axios = require('axios');
 const querystring = require('querystring');
 const crypto = require('crypto');
@@ -12,6 +14,8 @@ const SECRET_KEY = process.env.UPBIT_SEC_KEY;
 const EXCHANGE_RATE_KEY = process.env.EXCHANGE_RATE_KEY;
 const SERVER_URL = 'https://api.upbit.com';
 const EXCHANGE_RATE_URL = 'https://rate-history.vercel.app/api/rate-history';
+
+let config = require('./config'); // 위 설정 객체 연결
 
 async function getAccountInfo() {
   try {
@@ -222,6 +226,12 @@ async function getTetherPrice() {
 }
 
 async function main() {
+  delete require.cache[require.resolve('./config')];
+  config = require('./config');
+  
+  const buyThreshold = config.buyThreshold ?? 0.5;  
+  const sellThreshold = config.sellThreshold ?? 2.5;
+
   const accountInfo = await getAccountInfo();
   if (accountInfo) {
     console.log('코인 및 현금 정보:');
@@ -278,13 +288,13 @@ async function main() {
       }
     }
 
-    if (kimchiPremium > 2.5) {
+    if (kimchiPremium > sellThreshold) {
       // 김치 프리미엄이 2.5% 이상인 경우 매도
       const sellPrice = tetherPrice * (1 + kimchiPremium / 100);
       const volumeToSell = 10; // 예시로 10 USDT 매도
       console.log(`김치 프리미엄이 ${kimchiPremium}%이므로, ${sellPrice} 원에 ${volumeToSell} 매도 주문`);
       //await sellTether(sellPrice, volumeToSell);
-    } else if (kimchiPremium <= 0.5) {
+    } else if (kimchiPremium <= buyThreshold) {
       const buyPrice = tetherPrice * (1 + kimchiPremium / 100);
       const volumeToBuy = 10; // 예시로 10 USDT 매수
       console.log(`김치 프리미엄이 ${kimchiPremium}%이므로, ${buyPrice} 원에 ${volumeToBuy} 매수 주문`);

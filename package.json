@@ -2,8 +2,27 @@
   "dependencies": {
     "axios": "^1.10.0",
     "dotenv": "^16.5.0",
+    "express": "^5.1.0",
     "firebase-admin": "^13.4.0",
     "jsonwebtoken": "^9.0.2",
     "uuid": "^11.1.0"
-  }
+  },
+  "name": "myserver",
+  "version": "1.0.0",
+  "main": "my-bot.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/smartcompany/MyServer.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/smartcompany/MyServer/issues"
+  },
+  "homepage": "https://github.com/smartcompany/MyServer#readme",
+  "description": ""
 }
