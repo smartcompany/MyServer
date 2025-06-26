@@ -31,7 +31,7 @@ function verifyToken(req, res, next) {
   const token = auth && auth.split(' ')[1];
   if (!token) return res.status(401).send('토큰 없음');
 
-  jwt.verify(token, SECRET_KEY, (err, user) => {
+  jwt.verify(token, MY_SERVER_LOGIN_KEY, (err, user) => {
     if (err) return res.status(403).send('토큰 유효하지 않음');
     req.user = user;
     next();
@@ -45,7 +45,7 @@ function authMiddleware(req, res, next) {
   const token = authHeader.split(' ')[1];
 
   try {
-    const decoded = jwt.verify(token, process.env.SECRET_KEY);
+    const decoded = jwt.verify(token, MY_SERVER_LOGIN_KEY);
     req.user = decoded;
     next();
   } catch (err) {
