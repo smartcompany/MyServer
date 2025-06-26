@@ -27,7 +27,8 @@ app.post('/login', (req, res) => {
 
 // 토큰 검증 미들웨어
 function verifyToken(req, res, next) {
-  const auth = req.headers['authorization'];
+  console.log('토큰 검증 중...');
+  const auth = req.headers.authorization || req.headers['authorization'];
   const token = auth && auth.split(' ')[1];
   if (!token) return res.status(401).send('토큰 없음');
 

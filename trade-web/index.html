@@ -30,8 +30,6 @@
       login();
     });
 
-    let token = '';
-
     async function login() {
       const id = document.getElementById('id').value;
       const pw = document.getElementById('pw').value;
@@ -60,6 +58,7 @@
     }
 
     async function loadConfig() {
+      const token = localStorage.getItem('token');
       const res = await fetch('/trade-api/config', {
         headers: { 'Authorization': 'Bearer ' + token }
       });
@@ -69,8 +68,11 @@
     }
 
     async function updateConfig() {
+      const token = localStorage.getItem('token');
       const buy = parseFloat(document.getElementById('buy').value);
       const sell = parseFloat(document.getElementById('sell').value);
+
+      console.log('설정 업데이트:', { buy, sell });
 
       const res = await fetch('/trade-api/config', {
         method: 'POST',
@@ -94,6 +96,7 @@
     }
 
     async function loadLogs() {
+      const token = localStorage.getItem('token');
       const res = await fetch('/trade-api/logs', {
         headers: { 'Authorization': 'Bearer ' + token }
       });
