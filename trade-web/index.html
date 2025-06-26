@@ -38,6 +38,7 @@
       if (res.ok) {
         const data = await res.json();
         token = data.token;
+        console.log('로그인 성공, 토큰: 저장 ', token);
         localStorage.setItem('token', token);
 
         document.getElementById('loginArea').style.display = 'none';
