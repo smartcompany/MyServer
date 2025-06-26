@@ -8,6 +8,8 @@ const path = require('path');
 const jwt = require('jsonwebtoken');
 const bodyParser = require('body-parser');
 const MY_SERVER_LOGIN_KEY = process.env.MY_SERVER_LOGIN_KEY;
+const USER_ID = process.env.USER_ID;
+const PASSWORD = process.env.PASSWORD;
 
 app.use(bodyParser.json());
 app.use(express.static(path.join(__dirname, 'public'))); // 정적 파일
@@ -16,7 +18,7 @@ app.use(express.json());
 // 로그인
 app.post('/login', (req, res) => {
   const { id, password } = req.body;
-  if (id === 'admin' && password === '1234') {
+  if (id === USER_ID && password === PASSWORD) {
     const token = jwt.sign({ user: id }, MY_SERVER_LOGIN_KEY, { expiresIn: '1h' });
     return res.json({ token });
   }
@@ -34,6 +36,21 @@ function verifyToken(req, res, next) {
     req.user = user;
     next();
   });
+}
+
+function authMiddleware(req, res, next) {
+  const authHeader = req.headers.authorization;
+  if (!authHeader) return res.status(401).send('로그인 필요');
+
+  const token = authHeader.split(' ')[1];
+
+  try {
+    const decoded = jwt.verify(token, process.env.SECRET_KEY);
+    req.user = decoded;
+    next();
+  } catch (err) {
+    return res.status(403).send('토큰 유효하지 않음');
+  }
 }
 
 const configFilePath = path.join(__dirname, 'config.json');
@@ -84,6 +101,10 @@ app.get('/logs', (req, res) => {
     const lines = data.trim().split('\n').slice(-100).join('\n');
     res.type('text/plain').send(lines);
   });
+});
+
+app.get('/auth-check', authMiddleware, (req, res) => {
+  res.send({ ok: true, user: req.user });
 });
 
 app.listen(port, () => {

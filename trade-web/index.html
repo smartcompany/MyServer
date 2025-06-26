@@ -38,6 +38,7 @@
       if (res.ok) {
         const data = await res.json();
         token = data.token;
+        localStorage.setItem('token', token);
 
         document.getElementById('loginArea').style.display = 'none';
         document.getElementById('mainArea').style.display = 'block';
@@ -91,6 +92,30 @@
       const text = await res.text();
       document.getElementById('logArea').textContent = text;
     }
+
+    async function checkAuth() {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        // 토큰 없으면 로그인 폼 보여주기
+        document.querySelector('#loginArea').style.display = 'block';
+        return;
+      }
+
+      const res = await fetch('/trade-api/auth-check', {
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      });
+
+      if (res.ok) {
+        document.querySelector('#mainArea').style.display = 'block';
+      } else {
+        localStorage.removeItem('token');
+        document.querySelector('##loginArea').style.display = 'block';
+      }
+    }
+
+    window.onload = checkAuth;
   </script>
 </body>
 </html>
