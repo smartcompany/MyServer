@@ -12,7 +12,7 @@
 
   <script>
     document.addEventListener('DOMContentLoaded', () => {
-      fetch('/trade/config')
+      fetch('/trade-api/config')
         .then(response => response.json())
         .then(data => {
           const buyThreshold = data.buyThreshold;
@@ -25,22 +25,24 @@
     async function updateConfig() {
       const buy = parseFloat(document.getElementById('buy').value);
       const sell = parseFloat(document.getElementById('sell').value);
-      await fetch('/trade/config', {
+
+      await fetch('/trade-api/config', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ key: 'buyThreshold', value: buy })
+        body: JSON.stringify({
+          updates: [
+            { key: 'buyThreshold', value: buy },
+            { key: 'sellThreshold', value: sell }
+          ]
+        })
       });
-      await fetch('/trade/config', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ key: 'sellThreshold', value: sell })
-      });
+
       alert('설정이 반영되었습니다');
     }
 
     // 로그 주기적으로 갱신
     setInterval(async () => {
-      const res = await fetch('/trade/logs');
+      const res = await fetch('/trade-api/logs');
       const text = await res.text();
       document.getElementById('logArea').textContent = text;
     }, 5000);
