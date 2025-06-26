@@ -7,9 +7,11 @@
 <body>
   <h2>🔐 관리자 로그인</h2>
   <div id="loginArea">
-    ID: <input id="id" placeholder="admin"><br>
-    PW: <input id="pw" type="password" placeholder="password"><br>
-    <button onclick="login()">로그인</button>
+    <form id="loginForm">
+      <label>ID: <input id="id" type="text" placeholder="admin" /></label><br>
+      <label>PW: <input id="pw" type="password" placeholder="password" /></label><br>
+      <button type="submit">로그인</button>
+    </form>
   </div>
 
   <div id="mainArea" style="display: none;">
@@ -23,6 +25,11 @@
   </div>
 
   <script>
+    document.getElementById('loginForm').addEventListener('submit', function(event) {
+      event.preventDefault(); // 폼 제출 방지
+      login();
+    });
+    
     let token = '';
 
     async function login() {
@@ -112,9 +119,9 @@
       });
 
       console.log('✅ auth-check 응답 상태:', res.status);  // <-- 2. 응답 상태 확인
-      console.log('✅ auth-check 응답 내용:', await res.text());  // <-- 3. 응답 내용 확인
       if (res.ok) {
         document.querySelector('#mainArea').style.display = 'block';
+        document.querySelector('#loginArea').style.display = 'none';
       } else {
         console.error('❌ auth-check fetch 실패:', err);
         localStorage.removeItem('token');
