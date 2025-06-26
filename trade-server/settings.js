@@ -1,10 +1,40 @@
+
+require('dotenv').config();
 const express = require('express');
 const fs = require('fs');
 const app = express();
 const port = 3000;
 const path = require('path');
+const jwt = require('jsonwebtoken');
+const bodyParser = require('body-parser');
+const MY_SERVER_LOGIN_KEY = process.env.MY_SERVER_LOGIN_KEY;
 
+app.use(bodyParser.json());
+app.use(express.static(path.join(__dirname, 'public'))); // 정적 파일
 app.use(express.json());
+
+// 로그인
+app.post('/login', (req, res) => {
+  const { id, password } = req.body;
+  if (id === 'admin' && password === '1234') {
+    const token = jwt.sign({ user: id }, MY_SERVER_LOGIN_KEY, { expiresIn: '1h' });
+    return res.json({ token });
+  }
+  res.status(401).send('인증 실패');
+});
+
+// 토큰 검증 미들웨어
+function verifyToken(req, res, next) {
+  const auth = req.headers['authorization'];
+  const token = auth && auth.split(' ')[1];
+  if (!token) return res.status(401).send('토큰 없음');
+
+  jwt.verify(token, SECRET_KEY, (err, user) => {
+    if (err) return res.status(403).send('토큰 유효하지 않음');
+    req.user = user;
+    next();
+  });
+}
 
 const configFilePath = path.join(__dirname, 'config.json');
 // 초기값 로딩
@@ -21,8 +51,7 @@ app.get('/config', (req, res) => {
   res.json(config);
 });
 
-// 설정 변경
-app.post('/config', (req, res) => {
+app.post('/config', verifyToken, (req, res) => {
   const updates = req.body.updates;
 
   if (!Array.isArray(updates)) {

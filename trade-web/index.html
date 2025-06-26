@@ -5,33 +5,70 @@
   <title>트레이딩 설정</title>
 </head>
 <body>
-  <h3>김치 프리미엄 기준 설정</h3>
-  매수 기준: <input id="buy" type="number" step="0.01"><br>
-  매도 기준: <input id="sell" type="number" step="0.01"><br>
-  <button onclick="updateConfig()">설정 적용</button>
+  <h2>🔐 관리자 로그인</h2>
+  <div id="loginArea">
+    ID: <input id="id" placeholder="admin"><br>
+    PW: <input id="pw" type="password" placeholder="password"><br>
+    <button onclick="login()">로그인</button>
+  </div>
 
-  <h3>최근 로그</h3>
-  <pre id="logArea">불러오는 중...</pre>
+  <div id="mainArea" style="display: none;">
+    <h3>김치 프리미엄 기준 설정</h3>
+    매수 기준: <input id="buy" type="number" step="0.01"><br>
+    매도 기준: <input id="sell" type="number" step="0.01"><br>
+    <button onclick="updateConfig()">설정 적용</button>
+
+    <h3>최근 로그</h3>
+    <pre id="logArea">불러오는 중...</pre>
+  </div>
 
   <script>
-    document.addEventListener('DOMContentLoaded', () => {
-      fetch('/trade-api/config')
-        .then(response => response.json())
-        .then(data => {
-          const buyThreshold = data.buyThreshold;
-          const sellThreshold = data.sellThreshold;
-          document.getElementById('buy').value = buyThreshold;
-          document.getElementById('sell').value = sellThreshold;
-        });
-    });
+    let token = '';
+
+    async function login() {
+      const id = document.getElementById('id').value;
+      const pw = document.getElementById('pw').value;
+
+      const res = await fetch('/trade-api/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, password: pw })
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        token = data.token;
+
+        document.getElementById('loginArea').style.display = 'none';
+        document.getElementById('mainArea').style.display = 'block';
+
+        loadConfig();
+        loadLogs();
+        setInterval(loadLogs, 5000);
+      } else {
+        alert('로그인 실패!');
+      }
+    }
+
+    async function loadConfig() {
+      const res = await fetch('/trade-api/config', {
+        headers: { 'Authorization': 'Bearer ' + token }
+      });
+      const data = await res.json();
+      document.getElementById('buy').value = data.buyThreshold;
+      document.getElementById('sell').value = data.sellThreshold;
+    }
 
     async function updateConfig() {
       const buy = parseFloat(document.getElementById('buy').value);
       const sell = parseFloat(document.getElementById('sell').value);
 
-      await fetch('/trade-api/config', {
+      const res = await fetch('/trade-api/config', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ' + token
+        },
         body: JSON.stringify({
           updates: [
             { key: 'buyThreshold', value: buy },
@@ -40,15 +77,20 @@
         })
       });
 
-      alert('설정이 반영되었습니다');
+      if (res.ok) {
+        alert('설정이 반영되었습니다');
+      } else {
+        alert('설정 실패!');
+      }
     }
 
-    // 로그 주기적으로 갱신
-    setInterval(async () => {
-      const res = await fetch('/trade-api/logs');
+    async function loadLogs() {
+      const res = await fetch('/trade-api/logs', {
+        headers: { 'Authorization': 'Bearer ' + token }
+      });
       const text = await res.text();
       document.getElementById('logArea').textContent = text;
-    }, 5000);
+    }
   </script>
 </body>
 </html>
