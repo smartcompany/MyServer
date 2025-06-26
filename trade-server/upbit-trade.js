@@ -243,7 +243,7 @@ async function main() {
 
   const accountInfo = await getAccountInfo();
   if (accountInfo) {
-    console.log('코인 및 현금 정보:');
+    console.log('\n========= 코인 및 현금 정보 ===========');
     accountInfo.forEach((asset) => {
       if (asset.currency !== 'KRW' && asset.currency !== 'USDT') {
         return; // KRW와 USDT를 제외한 다른 자산은 출력하지 않음
