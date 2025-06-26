@@ -249,11 +249,8 @@ async function main() {
         return; // KRW와 USDT를 제외한 다른 자산은 출력하지 않음
       }
 
-      // 원화 format 으로 출력
-      const balance = formatNumber(asset.balance.toFixed(1));
-      const avg_buy_price = formatNumber(asset.avg_buy_price.toFixed(1));
       console.log(
-        `종목: ${asset.currency}, 잔고: ${balance}, 평균 매수가: ${avg_buy_price}`
+        `종목: ${asset.currency}, 잔고: ${asset.balance}, 평균 매수가: ${asset.avg_buy_price}`
       );
     });
 
