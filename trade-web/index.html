@@ -107,6 +107,8 @@
         }
       });
 
+      console.log('✅ auth-check 응답 상태:', res.status);  // <-- 2. 응답 상태 확인
+      console.log('✅ auth-check 응답 내용:', await res.text());  // <-- 3. 응답 내용 확인
       if (res.ok) {
         document.querySelector('#mainArea').style.display = 'block';
       } else {
