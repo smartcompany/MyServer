@@ -65,7 +65,7 @@ let config = fs.existsSync(configFilePath)
     };
 
 // 현재 설정값 가져오기
-app.get('/config', (req, res) => {
+app.get('/config', verifyToken, (req, res) => {
   res.json(config);
 });
 
@@ -95,7 +95,7 @@ app.post('/config', verifyToken, (req, res) => {
 });
 
 // 로그 보기 (최근 100줄)
-app.get('/logs', (req, res) => {
+app.get('/logs', verifyToken, (req, res) => {
   const logFile = path.join(__dirname, 'trade-logs.txt');
   fs.readFile(logFile, 'utf8', (err, data) => {
     if (err) return res.status(500).send('로그를 읽을 수 없습니다');

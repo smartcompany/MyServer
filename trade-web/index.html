@@ -75,7 +75,7 @@
       console.log('설정 업데이트:', { buy, sell });
 
       const res = await fetch('/trade-api/config', {
-        method: 'POST',
+        method: 'GET',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': 'Bearer ' + token
@@ -98,6 +98,7 @@
     async function loadLogs() {
       const token = localStorage.getItem('token');
       const res = await fetch('/trade-api/logs', {
+        method: 'GET',
         headers: { 'Authorization': 'Bearer ' + token }
       });
       const text = await res.text();
