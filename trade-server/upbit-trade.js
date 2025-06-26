@@ -265,8 +265,8 @@ async function main() {
     }
 
     // 김치 프리미엄 계산
-    const kimchiPremium = floorToHalf(((tetherPrice - rate)/rate) * 100);
-    console.log(`현재 김치 프리미엄: ${kimchiPremium.toFixed(1)}`);
+    const kimchiPremium = ((tetherPrice - rate)/rate) * 100;
+    console.log(`현재 김치 프리미엄: ${kimchiPremium.toFixed(2)}`);
 
     // 예시: 테더 매도// 현재 주문 확인 
     const orders = await getActiveOrders();
@@ -301,21 +301,33 @@ async function main() {
       }
     }
 
+    const expactedSellPrice = floorToHalf(tetherPrice * (1 + sellThreshold / 100));
+    const volumeToSell = 10; // 예시로 10 USDT 매도
+    console.log(`김치 ${sellThreshold.toFixed(1)}%이므로, ${expactedSellPrice} 원에 ${volumeToSell} 매도 주문 걸기`);
+    //await sellTether(sellPrice, volumeToSell);
+
+    const expactedBuyPrice = floorToHalf(tetherPrice * (1 + buyThreshold / 100));
+    const volumeToBuy = 10; // 예시로 10 USDT 매수
+    console.log(`김치 ${buyThreshold.toFixed(1)}% 에, ${expactedBuyPrice} 원에 ${volumeToBuy} 매수 주문 걸기`);
+    //await buyTether(buyPrice, volumeToBuy);
+
+/*
     if (kimchiPremium > sellThreshold) {
       // 김치 프리미엄이 2.5% 이상인 경우 매도
-      const sellPrice = floorToHalf(tetherPrice * (1 + kimchiPremium / 100));
+      const expactedSellPrice = floorToHalf(tetherPrice * (1 + kimchiPremium / 100));
       const volumeToSell = 10; // 예시로 10 USDT 매도
       console.log(`김치 ${kimchiPremium.toFixed(1)}%이므로, ${sellPrice} 원에 ${volumeToSell} 매도 주문`);
       //await sellTether(sellPrice, volumeToSell);
     } else if (kimchiPremium <= buyThreshold) {
       const buyPrice = floorToHalf(tetherPrice * (1 + kimchiPremium / 100));
       const volumeToBuy = 10; // 예시로 10 USDT 매수
-      console.log(`김치 프리미엄이 ${kimchiPremium}%이므로, ${buyPrice} 원에 ${volumeToBuy} 매수 주문`);
+      console.log(`김치 프리미엄이 ${kimchiPremium.toFixed(1)}%이므로, ${buyPrice} 원에 ${volumeToBuy} 매수 주문`);
       // 매수
       //await buyTether(buyPrice, volumeToBuy);
     } else {
-      console.log(`김치 프리미엄이 ${kimchiPremium}%로, 매도/매수 조건을 만족하지 않습니다.`);
+      console.log(`김치 프리미엄이 ${kimchiPremium.toFixed(1)}%로, 매도/매수 조건을 만족하지 않습니다.`);
     }
+*/
   }
 }
 
