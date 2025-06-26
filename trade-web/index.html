@@ -8,8 +8,8 @@
   <h2>🔐 관리자 로그인</h2>
   <div id="loginArea">
     <form id="loginForm">
-      <label>ID: <input id="id" type="text" placeholder="admin" /></label><br>
-      <label>PW: <input id="pw" type="password" placeholder="password" /></label><br>
+      <label>ID: <input id="id" type="text" placeholder="admin" autocomplete="username"/></label><br>
+      <label>PW: <input id="pw" type="password" placeholder="password" autocomplete="current-password"/></label><br>
       <button type="submit">로그인</button>
     </form>
   </div>
@@ -29,7 +29,7 @@
       event.preventDefault(); // 폼 제출 방지
       login();
     });
-    
+
     let token = '';
 
     async function login() {
