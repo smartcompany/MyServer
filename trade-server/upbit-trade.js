@@ -295,12 +295,12 @@ async function main() {
 
     console.log(`현재 테더: ${tetherPrice}원, 환율: ${rate}원, 김프: ${kimchiPremium.toFixed(2)}%`);
     
-    const expactedSellPrice = floorToHalf(tetherPrice * (1 + sellThreshold / 100));
+    const expactedSellPrice = floorToHalf(rate * (1 + sellThreshold / 100));
     const volumeToSell = 10; // 예시로 10 USDT 매도
     console.log(`김치 ${sellThreshold.toFixed(1)}% 에, ${expactedSellPrice} 원에 ${volumeToSell} 매도 주문 걸기`);
     //await sellTether(sellPrice, volumeToSell);
 
-    const expactedBuyPrice = floorToHalf(tetherPrice * (1 + buyThreshold / 100));
+    const expactedBuyPrice = floorToHalf(rate * (1 + buyThreshold / 100));
     const volumeToBuy = 10; // 예시로 10 USDT 매수
     console.log(`김치 ${buyThreshold.toFixed(1)}% 에, ${expactedBuyPrice} 원에 ${volumeToBuy} 매수 주문 걸기`);
     //await buyTether(buyPrice, volumeToBuy);
