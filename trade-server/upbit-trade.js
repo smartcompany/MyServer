@@ -255,18 +255,10 @@ async function main() {
     });
 
     const rate = await getExchangeRate();
-    if (rate) {
-      console.log(`현재 환율: ${rate}`);
-    }
-
     const tetherPrice = await getTetherPrice();
-    if (tetherPrice) {
-      console.log(`현재 테더 가격: ${tetherPrice} KRW`);
-    }
 
     // 김치 프리미엄 계산
     const kimchiPremium = ((tetherPrice - rate)/rate) * 100;
-    console.log(`현재 김치 프리미엄: ${kimchiPremium.toFixed(2)}`);
 
     // 예시: 테더 매도// 현재 주문 확인 
     const orders = await getActiveOrders();
@@ -301,9 +293,11 @@ async function main() {
       }
     }
 
+    console.log(`현재 테더: ${tetherPrice}원, 환율: ${rate}원, 김프: ${kimchiPremium.toFixed(2)}%`);
+    
     const expactedSellPrice = floorToHalf(tetherPrice * (1 + sellThreshold / 100));
     const volumeToSell = 10; // 예시로 10 USDT 매도
-    console.log(`김치 ${sellThreshold.toFixed(1)}%이므로, ${expactedSellPrice} 원에 ${volumeToSell} 매도 주문 걸기`);
+    console.log(`김치 ${sellThreshold.toFixed(1)}% 에, ${expactedSellPrice} 원에 ${volumeToSell} 매도 주문 걸기`);
     //await sellTether(sellPrice, volumeToSell);
 
     const expactedBuyPrice = floorToHalf(tetherPrice * (1 + buyThreshold / 100));
