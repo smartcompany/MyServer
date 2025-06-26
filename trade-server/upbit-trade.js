@@ -225,6 +225,15 @@ async function getTetherPrice() {
   }
 }
 
+function formatNumber(num) {
+  const formattedNum = floorToHalf(num);
+  return formattedNum.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+}
+
+function floorToHalf(num) {
+  return Math.floor(num * 2) / 2;
+}
+
 async function main() {
   delete require.cache[require.resolve('./config')];
   config = require('./config');
@@ -236,8 +245,15 @@ async function main() {
   if (accountInfo) {
     console.log('코인 및 현금 정보:');
     accountInfo.forEach((asset) => {
+      if (asset.currency !== 'KRW' && asset.currency !== 'USDT') {
+        return; // KRW와 USDT를 제외한 다른 자산은 출력하지 않음
+      }
+
+      // 원화 format 으로 출력
+      const balance = formatNumber(asset.balance.toFixed(1));
+      const avg_buy_price = formatNumber(asset.avg_buy_price.toFixed(1));
       console.log(
-        `종목: ${asset.currency}, 잔고: ${asset.balance}, 평균 매수가: ${asset.avg_buy_price}`
+        `종목: ${asset.currency}, 잔고: ${balance}, 평균 매수가: ${avg_buy_price}`
       );
     });
 
@@ -252,8 +268,8 @@ async function main() {
     }
 
     // 김치 프리미엄 계산
-    const kimchiPremium = ((tetherPrice - rate)/rate) * 100;
-    console.log(`현재 김치 프리미엄: ${kimchiPremium}`);
+    const kimchiPremium = floorToHalf(((tetherPrice - rate)/rate) * 100);
+    console.log(`현재 김치 프리미엄: ${kimchiPremium.toFixed(1)}`);
 
     // 예시: 테더 매도// 현재 주문 확인 
     const orders = await getActiveOrders();
@@ -290,12 +306,12 @@ async function main() {
 
     if (kimchiPremium > sellThreshold) {
       // 김치 프리미엄이 2.5% 이상인 경우 매도
-      const sellPrice = tetherPrice * (1 + kimchiPremium / 100);
+      const sellPrice = floorToHalf(tetherPrice * (1 + kimchiPremium / 100));
       const volumeToSell = 10; // 예시로 10 USDT 매도
-      console.log(`김치 프리미엄이 ${kimchiPremium}%이므로, ${sellPrice} 원에 ${volumeToSell} 매도 주문`);
+      console.log(`김치 ${kimchiPremium.toFixed(1)}%이므로, ${sellPrice} 원에 ${volumeToSell} 매도 주문`);
       //await sellTether(sellPrice, volumeToSell);
     } else if (kimchiPremium <= buyThreshold) {
-      const buyPrice = tetherPrice * (1 + kimchiPremium / 100);
+      const buyPrice = floorToHalf(tetherPrice * (1 + kimchiPremium / 100));
       const volumeToBuy = 10; // 예시로 10 USDT 매수
       console.log(`김치 프리미엄이 ${kimchiPremium}%이므로, ${buyPrice} 원에 ${volumeToBuy} 매수 주문`);
       // 매수
