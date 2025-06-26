@@ -49,7 +49,7 @@ app.post('/config', (req, res) => {
 
 // 로그 보기 (최근 100줄)
 app.get('/logs', (req, res) => {
-  const logFile = './trade-logs.txt';
+  const logFile = '../trade-server/trade-logs.txt';
   fs.readFile(logFile, 'utf8', (err, data) => {
     if (err) return res.status(500).send('로그를 읽을 수 없습니다');
     const lines = data.trim().split('\n').slice(-100).join('\n');
