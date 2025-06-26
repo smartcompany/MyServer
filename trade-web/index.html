@@ -94,13 +94,16 @@
     }
 
     async function checkAuth() {
+      console.log('✅ auth-check start:'); 
       const token = localStorage.getItem('token');
       if (!token) {
+        console.log('토큰 없으면 로그인 폼 보여주기'); 
         // 토큰 없으면 로그인 폼 보여주기
         document.querySelector('#loginArea').style.display = 'block';
         return;
       }
 
+      console.log('call auth-check API with token:', token);  // <-- 1. 토큰 확인
       const res = await fetch('/trade-api/auth-check', {
         headers: {
           Authorization: `Bearer ${token}`
@@ -112,12 +115,13 @@
       if (res.ok) {
         document.querySelector('#mainArea').style.display = 'block';
       } else {
+        console.error('❌ auth-check fetch 실패:', err);
         localStorage.removeItem('token');
         document.querySelector('#loginArea').style.display = 'block';
       }
     }
 
-    window.onload = checkAuth;
+    window.addEventListener('DOMContentLoaded', checkAuth);
   </script>
 </body>
 </html>
