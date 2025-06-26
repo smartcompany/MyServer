@@ -2,11 +2,11 @@ const express = require('express');
 const fs = require('fs');
 const app = express();
 const port = 3000;
+const path = require('path');
 
 app.use(express.json());
 
-const configFilePath = '../trade-server/config.json';
-
+const configFilePath = path.join(__dirname, 'config.json');
 // 초기값 로딩
 let config = fs.existsSync(configFilePath)
   ? JSON.parse(fs.readFileSync(configFilePath, 'utf8'))
@@ -49,7 +49,7 @@ app.post('/config', (req, res) => {
 
 // 로그 보기 (최근 100줄)
 app.get('/logs', (req, res) => {
-  const logFile = '../trade-server/trade-logs.txt';
+  const logFile = path.join(__dirname, 'trade-logs.txt');
   fs.readFile(logFile, 'utf8', (err, data) => {
     if (err) return res.status(500).send('로그를 읽을 수 없습니다');
     const lines = data.trim().split('\n').slice(-100).join('\n');
