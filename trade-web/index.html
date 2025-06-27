@@ -104,15 +104,25 @@
         console.log('로그인 성공, 토큰: 저장 ', token);
         localStorage.setItem('token', token);
 
-        document.getElementById('loginArea').style.display = 'none';
-        document.getElementById('mainArea').style.display = 'block';
-
-        loadConfig();
-        loadLogs();
-        setInterval(loadLogs, 5000);
+        showMain();
       } else {
         alert('로그인 실패!');
       }
+    }
+
+    function showMain() {
+      document.getElementById('loginArea').style.display = 'none';
+      document.getElementById('mainArea').style.display = 'block';
+
+      loadConfig();
+      loadLogs();
+      setInterval(loadLogs, 5000);
+    }
+
+    function showLogin() {
+      document.getElementById('loginArea').style.display = 'block';
+      document.getElementById('mainArea').style.display = 'none';
+      localStorage.removeItem('token');
     }
 
     async function loadConfig() {
@@ -163,7 +173,7 @@
         method: 'GET',
         headers: { 'Authorization': 'Bearer ' + token }
       });
-      
+
       const text = await res.text();
       console.log('load logs with text:', text);
       document.getElementById('logArea').textContent = text;
@@ -188,12 +198,10 @@
 
       console.log('✅ auth-check 응답 상태:', res.status);  // <-- 2. 응답 상태 확인
       if (res.ok) {
-        document.querySelector('#mainArea').style.display = 'block';
-        document.querySelector('#loginArea').style.display = 'none';
+        showMain();
       } else {
         console.error('❌ auth-check fetch 실패:', err);
-        localStorage.removeItem('token');
-        document.querySelector('#loginArea').style.display = 'block';
+        showLogin();
       }
     }
 
