@@ -289,7 +289,14 @@ async function main() {
 
       // 테스트 조건이 1000 미만인 경우
       if (order.volume < 1000) {
-        //const cancelResponse = await cancelOrder(order.uuid);
+        let orderType = "";
+        if (order.side == 'bid') 
+          orderType = "매수";
+        else if (order.side == 'ask')
+          orderType = "매도";
+
+        console.log(`${orderType} 주문  ${order.uuid} 1000 이하의 수량이므로 취소`);
+        const cancelResponse = await cancelOrder(order.uuid);
         if (cancelResponse) {
           console.log(`주문 ${order.uuid} 취소 성공`);
         }
