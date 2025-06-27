@@ -308,10 +308,13 @@ async function trade() {
         else if (order.side == 'ask')
           orderType = "매도";
 
-        console.log(`${orderType} 주문  ${order.uuid} 1000 이하의 수량이므로 취소`);
+        console.log(`${volume} 이하 수량, ${orderType} 주문 취소 요청 ${order.uuid}`);
         const cancelResponse = await cancelOrder(order.uuid);
         if (cancelResponse) {
-          console.log(`주문 ${order.uuid} 취소 성공`);
+          console.log(`${orderType} 주문 취소 성공 ${order.uuid}`);
+        } else {
+          console.log(`주문 취소가 실패시 로직 멈춤`);
+          return null;
         }
       } else {
         console.log(`주문 ${order.uuid} 상태가 'wait'이지만, 테스트 조건이 1000 이상이므로 취소하지 않습니다.`);
