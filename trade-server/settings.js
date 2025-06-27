@@ -15,6 +15,17 @@ app.use(bodyParser.json());
 app.use(express.static(path.join(__dirname, 'public'))); // 정적 파일
 app.use(express.json());
 
+const configFilePath = path.join(__dirname, 'config.json');
+
+let config = {};
+if (fs.existsSync(configFilePath)) {
+  config = JSON.parse(fs.readFileSync(configFilePath, 'utf8'));
+  console.log('현재 설정값 파일 읽기');
+  console.log(JSON.stringify(config, null, 2));
+} else {
+  console.log('현재 설정값 참조 파일 없음', configFilePath);
+}
+
 // 로그인
 app.post('/login', (req, res) => {
   const { id, password } = req.body;
@@ -53,16 +64,6 @@ function authMiddleware(req, res, next) {
     return res.status(403).send('토큰 유효하지 않음');
   }
 }
-
-const configFilePath = path.join(__dirname, 'config.json');
-// 초기값 로딩
-let config = fs.existsSync(configFilePath)
-  ? JSON.parse(fs.readFileSync(configFilePath, 'utf8'))
-  : {
-      isTrading: true,
-      buyThreshold: 0.5,
-      sellThreshold: 2.5,
-    };
 
 // 현재 설정값 가져오기
 app.get('/config', verifyToken, (req, res) => {
