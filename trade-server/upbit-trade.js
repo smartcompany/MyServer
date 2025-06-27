@@ -136,7 +136,7 @@ async function cancelOrder(orderUuid) {
     // 주문 취소 API 호출
     const response = await axios.delete(`${SERVER_URL}/v1/order`, {
       headers, 
-      params: orderData
+      params: queryData
     });
 
     if (response.status === 200) {
