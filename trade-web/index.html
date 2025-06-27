@@ -78,7 +78,7 @@
     매도 기준: <input id="sell" type="number" step="0.01"><br>
      <h3>트레이딩 설정</h3>
   <label>
-    <input id="trade-start" type="checkbox">
+    <input id="isTrading" type="checkbox">
     트레이딩 시작/중지
   </label>
 
@@ -142,14 +142,14 @@
       console.log('set config form with data:', data);
       document.getElementById('buy').value = data.buyThreshold;
       document.getElementById('sell').value = data.sellThreshold;
-      document.getElementById('trade-start').checked = data.tradeStart;
+      document.getElementById('isTrading').checked = data.isTrading;
     }
 
     async function updateConfig() {
       const token = localStorage.getItem('token');
       const buy = parseFloat(document.getElementById('buy').value);
       const sell = parseFloat(document.getElementById('sell').value);
-      const tradeStart = document.getElementById('trade-start').checked;
+      const isTrading = document.getElementById('isTrading').checked;
 
       console.log('설정 업데이트 :', { buy, sell });
       console.log('call update config API with token:', token);
@@ -163,7 +163,7 @@
           updates: [
             { key: 'buyThreshold', value: buy },
             { key: 'sellThreshold', value: sell },
-            { key: 'tradeStart', value: tradeStart }
+            { key: 'isTrading', value: isTrading }
           ]
         })
       });
