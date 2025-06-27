@@ -309,12 +309,12 @@ async function main() {
     const expactedSellPrice = floorToHalf(rate * (1 + sellThreshold / 100));
     const volumeToSell = 10; // 예시로 10 USDT 매도
     console.log(`김치 ${sellThreshold.toFixed(1)}% 에, ${expactedSellPrice} 원에 ${volumeToSell} 매도 주문 걸기`);
-    await sellTether(sellPrice, volumeToSell);
+    await sellTether(expactedSellPrice, volumeToSell);
 
     const expactedBuyPrice = floorToHalf(rate * (1 + buyThreshold / 100));
     const volumeToBuy = 10; // 예시로 10 USDT 매수
     console.log(`김치 ${buyThreshold.toFixed(1)}% 에, ${expactedBuyPrice} 원에 ${volumeToBuy} 매수 주문 걸기`);
-    await buyTether(buyPrice, volumeToBuy);
+    await buyTether(expactedBuyPrice, volumeToBuy);
 
 /*
     if (kimchiPremium > sellThreshold) {
