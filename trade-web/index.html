@@ -63,8 +63,8 @@
   <title>트레이딩 설정</title>
 </head>
 <body>
-  <h2>🔐 관리자 로그인</h2>
   <div id="loginArea">
+  <h2>🔐 관리자 로그인</h2>
     <form id="loginForm">
       <label>ID: <input id="id" type="text" placeholder="admin" autocomplete="username"/></label><br>
       <label>PW: <input id="pw" type="password" placeholder="password" autocomplete="current-password"/></label><br>
@@ -118,6 +118,7 @@
     async function loadConfig() {
       const token = localStorage.getItem('token');
       const res = await fetch('/trade-api/config', {
+        method: 'GET',
         headers: { 'Authorization': 'Bearer ' + token }
       });
       const data = await res.json();
@@ -133,7 +134,7 @@
       console.log('설정 업데이트:', { buy, sell });
 
       const res = await fetch('/trade-api/config', {
-        method: 'GET',
+        method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': 'Bearer ' + token
