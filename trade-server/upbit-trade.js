@@ -239,6 +239,7 @@ async function main() {
   config = require('./config');
 
   if (config.isTrading == false) { 
+    console.log('\n트레이딩 중지');
     return; 
   }
   
