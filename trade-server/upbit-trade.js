@@ -124,17 +124,20 @@ function makeEncryptToken(orderData) {
 
 async function cancelOrder(orderUuid) {
   try {
-    const orderData = {
+    const queryData = {
       uuid: orderUuid, // 취소할 주문의 UUID
     };
 
-    const token = makeEncryptToken(orderData);
+    const token = makeEncryptToken(queryData);
     const headers = {
       Authorization: `Bearer ${token}`,
     };
 
     // 주문 취소 API 호출
-    const response = await axios.delete(`${SERVER_URL}/v1/order`, orderData, { headers });
+    const response = await axios.delete(`${SERVER_URL}/v1/order`, {
+      headers, 
+      params: orderData
+    });
 
     if (response.status === 200) {
       console.log('주문 취소 성공:', response.data);
