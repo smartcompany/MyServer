@@ -15,8 +15,6 @@ const EXCHANGE_RATE_KEY = process.env.EXCHANGE_RATE_KEY;
 const SERVER_URL = 'https://api.upbit.com';
 const EXCHANGE_RATE_URL = 'https://rate-history.vercel.app/api/rate-history';
 
-let config = require('./config'); // 위 설정 객체 연결
-
 async function getAccountInfo() {
   try {
     // JWT 생성
@@ -233,12 +231,28 @@ function floorToHalf(num) {
   return Math.floor(num * 2) / 2;
 }
 
-async function main() {
+async function trade() {
+  const prevConfig = require('./config');
   delete require.cache[require.resolve('./config')];
-  config = require('./config');
+  const config = require('./config');
+  const volume = config.volume;
+
+  if (volume == null || volume == undefined) {
+    console.log('수량 정의가 필요');
+    return;
+  }
+
+  if (prevConfig.isTrading == true) {
+    if (config.isTrading == false) {
+      console.log('트레이딩 중지');
+    }
+  } else {
+    if (config.isTrading == true) {
+      console.log('트레이딩 시작');
+    }
+  }
 
   if (config.isTrading == false) { 
-    console.log('\n트레이딩 중지');
     return; 
   }
   
@@ -286,8 +300,8 @@ async function main() {
         continue;
       }
 
-      // 테스트 조건이 1000 미만인 경우
-      if (order.volume < 1000) {
+      // 우선 볼륨 기준으로 테스트 
+      if (order.volume <= volume) {
         let orderType = "";
         if (order.side == 'bid') 
           orderType = "매수";
@@ -307,39 +321,21 @@ async function main() {
     console.log(`현재 테더: ${tetherPrice}원, 환율: ${rate}원, 김프: ${kimchiPremium.toFixed(2)}%`);
     
     const expactedSellPrice = floorToHalf(rate * (1 + sellThreshold / 100));
-    const volumeToSell = 10; // 예시로 10 USDT 매도
+    const volumeToSell = volume;
     console.log(`김치 ${sellThreshold.toFixed(1)}% 에, ${expactedSellPrice} 원에 ${volumeToSell} 매도 주문 걸기`);
     await sellTether(expactedSellPrice, volumeToSell);
 
     const expactedBuyPrice = floorToHalf(rate * (1 + buyThreshold / 100));
-    const volumeToBuy = 10; // 예시로 10 USDT 매수
+    const volumeToBuy = volume; 
     console.log(`김치 ${buyThreshold.toFixed(1)}% 에, ${expactedBuyPrice} 원에 ${volumeToBuy} 매수 주문 걸기`);
     await buyTether(expactedBuyPrice, volumeToBuy);
-
-/*
-    if (kimchiPremium > sellThreshold) {
-      // 김치 프리미엄이 2.5% 이상인 경우 매도
-      const expactedSellPrice = floorToHalf(tetherPrice * (1 + kimchiPremium / 100));
-      const volumeToSell = 10; // 예시로 10 USDT 매도
-      console.log(`김치 ${kimchiPremium.toFixed(1)}%이므로, ${sellPrice} 원에 ${volumeToSell} 매도 주문`);
-      //await sellTether(sellPrice, volumeToSell);
-    } else if (kimchiPremium <= buyThreshold) {
-      const buyPrice = floorToHalf(tetherPrice * (1 + kimchiPremium / 100));
-      const volumeToBuy = 10; // 예시로 10 USDT 매수
-      console.log(`김치 프리미엄이 ${kimchiPremium.toFixed(1)}%이므로, ${buyPrice} 원에 ${volumeToBuy} 매수 주문`);
-      // 매수
-      //await buyTether(buyPrice, volumeToBuy);
-    } else {
-      console.log(`김치 프리미엄이 ${kimchiPremium.toFixed(1)}%로, 매도/매수 조건을 만족하지 않습니다.`);
-    }
-*/
   }
 }
 
 async function loop() {
   while (true) {
     try {
-      await main(); // 너가 만든 로직 수행
+      await trade();
     } catch (e) {
       console.error('Loop error:', e);
     }
