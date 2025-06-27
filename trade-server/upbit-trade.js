@@ -237,6 +237,10 @@ function floorToHalf(num) {
 async function main() {
   delete require.cache[require.resolve('./config')];
   config = require('./config');
+
+  if (config.isTrading == false) { 
+    return; 
+  }
   
   const buyThreshold = config.buyThreshold ?? 0.5;  
   const sellThreshold = config.sellThreshold ?? 2.5;

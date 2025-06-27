@@ -76,6 +76,12 @@
     <h3>김치 프리미엄 기준 설정</h3>
     매수 기준: <input id="buy" type="number" step="0.01"><br>
     매도 기준: <input id="sell" type="number" step="0.01"><br>
+     <h3>트레이딩 설정</h3>
+  <label>
+    <input id="trade-start" type="checkbox">
+    트레이딩 시작/중지
+  </label>
+
     <button onclick="updateConfig()">설정 적용</button>
 
     <h3>최근 로그</h3>
@@ -136,12 +142,14 @@
       console.log('set config form with data:', data);
       document.getElementById('buy').value = data.buyThreshold;
       document.getElementById('sell').value = data.sellThreshold;
+      document.getElementById('trade-start').checked = data.tradeStart;
     }
 
     async function updateConfig() {
       const token = localStorage.getItem('token');
       const buy = parseFloat(document.getElementById('buy').value);
       const sell = parseFloat(document.getElementById('sell').value);
+      const tradeStart = document.getElementById('trade-start').checked;
 
       console.log('설정 업데이트 :', { buy, sell });
       console.log('call update config API with token:', token);
@@ -154,7 +162,8 @@
         body: JSON.stringify({
           updates: [
             { key: 'buyThreshold', value: buy },
-            { key: 'sellThreshold', value: sell }
+            { key: 'sellThreshold', value: sell },
+            { key: 'tradeStart', value: tradeStart }
           ]
         })
       });
