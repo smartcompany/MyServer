@@ -192,7 +192,7 @@ async function checkOrderedData(orderedUuid) {
     });
 
     if (response.status === 200) {
-      console.log(`확인된 주문 상태: ${response.data.state}, 주문 수량: ${response.data.volume}, 주문 가격: ${response.data.price}, 주문 UUID: ${response.data.uuid}, 주문 시간: ${response.data.created_at}`);
+      console.log('주문 상태 확인 성공:', JSON.stringify(response.data));
       return response.data;
     } else {
       console.error(`Error: ${response.status}, ${response.data}`);
