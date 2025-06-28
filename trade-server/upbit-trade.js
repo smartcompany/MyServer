@@ -40,20 +40,25 @@ function loadOrderHistory() {
   }
 }
 
-function saveOrderHistory(history) {
-  fs.writeFileSync(ordersFilePath, JSON.stringify(history));
+function saveCashBalance(balance) {
+  if (!balance.history) balance.history = [];
+  if (balance.total == null) balance.total = 0;
+  fs.writeFileSync(cashBalanceLogPath, JSON.stringify(balance));
 }
 
 function loadCashBalance () {
   try {
     if (!fs.existsSync(cashBalanceLogPath)) {
-      fs.writeFileSync(cashBalanceLogPath, '{}');
+      fs.writeFileSync(cashBalanceLogPath, JSON.stringify({ history: [], total: 0 }));
     }
-    const data = fs.readFileSync(ordersFilePath, 'utf8');
-    return JSON.parse(data);
+    const data = fs.readFileSync(cashBalanceLogPath, 'utf8');
+    const parsed = JSON.parse(data);
+    if (!parsed.history) parsed.history = [];
+    if (parsed.total == null) parsed.total = 0;
+    return parsed;
   } catch (err) {
     console.error(err);
-    return null;
+    return { history: [], total: 0 };
   }
 }
 
