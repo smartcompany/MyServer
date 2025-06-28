@@ -6,6 +6,8 @@ const querystring = require('querystring');
 const crypto = require('crypto');
 const jwt = require('jsonwebtoken');
 const uuid = require('uuid');
+const path = require('path');
+const fs = require('fs');
 
 // filepath: /path/to/file
 // 업비트 API 키 설정
@@ -14,6 +16,81 @@ const SECRET_KEY = process.env.UPBIT_SEC_KEY;
 const EXCHANGE_RATE_KEY = process.env.EXCHANGE_RATE_KEY;
 const SERVER_URL = 'https://api.upbit.com';
 const EXCHANGE_RATE_URL = 'https://rate-history.vercel.app/api/rate-history';
+
+const ordersFilePath = path.join(__dirname, 'orderHistory.json');
+
+const OrderType = {
+  BUY: 'buy',
+  SELL: 'sell',
+};
+
+let orderHistory = loadOrderHistory();
+
+// 지정가 주문에 대한 콜백 함수
+const WebSocket = require('ws');
+const ws = new WebSocket('wss://api.upbit.com/websocket/v1');
+
+ws.on('open', () => {
+  const authData = {
+    type: 'auth',
+    ACCESS_KEY,
+    SECRET_KEY,
+  };
+  ws.send(JSON.stringify(authData));
+
+  const subscribeData = {
+    type: 'order',
+    codes: ['KRW-USDT'],
+    isOnlyRealtime: true,
+  };
+  ws.send(JSON.stringify(subscribeData));
+});
+
+ws.on('message', (data) => {
+  const message = JSON.parse(data);
+  if (message.type === 'order') {
+    const order = message.data;
+    if (order.state === 'done') {
+      if (order.side === 'bid') {
+        // 매수가 완료됨 
+        orderHistory.nextOrder = OrderType.SELL;
+      } else if (order.side === 'ask') {
+        orderHistory.nextOrder = OrderType.BUY;
+      }
+
+      // order 의 모든 정보를 로깅하고 orders.json 파일에 저장
+      console.log(`주문 side: ${order.side}`);
+      console.log(`볼륨: ${order.volume}`);
+      console.log(`남은 볼륨: ${order.remaining_volume}`);
+      console.log(`주문 가격: ${order.price}`);
+      console.log(`주문 id: ${order.uuid}`);
+
+      saveOrderHistory(orderHistory);
+    }
+  }
+});
+
+ws.on('error', (error) => {
+  console.error(error);
+});
+
+ws.on('close', () => {
+  console.log('WebSocket 연결이 종료되었습니다.');
+});
+
+function loadOrderHistory() {
+  try {
+    const data = fs.readFileSync(ordersFilePath, 'utf8');
+    return JSON.parse(data);
+  } catch (err) {
+    console.error(err);
+    return null;
+  }
+}
+
+function saveOrderHistory(order) {
+  fs.writeFileSync(orderHistoryFile, JSON.stringify(orderHistory));
+}
 
 async function getAccountInfo() {
   try {
@@ -120,10 +197,10 @@ function makeEncryptToken(orderData) {
   return token;
 }
 
-async function cancelOrder(orderUuid) {
+async function cancelOrder(orderedUuid) {
   try {
     const queryData = {
-      uuid: orderUuid, // 취소할 주문의 UUID
+      uuid: orderedUuid, // 취소할 주문의 UUID
     };
 
     const token = makeEncryptToken(queryData);
@@ -275,25 +352,40 @@ async function trade() {
     const rate = await getExchangeRate();
     const tetherPrice = await getTetherPrice();
 
+    const expactedBuyPrice = floorToHalf(rate * (1 + buyThreshold / 100));
+    const expactedSellPrice = floorToHalf(rate * (1 + sellThreshold / 100));
+
     // 김치 프리미엄 계산
     const kimchiPremium = ((tetherPrice - rate)/rate) * 100;
 
     // 예시: 테더 매도// 현재 주문 확인 
-    const orders = await getActiveOrders();
-    
-    if (orders) {
-      console.log('현재 활성화된 주문:');
-      orders.forEach((order) => {
-        let orderType = "";
-        if (order.side == 'bid') 
-          orderType = "매수";
-        else if (order.side == 'ask')
-          orderType = "매도";
-        console.log(`주문 UUID: ${order.uuid}, ${orderType} 상태: ${order.state}, 가격: ${order.price}, 수량: ${order.volume}`);
-      });
+    const activeOrder = await getActiveOrder(orderHistory.uuid);
+    if (activeOrder) {
+      let needToCancel = false;
+      if (activeOrder.side == 'bid') {
+        if (activeOrder.price != expactedBuyPrice) {
+          needToCancel = true;
+        }
+      } else if (activeOrder.side == 'ask') {
+        if (activeOrder.price != expactedSellPrice) {
+          needToCancel = true;
+        }
+      }
+
+      if (needToCancel) {
+        const cancelResponse = await cancelOrder(activeOrder.uuid);
+        if (cancelResponse) {
+          console.log(`${activeOrder.side} 주문 취소 성공 ${activeOrder.uuid}`);
+        } else {
+          console.log(`주문 취소가 실패시 로직 멈춤`);
+          return null;
+        }
+      }
     }
+
     
     // 모든 주문 취소
+    /*
     for (const order of orders) {
       if (order.state !== 'wait') {
         console.log(`주문 ${order.uuid} 상태가 'wait'가 아니므로 취소하지 않습니다.`);
@@ -320,19 +412,66 @@ async function trade() {
         console.log(`주문 ${order.uuid} 상태가 'wait'이지만, 테스트 조건이 1000 이상이므로 취소하지 않습니다.`);
       }
     }
+    */
 
     console.log(`현재 테더: ${tetherPrice}원, 환율: ${rate}원, 김프: ${kimchiPremium.toFixed(2)}%`);
-    
-    const expactedSellPrice = floorToHalf(rate * (1 + sellThreshold / 100));
-    const volumeToSell = volume;
-    console.log(`김치 ${sellThreshold.toFixed(1)}% 에, ${expactedSellPrice} 원에 ${volumeToSell} 매도 주문 걸기`);
-    await sellTether(expactedSellPrice, volumeToSell);
 
-    const expactedBuyPrice = floorToHalf(rate * (1 + buyThreshold / 100));
-    const volumeToBuy = volume; 
-    console.log(`김치 ${buyThreshold.toFixed(1)}% 에, ${expactedBuyPrice} 원에 ${volumeToBuy} 매수 주문 걸기`);
-    await buyTether(expactedBuyPrice, volumeToBuy);
+    switch (orderHistory.nextOrder) {
+      case OrderType.BUY:
+      {
+        const volumeToBuy = volume; 
+        console.log(`김치 ${buyThreshold.toFixed(1)}% 에, ${expactedBuyPrice} 원에 ${volumeToBuy} 매수 주문 걸기`);
+        const order = await buyTether(expactedBuyPrice, volumeToBuy);
+        if (order) {
+          console.log(`매수 주문 성공, UUID: ${order.uuid}`);
+          orderHistory.orderedUuid = order.uuid;
+          orderHistory.orderedSide = order.side;
+          orderHistory.orderedPrice = order.price;
+          orderHistory.orderedVolume = order.volume;
+          saveOrderHistory(orderHistory);
+        }
+      }
+        break;
+      case OrderType.SELL:
+      {
+        const volumeToSell = volume;
+        console.log(`김치 ${sellThreshold.toFixed(1)}% 에, ${expactedSellPrice} 원에 ${volumeToSell} 매도 주문 걸기`);
+        const order = await sellTether(expactedSellPrice, volumeToSell);
+        if (order) {
+          console.log(`매도 주문 성공, UUID: ${order.uuid}`);
+          orderHistory.orderedUuid = order.uuid;
+          orderHistory.orderedSide = order.side;
+          orderHistory.orderedPrice = order.price;
+          orderHistory.orderedVolume = order.volume;
+          saveOrderHistory(orderHistory);
+        }
+      }
+        break;
+    }
   }
+}
+
+async function getActiveOrder(uuid) {
+  const orders = await getActiveOrders();
+  let activeOrder = null;
+  if (orders) {
+    console.log('현재 활성화된 주문:');
+    orders.forEach((order) => {
+      let orderType = "";
+      if (order.side == 'bid')
+        orderType = "매수";
+      else if (order.side == 'ask')
+        orderType = "매도";
+
+      console.log(`주문 UUID: ${order.uuid}, ${orderType} 상태: ${order.state}, 가격: ${order.price}, 수량: ${order.volume}`);
+      // 주문 상태 재차 확인 
+      if (order.uuid == uuid) {
+        activeOrder = order;
+      }
+    });
+  }
+
+  return activeOrder;
 }
 
 async function loop() {

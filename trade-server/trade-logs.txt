@@ -1,1 +1,43 @@
 
+[2025-06-28T06:20:08.786Z] ERROR: ReferenceError: fs is not defined
+[2025-06-28T06:20:08.910Z] WebSocket 연결이 종료되었습니다.
+[2025-06-28T06:20:08.924Z] ERROR: Error fetching account info: Request failed with status code 401
+[2025-06-28T06:20:18.969Z] ERROR: Error fetching account info: Request failed with status code 401
+[2025-06-28T06:20:29.019Z] ERROR: Error fetching account info: Request failed with status code 401
+[2025-06-28T06:20:39.074Z] ERROR: Error fetching account info: Request failed with status code 401
+[2025-06-28T06:20:49.145Z] ERROR: Error fetching account info: Request failed with status code 401
+[2025-06-28T06:20:59.199Z] ERROR: Error fetching account info: Request failed with status code 401
+[2025-06-28T06:21:09.264Z] ERROR: Error fetching account info: Request failed with status code 401
+[2025-06-28T06:21:19.313Z] ERROR: Error fetching account info: Request failed with status code 401
+[2025-06-28T06:21:29.381Z] ERROR: Error fetching account info: Request failed with status code 401
+[2025-06-28T06:21:39.445Z] ERROR: Error fetching account info: Request failed with status code 401
+[2025-06-28T06:21:49.513Z] ERROR: Error fetching account info: Request failed with status code 401
+[2025-06-28T06:21:59.571Z] ERROR: Error fetching account info: Request failed with status code 401
+[2025-06-28T06:22:09.645Z] ERROR: Error fetching account info: Request failed with status code 401
+[2025-06-28T06:22:19.694Z] ERROR: Error fetching account info: Request failed with status code 401
+[2025-06-28T06:22:23.088Z] ERROR: Error: ENOENT: no such file or directory, open '/Users/smart/Projects/FlutterGimchi/MyServer/trade-server/orderHistory.json'
+[2025-06-28T06:22:23.219Z] ERROR: Error fetching account info: Request failed with status code 401
+[2025-06-28T06:22:23.244Z] WebSocket 연결이 종료되었습니다.
+[2025-06-28T06:22:33.273Z] ERROR: Error fetching account info: Request failed with status code 401
+[2025-06-28T06:22:43.353Z] ERROR: Error fetching account info: Request failed with status code 401
+[2025-06-28T06:22:53.407Z] ERROR: Error fetching account info: Request failed with status code 401
+[2025-06-28T06:23:03.473Z] ERROR: Error fetching account info: Request failed with status code 401
+[2025-06-28T06:23:13.315Z] ERROR: Error fetching account info: Request failed with status code 401
+[2025-06-28T06:23:13.321Z] WebSocket 연결이 종료되었습니다.
+[2025-06-28T06:23:23.372Z] ERROR: Error fetching account info: Request failed with status code 401
+[2025-06-28T06:23:33.427Z] ERROR: Error fetching account info: Request failed with status code 401
+[2025-06-28T06:23:43.480Z] ERROR: Error fetching account info: Request failed with status code 401
+[2025-06-28T06:23:53.559Z] ERROR: Error fetching account info: Request failed with status code 401
+[2025-06-28T06:24:03.614Z] ERROR: Error fetching account info: Request failed with status code 401
+[2025-06-28T06:24:13.683Z] ERROR: Error fetching account info: Request failed with status code 401
+[2025-06-28T06:24:23.736Z] ERROR: Error fetching account info: Request failed with status code 401
+[2025-06-28T06:24:33.789Z] ERROR: Error fetching account info: Request failed with status code 401
+[2025-06-28T06:24:43.858Z] ERROR: Error fetching account info: Request failed with status code 401
+[2025-06-28T06:24:53.914Z] ERROR: Error fetching account info: Request failed with status code 401
+[2025-06-28T06:25:03.969Z] ERROR: Error fetching account info: Request failed with status code 401
+[2025-06-28T06:25:14.062Z] ERROR: Error fetching account info: Request failed with status code 401
+[2025-06-28T06:25:24.135Z] ERROR: Error fetching account info: Request failed with status code 401
+[2025-06-28T06:25:34.229Z] ERROR: Error fetching account info: Request failed with status code 401
+[2025-06-28T06:25:44.291Z] ERROR: Error fetching account info: Request failed with status code 401
+[2025-06-28T06:25:54.338Z] ERROR: Error fetching account info: Request failed with status code 401
+[2025-06-28T06:26:04.427Z] ERROR: Error fetching account info: Request failed with status code 401
