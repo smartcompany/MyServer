@@ -17,6 +17,7 @@ const SERVER_URL = 'https://api.upbit.com';
 const EXCHANGE_RATE_URL = 'https://rate-history.vercel.app/api/rate-history';
 
 const ordersFilePath = path.join(__dirname, 'orderHistory.json');
+const cashBalanceLogPath = path.join(__dirname, 'cashBalance.json');
 
 const OrderType = {
   BUY: 'buy',
@@ -24,6 +25,7 @@ const OrderType = {
 };
 
 let orderHistory = loadOrderHistory();
+let cashBalance = loadCashBalance();
 
 function loadOrderHistory() {
   try {
@@ -40,6 +42,23 @@ function loadOrderHistory() {
 
 function saveOrderHistory(history) {
   fs.writeFileSync(ordersFilePath, JSON.stringify(history));
+}
+
+function loadCashBalance () {
+  try {
+    if (!fs.existsSync(cashBalanceLogPath)) {
+      fs.writeFileSync(cashBalanceLogPath, '{}');
+    }
+    const data = fs.readFileSync(ordersFilePath, 'utf8');
+    return JSON.parse(data);
+  } catch (err) {
+    console.error(err);
+    return null;
+  }
+}
+
+function saveCashBalance (balance) {
+  fs.writeFileSync(cashBalanceLogPath, JSON.stringify(balance));
 }
 
 async function getAccountInfo() {
@@ -381,9 +400,17 @@ async function trade() {
           if (orderedData.side === 'bid') {
             console.log(`매수 주문 처리됨: ${orderedData.price}`);
             orderHistory.nextOrder = OrderType.SELL;
+
+            cashBalance.history.push({ type: 'sell', date: new Date(), price: orderedData.price, volume: orderedData.volume });
+            cashBalance.total -= (orderedData.volume * orderedData.price);
+            saveCashBalance(cashBalance);
           } else if (orderedData.side === 'ask') {
             console.log(`매도 주문 처리됨: ${orderedData.price}`);
             orderHistory.nextOrder = OrderType.BUY;
+
+            cashBalance.history.push({ type: 'buy', date: new Date(), price: orderedData.price, volume: orderedData.volume });
+            cashBalance.total += (orderedData.volume * orderedData.price);
+            saveCashBalance(cashBalance);
           }
 
           orderHistory.orderedUuid = null;
