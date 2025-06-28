@@ -385,12 +385,12 @@ async function trade() {
       }
     }
 
+    console.log(`현재 테더: ${tetherPrice}원, 환율: ${rate}원, 김프: ${kimchiPremium.toFixed(2)}%, 매수가 ${expactedBuyPrice} 원, 매도가 ${expactedSellPrice} 원`);
+
     if (needToOrder == false) {
-      console.log('매도/매수 중 주문 지표를 찾아서 재주문 안함');
+      console.log('주문 안함');
       return null;
     }
-
-    console.log(`현재 테더: ${tetherPrice}원, 환율: ${rate}원, 김프: ${kimchiPremium.toFixed(2)}%`);
 
     switch (orderHistory.nextOrder) {
       case OrderType.BUY:
