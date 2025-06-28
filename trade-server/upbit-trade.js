@@ -372,6 +372,21 @@ async function trade() {
   if (config.isTrading == false) { 
     return; 
   }
+
+  if (orderHistory.needInit) {
+    if (orderHistory.orderedUuid) {
+      const canceledData = await cancelOrder(orderHistory.orderedUuid);
+      if (canceledData) {
+        orderHistory.orderedUuid = null;
+        console.log('초기화 필요 주문 취소 성공');
+      } else {
+        console.log('초기화 필요 주문 취소 실패');
+        return;
+      }
+    } 
+    orderHistory.needInit = false;
+    saveOrderHistory(orderHistory);
+  }
   
   const buyThreshold = config.buyThreshold ?? 0.5;  
   const sellThreshold = config.sellThreshold ?? 2.5;

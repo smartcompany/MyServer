@@ -72,7 +72,11 @@ app.post('/init', verifyToken, (req, res) => {
   // log 파일 삭제
   // history 파일 삭제
   fs.writeFileSync(logFilePath, '');
-  fs.writeFileSync(ordersFilePath, '{ "nextOrder": "buy" }');
+
+  const data = fs.readFileSync(ordersFilePath, 'utf8');
+  let history = JSON.parse(data);
+  history.needInit = true; // 초기화 요청
+  fs.writeFileSync(ordersFilePath, JSON.stringify(history));
   res.sendStatus(200);
 });
 
