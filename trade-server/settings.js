@@ -71,8 +71,6 @@ function authMiddleware(req, res, next) {
 app.post('/init', verifyToken, (req, res) => {
   // log 파일 삭제
   // history 파일 삭제
-
-  config = {};
   fs.writeFileSync(logFilePath, '');
   fs.writeFileSync(ordersFilePath, '{ "nextOrder": "buy" }');
   res.sendStatus(200);
