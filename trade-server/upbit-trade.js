@@ -24,14 +24,12 @@ const OrderType = {
 };
 
 let orderHistory = loadOrderHistory();
-if (orderHistory === null || orderHistory.nextOrder === undefined) {
-  orderHistory = {
-    nextOrder: OrderType.BUY,
-  };
-}
 
 function loadOrderHistory() {
   try {
+    if (!fs.existsSync(ordersFilePath)) {
+      fs.writeFileSync(ordersFilePath, '{ "nextOrder": "buy" }');
+    }
     const data = fs.readFileSync(ordersFilePath, 'utf8');
     return JSON.parse(data);
   } catch (err) {
