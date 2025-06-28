@@ -188,7 +188,7 @@ async function checkOrderedData(orderedUuid) {
 
     const response = await axios.get(`${SERVER_URL}/v1/orders`, {
       headers,
-      params: query
+      params: queryData
     });
 
     if (response.status === 200) {
