@@ -1,6 +1,6 @@
 {
   "isTrading": true,
   "volume": 10,
-  "buyThreshold": 1,
+  "buyThreshold": 0.0,
   "sellThreshold": 2.5
 }
