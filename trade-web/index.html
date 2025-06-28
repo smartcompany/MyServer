@@ -84,7 +84,8 @@
   </label>
 
     <button onclick="updateConfig()">설정 적용</button>
-
+    <h3>거래 내역</h3>
+    <pre id="tradeArea">불러오는 중...</pre>
     <h3>최근 로그</h3>
     <pre id="logArea">불러오는 중...</pre>
   </div>
@@ -122,8 +123,10 @@
       document.getElementById('mainArea').style.display = 'block';
 
       loadConfig();
+      loadTradeLogs();
       loadLogs();
       setInterval(loadLogs, 5000);
+      setInterval(loadTradeLogs, 5000);
     }
 
     function showLogin() {
@@ -177,6 +180,20 @@
       } else {
         alert('설정 실패!');
       }
+    }
+
+    async function loadTradeLogs() {
+      const token = localStorage.getItem('token');
+      console.log('call get logs API with token:', token);
+
+      const res = await fetch('/trade-api/cashBalance', {
+        method: 'GET',
+        headers: { 'Authorization': 'Bearer ' + token }
+      });
+
+      const text = await res.text();
+      console.log('load logs with text:', text);
+      document.getElementById('tradeArea').textContent = text;
     }
 
     async function loadLogs() {

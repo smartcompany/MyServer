@@ -26,6 +26,7 @@ if (fs.existsSync(configFilePath)) {
   console.log('현재 설정값 참조 파일 없음', configFilePath);
 }
 
+
 // 로그인
 app.post('/login', (req, res) => {
   const { id, password } = req.body;
@@ -102,6 +103,15 @@ app.get('/logs', verifyToken, (req, res) => {
     if (err) return res.status(500).send('로그를 읽을 수 없습니다');
     const lines = data.trim().split('\n').slice(-100).join('\n');
     res.type('text/plain').send(lines);
+  });
+});
+
+// 거래 내역 
+app.get('/cashBalance', verifyToken, (req, res) => {
+  const cashBalanceLogPath = path.join(__dirname, 'cashBalance.json');
+  fs.readFile(cashBalanceLogPath, 'utf8', (err, data) => {
+    if (err) return res.status(500).send('거래 내역을 읽을 수 없습니다');
+    res.type('application/json').send(data);
   });
 });
 
