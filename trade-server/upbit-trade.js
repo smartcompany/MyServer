@@ -89,7 +89,7 @@ function loadOrderHistory() {
 }
 
 function saveOrderHistory(order) {
-  fs.writeFileSync(orderHistoryFile, JSON.stringify(orderHistory));
+  fs.writeFileSync(ordersFilePath, JSON.stringify(orderHistory));
 }
 
 async function getAccountInfo() {
@@ -360,19 +360,21 @@ async function trade() {
 
     // 예시: 테더 매도// 현재 주문 확인 
     const activeOrder = await getActiveOrder(orderHistory.uuid);
+    let needToOrder = true;
     if (activeOrder) {
-      let needToCancel = false;
-      if (activeOrder.side == 'bid') {
-        if (activeOrder.price != expactedBuyPrice) {
-          needToCancel = true;
+      if (activeOrder.side === 'bid') {
+        if (activeOrder.price == expactedBuyPrice) {
+          console.log(`매수 중 주문된 가격: ${activeOrder.price}이 기존과 같아서 재주문 안함`);
+          needToOrder = false;
         }
-      } else if (activeOrder.side == 'ask') {
+      } else if (activeOrder.side === 'ask') {
         if (activeOrder.price != expactedSellPrice) {
-          needToCancel = true;
+          console.log(`매도 중 주문된 가격: ${activeOrder.price}이 기존과 같아서 재주문 안함`);
+          needToOrder = false;
         }
       }
 
-      if (needToCancel) {
+      if (needToOrder) {
         const cancelResponse = await cancelOrder(activeOrder.uuid);
         if (cancelResponse) {
           console.log(`${activeOrder.side} 주문 취소 성공 ${activeOrder.uuid}`);
@@ -383,36 +385,10 @@ async function trade() {
       }
     }
 
-    
-    // 모든 주문 취소
-    /*
-    for (const order of orders) {
-      if (order.state !== 'wait') {
-        console.log(`주문 ${order.uuid} 상태가 'wait'가 아니므로 취소하지 않습니다.`);
-        continue;
-      }
-
-      // 우선 볼륨 기준으로 테스트 
-      if (order.volume <= volume) {
-        let orderType = "";
-        if (order.side == 'bid') 
-          orderType = "매수";
-        else if (order.side == 'ask')
-          orderType = "매도";
-
-        console.log(`${volume} 이하 수량, ${orderType} 주문 취소 요청 ${order.uuid}`);
-        const cancelResponse = await cancelOrder(order.uuid);
-        if (cancelResponse) {
-          console.log(`${orderType} 주문 취소 성공 ${order.uuid}`);
-        } else {
-          console.log(`주문 취소가 실패시 로직 멈춤`);
-          return null;
-        }
-      } else {
-        console.log(`주문 ${order.uuid} 상태가 'wait'이지만, 테스트 조건이 1000 이상이므로 취소하지 않습니다.`);
-      }
+    if (needToOrder == false) {
+      console.log('매도/매수 중 주문 지표를 찾아서 재주문 안함');
+      return null;
     }
-    */
 
     console.log(`현재 테더: ${tetherPrice}원, 환율: ${rate}원, 김프: ${kimchiPremium.toFixed(2)}%`);
 
@@ -465,12 +441,13 @@ async function getActiveOrder(uuid) {
 
       console.log(`주문 UUID: ${order.uuid}, ${orderType} 상태: ${order.state}, 가격: ${order.price}, 수량: ${order.volume}`);
       // 주문 상태 재차 확인 
-      if (order.uuid == uuid) {
+      if (order.uuid === uuid) {
         activeOrder = order;
       }
     });
   }
 
+  console.log(`활성화된 테스트 주문: ${activeOrder ? activeOrder.uuid : '없음'}`);
   return activeOrder;
 }
 
