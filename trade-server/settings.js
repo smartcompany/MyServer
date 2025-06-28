@@ -16,6 +16,8 @@ app.use(express.static(path.join(__dirname, 'public'))); // 정적 파일
 app.use(express.json());
 
 const configFilePath = path.join(__dirname, 'config.json');
+const logFilePath = path.join(__dirname, 'trade-logs.txt');
+const ordersFilePath = path.join(__dirname, 'orderHistory.json');
 
 let config = {};
 if (fs.existsSync(configFilePath)) {
@@ -66,6 +68,16 @@ function authMiddleware(req, res, next) {
   }
 }
 
+app.post('/init', verifyToken, (req, res) => {
+  // log 파일 삭제
+  // history 파일 삭제
+
+  config = {};
+  fs.writeFileSync(logFilePath, '');
+  fs.writeFileSync(ordersFilePath, '{ "nextOrder": "buy" }');
+  res.sendStatus(200);
+});
+
 // 현재 설정값 가져오기
 app.get('/config', verifyToken, (req, res) => {
   res.json(config);
@@ -98,8 +110,7 @@ app.post('/config', verifyToken, (req, res) => {
 
 // 로그 보기 (최근 100줄)
 app.get('/logs', verifyToken, (req, res) => {
-  const logFile = path.join(__dirname, 'trade-logs.txt');
-  fs.readFile(logFile, 'utf8', (err, data) => {
+  fs.readFile(logFilePath, 'utf8', (err, data) => {
     if (err) return res.status(500).send('로그를 읽을 수 없습니다');
     const lines = data.trim().split('\n').slice(-100).join('\n');
     res.type('text/plain').send(lines);

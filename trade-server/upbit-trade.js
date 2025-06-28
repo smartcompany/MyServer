@@ -24,7 +24,6 @@ const OrderType = {
   SELL: 'sell',
 };
 
-let orderHistory = loadOrderHistory();
 let cashBalance = loadCashBalance();
 
 function loadOrderHistory() {
@@ -353,6 +352,8 @@ async function trade() {
   const config = require('./config');
   const volume = config.volume;
 
+  let orderHistory = loadOrderHistory();
+
   if (volume == null || volume == undefined) {
     console.log('수량 정의가 필요');
     return;
@@ -428,11 +429,13 @@ async function trade() {
             return null;
           } finally {
             orderHistory.orderedUuid = null;
+            saveOrderHistory(orderHistory);
           }
           break;
         case 'cancel':
           console.log('주문이 취소되어서 다시 진행');
           orderHistory.orderedUuid = null;
+          saveOrderHistory(orderHistory);
           break;
         case 'wait':
           if (needToCancelOrder(orderedData, expactedBuyPrice, expactedSellPrice, volume)) {
@@ -440,6 +443,7 @@ async function trade() {
             if (cancelResponse) {
               console.log(`주문 취소 성공 ${orderHistory.orderedUuid}`);
               orderHistory.orderedUuid = null;
+              saveOrderHistory(orderHistory);
             } else {
               console.log(`주문 취소가 실패시 로직 멈춤`);
               return null;

@@ -81,6 +81,7 @@
   <label>
     <input id="isTrading" type="checkbox" onclick="updateConfig()">
     트레이딩 시작/중지
+    <button onclick="confirmReset()" style="background-color: #f44336;">매매 초기화</button>
   </label>
 
     <button onclick="updateConfig()">설정 적용</button>
@@ -188,6 +189,23 @@
       }
     }
 
+    async function confirmReset() {
+      if (confirm("매매 초기화를 진행하시겠습니까?")) {
+        const token = localStorage.getItem('token');
+        const res = await fetch('/trade-api/init', {
+          method: 'POST',
+          headers: {
+            'Authorization': 'Bearer ' + token
+          }
+        });
+        if (res.ok) {
+          alert('초기화 완료');
+        } else {
+          alert('초기화 실패!');
+        }
+      }
+    }
+
     async function loadTradeLogs() {
       const token = localStorage.getItem('token');
       console.log('call get logs API with token:', token);
@@ -266,6 +284,6 @@
       }
     }
 
-  </script>
+</script>
 </body>
 </html>
