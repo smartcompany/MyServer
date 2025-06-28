@@ -40,6 +40,11 @@ function loadOrderHistory() {
   }
 }
 
+function saveOrderHistory(history) {
+  fs.writeFileSync(ordersFilePath, JSON.stringify(history));
+}
+
+
 function saveCashBalance(balance) {
   if (!balance.history) balance.history = [];
   if (balance.total == null) balance.total = 0;
