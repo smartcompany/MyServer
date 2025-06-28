@@ -188,7 +188,7 @@ async function checkOrderedData(uuid) {
   });
 
   const data = res.data;
-  console.log(`주문 상태: ${data.state}`);
+  console.log(`주문 상태: ${data.state}, 주문 수량: ${data.volume}, 주문 가격: ${data.price}, 주문 UUID: ${data.uuid}, 주문 시간: ${data.created_at}`);
   return data;
 }
 
@@ -375,6 +375,8 @@ async function trade() {
           }
           break;
         default:
+          console.log(`주문이 외부에서 취소 되었을수도 있다`);
+          orderHistory.orderedUuid = null;
       }
     }
 
