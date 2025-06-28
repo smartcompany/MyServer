@@ -287,7 +287,7 @@ function floorToHalf(num) {
 }
 
 function needToCancelOrder(orderedData, expactedBuyPrice, expactedSellPrice, volume) {
-  if (orderedData.volume !== volume) {
+  if (parseFloat(orderedData.volume) != parseFloat(volume)) {
     console.log(`주문할 수량이 다르면 취소: 주문 물량 ${volume}, 대기 물량 ${orderedData.volume}`);
     return true;
   }
