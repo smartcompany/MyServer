@@ -174,22 +174,34 @@ async function cancelOrder(orderedUuid) {
   }
 }
 
-async function checkOrderedData(uuid) {
-  const query = { uuid };
+async function checkOrderedData(orderedUuid) {
+  try {
+    console.log(`주문 상태 확인: ${orderedUuid}`);
+    const queryData = {
+      uuid: orderedUuid,
+    };
 
-  const token = makeEncryptToken(query);  // query hash 기반 JWT 생성
-  const headers = {
-    Authorization: `Bearer ${token}`,
-  };
+    const token = makeEncryptToken(queryData);
+    const headers = {
+      Authorization: `Bearer ${token}`,
+    };
 
-  const res = await axios.get(`${SERVER_URL}/v1/orders`, {
-    headers,
-    params: query
-  });
+    const response = await axios.get(`${SERVER_URL}/v1/orders`, {
+      headers,
+      params: query
+    });
 
-  const data = res.data;
-  console.log(`주문 상태: ${data.state}, 주문 수량: ${data.volume}, 주문 가격: ${data.price}, 주문 UUID: ${data.uuid}, 주문 시간: ${data.created_at}`);
-  return data;
+    if (response.status === 200) {
+      console.log(`확인된 주문 상태: ${response.data.state}, 주문 수량: ${response.data.volume}, 주문 가격: ${response.data.price}, 주문 UUID: ${response.data.uuid}, 주문 시간: ${response.data.created_at}`);
+      return response.data;
+    } else {
+      console.error(`Error: ${response.status}, ${response.data}`);
+      return null;
+    }
+  } catch (error) {
+    console.error('Error checking ordered data:', error.message);
+    return null;
+  }
 }
 
 async function getActiveOrders() {
@@ -349,6 +361,11 @@ async function trade() {
 
     if (orderHistory.orderedUuid) {
       const orderedData = await checkOrderedData(orderHistory.orderedUuid);
+      if (orderedData == null) {
+        console.log(`주문 상태 확인 실패시 로직 멈춤`);
+        return null;
+      } 
+
       switch (orderedData.state) {
         case 'done':
           console.log('주문이 처리 됨');
@@ -360,6 +377,10 @@ async function trade() {
             orderHistory.nextOrder = OrderType.BUY;
           }
 
+          orderHistory.orderedUuid = null;
+          break;
+        case 'cancel':
+          console.log('주문이 취소되어서 다시 진행');
           orderHistory.orderedUuid = null;
           break;
         case 'wait':
@@ -375,8 +396,6 @@ async function trade() {
           }
           break;
         default:
-          console.log(`주문이 외부에서 취소 되었을수도 있다`);
-          orderHistory.orderedUuid = null;
       }
     }
 
