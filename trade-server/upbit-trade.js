@@ -186,7 +186,7 @@ async function checkOrderedData(orderedUuid) {
       Authorization: `Bearer ${token}`,
     };
 
-    const response = await axios.get(`${SERVER_URL}/v1/orders`, {
+    const response = await axios.get(`${SERVER_URL}/v1/order`, {
       headers,
       params: queryData
     });
