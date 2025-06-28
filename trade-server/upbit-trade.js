@@ -24,6 +24,11 @@ const OrderType = {
 };
 
 let orderHistory = loadOrderHistory();
+if (orderHistory === null || orderHistory.nextOrder === undefined) {
+  orderHistory = {
+    nextOrder: OrderType.BUY,
+  };
+}
 
 function loadOrderHistory() {
   try {
@@ -35,8 +40,8 @@ function loadOrderHistory() {
   }
 }
 
-function saveOrderHistory(order) {
-  fs.writeFileSync(ordersFilePath, JSON.stringify(orderHistory));
+function saveOrderHistory(history) {
+  fs.writeFileSync(ordersFilePath, JSON.stringify(history));
 }
 
 async function getAccountInfo() {
