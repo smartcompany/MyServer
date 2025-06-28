@@ -385,7 +385,9 @@ async function trade() {
         return;
       }
     } 
-    orderHistory.needInit = false;
+    
+    orderHistory = {};
+    orderHistory.nextOrder = OrderType.BUY;
     saveOrderHistory(orderHistory);
   }
   
