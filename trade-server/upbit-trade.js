@@ -386,9 +386,9 @@ async function trade() {
           break;
         case 'wait':
           if (needToCancelOrder(orderedData, expactedBuyPrice, expactedSellPrice)) {
-            const cancelResponse = await cancelOrder(orderHistory.uuid);
+            const cancelResponse = await cancelOrder(orderHistory.orderedUuid);
             if (cancelResponse) {
-              console.log(`${orderHistory.side} 주문 취소 성공 ${orderHistory.uuid}`);
+              console.log(`${orderHistory.side} 주문 취소 성공 ${orderHistory.orderedUuid}`);
               orderHistory.orderedUuid = null;
             } else {
               console.log(`주문 취소가 실패시 로직 멈춤`);
