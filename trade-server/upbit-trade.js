@@ -375,6 +375,7 @@ async function trade() {
 
   if (orderHistory.needInit) {
     if (orderHistory.orderedUuid) {
+      console.log('초기화 필요 주문 취소 시작');
       const canceledData = await cancelOrder(orderHistory.orderedUuid);
       if (canceledData) {
         orderHistory.orderedUuid = null;
