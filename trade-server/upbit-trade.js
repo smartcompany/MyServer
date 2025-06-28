@@ -359,7 +359,7 @@ async function trade() {
     const kimchiPremium = ((tetherPrice - rate)/rate) * 100;
 
     // 예시: 테더 매도// 현재 주문 확인 
-    const activeOrder = await getActiveOrder(orderHistory.uuid);
+    const activeOrder = await getActiveOrder(orderHistory.orderedUuid);
     let needToOrder = true;
     if (activeOrder) {
       if (activeOrder.side === 'bid') {
@@ -428,6 +428,7 @@ async function trade() {
 }
 
 async function getActiveOrder(uuid) {
+  console.log(`활성화된 주문 UUID 찾기: ${uuid}`);
   const orders = await getActiveOrders();
   let activeOrder = null;
   if (orders) {
