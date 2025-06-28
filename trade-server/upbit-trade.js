@@ -146,6 +146,7 @@ function makeEncryptToken(orderData) {
 
 async function cancelOrder(orderedUuid) {
   try {
+    console.log(`주문 취소 할 ID: ${orderedUuid}`);
     const queryData = {
       uuid: orderedUuid, // 취소할 주문의 UUID
     };
