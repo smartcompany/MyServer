@@ -84,10 +84,16 @@
   </label>
 
     <button onclick="updateConfig()">설정 적용</button>
-    <h3>거래 내역</h3>
-    <pre id="tradeArea">불러오는 중...</pre>
-    <h3>최근 로그</h3>
-    <pre id="logArea">불러오는 중...</pre>
+    
+    <div>
+      <div style="display: flex; justify-content: center; gap: 10px; margin-bottom: 10px;">
+        <button onclick="showTab('trade')" id="tabTrade" style="flex:1; padding: 10px; background-color: #4CAF50; color: white;">거래 내역</button>
+        <button onclick="showTab('log')" id="tabLog" style="flex:1; padding: 10px; background-color: #ddd;">최근 로그</button>
+      </div>
+      <div id="tradeTab"><pre id="tradeArea">불러오는 중...</pre></div>
+      <div id="logTab" style="display: none;"><pre id="logArea">불러오는 중...</pre></div>
+    </div>
+    
   </div>
 
   <script>
@@ -236,6 +242,30 @@
     }
 
     window.addEventListener('DOMContentLoaded', checkAuth);
+
+    function showTab(tab) {
+      const tradeBtn = document.getElementById('tabTrade');
+      const logBtn = document.getElementById('tabLog');
+      const tradeTab = document.getElementById('tradeTab');
+      const logTab = document.getElementById('logTab');
+
+      if (tab === 'trade') {
+        tradeTab.style.display = 'block';
+        logTab.style.display = 'none';
+        tradeBtn.style.backgroundColor = '#4CAF50';
+        tradeBtn.style.color = 'white';
+        logBtn.style.backgroundColor = '#ddd';
+        logBtn.style.color = 'black';
+      } else {
+        tradeTab.style.display = 'none';
+        logTab.style.display = 'block';
+        tradeBtn.style.backgroundColor = '#ddd';
+        tradeBtn.style.color = 'black';
+        logBtn.style.backgroundColor = '#4CAF50';
+        logBtn.style.color = 'white';
+      }
+    }
+
   </script>
 </body>
 </html>
