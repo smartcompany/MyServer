@@ -117,7 +117,7 @@ async function buyTether(price, volume) {
     const response = await axios.post(`${SERVER_URL}/v1/orders`, orderData, { headers });
 
     if (response.status === 201) {
-      console.log('지정가 매수 주문 성공:', response.data);
+      //console.log('지정가 매수 주문 성공:', response.data);
       return response.data;
     } else {
       console.error(`Error: ${response.status}, ${response.data}`);
@@ -163,7 +163,7 @@ async function cancelOrder(orderedUuid) {
     });
 
     if (response.status === 200) {
-      console.log('주문 취소 성공:', response.data);
+      //console.log('주문 취소 성공:', response.data);
       return response.data;
     } else {
       console.error(`Error: ${response.status}, ${response.data}`);
@@ -193,7 +193,7 @@ async function checkOrderedData(orderedUuid) {
     });
 
     if (response.status === 200) {
-      console.log('주문 상태 확인 성공:', JSON.stringify(response.data));
+      //console.log('주문 상태 확인 성공:', JSON.stringify(response.data));
       return response.data;
     } else {
       console.error(`Error: ${response.status}, ${response.data}`);
@@ -388,7 +388,7 @@ async function trade() {
           if (needToCancelOrder(orderedData, expactedBuyPrice, expactedSellPrice)) {
             const cancelResponse = await cancelOrder(orderHistory.orderedUuid);
             if (cancelResponse) {
-              console.log(`${orderHistory.side} 주문 취소 성공 ${orderHistory.orderedUuid}`);
+              console.log(`주문 취소 성공 ${orderHistory.orderedUuid}`);
               orderHistory.orderedUuid = null;
             } else {
               console.log(`주문 취소가 실패시 로직 멈춤`);
