@@ -286,7 +286,12 @@ function floorToHalf(num) {
   return Math.floor(num * 2) / 2;
 }
 
-function needToCancelOrder(orderedData, expactedBuyPrice, expactedSellPrice) {
+function needToCancelOrder(orderedData, expactedBuyPrice, expactedSellPrice, volume) {
+  if (orderedData.volume !== volume) {
+    console.log(`주문할 수량이 다르면 취소: 주문 물량 ${volume}, 대기 물량 ${orderedData.volume}`);
+    return true;
+  }
+
   if (orderedData.side === 'bid') {
     if (orderedData.price == expactedBuyPrice) {
       console.log(`매수 대기 중 주문할 가격과 동일: ${orderedData.price}`);
@@ -385,7 +390,7 @@ async function trade() {
           orderHistory.orderedUuid = null;
           break;
         case 'wait':
-          if (needToCancelOrder(orderedData, expactedBuyPrice, expactedSellPrice)) {
+          if (needToCancelOrder(orderedData, expactedBuyPrice, expactedSellPrice, volume)) {
             const cancelResponse = await cancelOrder(orderHistory.orderedUuid);
             if (cancelResponse) {
               console.log(`주문 취소 성공 ${orderHistory.orderedUuid}`);
