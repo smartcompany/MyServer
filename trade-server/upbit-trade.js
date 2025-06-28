@@ -285,7 +285,7 @@ function floorToHalf(num) {
   return Math.floor(num * 2) / 2;
 }
 
-function needToCancelOrder(orderedData) {
+function needToCancelOrder(orderedData, expactedBuyPrice, expactedSellPrice) {
   if (orderedData.side === 'bid') {
     if (orderedData.price == expactedBuyPrice) {
       console.log(`매수 대기 중 주문할 가격과 동일: ${orderedData.price}`);
@@ -384,7 +384,7 @@ async function trade() {
           orderHistory.orderedUuid = null;
           break;
         case 'wait':
-          if (needToCancelOrder(orderedData)) {
+          if (needToCancelOrder(orderedData, expactedBuyPrice, expactedSellPrice)) {
             const cancelResponse = await cancelOrder(orderHistory.uuid);
             if (cancelResponse) {
               console.log(`${orderHistory.side} 주문 취소 성공 ${orderHistory.uuid}`);
