@@ -31,6 +31,7 @@ const WebSocket = require('ws');
 const ws = new WebSocket('wss://api.upbit.com/websocket/v1');
 
 ws.on('open', () => {
+  console.log('WebSocket 연결이 생성되었습니다.');
   const authData = {
     type: 'auth',
     ACCESS_KEY,
@@ -47,6 +48,7 @@ ws.on('open', () => {
 });
 
 ws.on('message', (data) => {
+  console.log(`Received socket message: ${data}`);
   const message = JSON.parse(data);
   if (message.type === 'order') {
     const order = message.data;
