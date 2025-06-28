@@ -402,23 +402,28 @@ async function trade() {
       switch (orderedData.state) {
         case 'done':
           console.log('주문이 처리 됨');
-          if (orderedData.side === 'bid') {
-            console.log(`매수 주문 처리됨: ${orderedData.price}`);
-            orderHistory.nextOrder = OrderType.SELL;
+          try {
+            if (orderedData.side === 'bid') {
+              console.log(`매수 주문 처리됨: ${orderedData.price}`);
+              orderHistory.nextOrder = OrderType.SELL;
 
-            cashBalance.history.push({ type: 'sell', date: new Date(), price: orderedData.price, volume: orderedData.volume });
-            cashBalance.total -= (orderedData.volume * orderedData.price);
-            saveCashBalance(cashBalance);
-          } else if (orderedData.side === 'ask') {
-            console.log(`매도 주문 처리됨: ${orderedData.price}`);
-            orderHistory.nextOrder = OrderType.BUY;
+              cashBalance.history.push({ type: 'sell', date: new Date(), price: orderedData.price, volume: orderedData.volume });
+              cashBalance.total -= (orderedData.volume * orderedData.price);
+              saveCashBalance(cashBalance);
+            } else if (orderedData.side === 'ask') {
+              console.log(`매도 주문 처리됨: ${orderedData.price}`);
+              orderHistory.nextOrder = OrderType.BUY;
 
-            cashBalance.history.push({ type: 'buy', date: new Date(), price: orderedData.price, volume: orderedData.volume });
-            cashBalance.total += (orderedData.volume * orderedData.price);
-            saveCashBalance(cashBalance);
+              cashBalance.history.push({ type: 'buy', date: new Date(), price: orderedData.price, volume: orderedData.volume });
+              cashBalance.total += (orderedData.volume * orderedData.price);
+              saveCashBalance(cashBalance);
+            }
+          } catch (error) {
+            console.error('Error processing order:', error);
+            return null;
+          } finally {
+            orderHistory.orderedUuid = null;
           }
-
-          orderHistory.orderedUuid = null;
           break;
         case 'cancel':
           console.log('주문이 취소되어서 다시 진행');
