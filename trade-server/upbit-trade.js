@@ -321,13 +321,13 @@ function floorToHalf(num) {
 }
 
 function needToCancelOrder(orderedData, expactedBuyPrice, expactedSellPrice, config, avaliableMoney) {
-  const volume = calcuratedVolume(config.isTradeByMoney, 
-    (orderedData.side === 'bid') ? expactedBuyPrice : expactedSellPrice, 
-    avaliableMoney);
 
-  if (parseFloat(orderedData.volume) != parseFloat(volume)) {
-    console.log(`주문할 수량이 다르면 취소: 주문 물량 ${volume}, 대기 물량 ${orderedData.volume}`);
-    return true;
+  if (orderedData.side === 'bid') { 
+    const volume = calcuratedVolume(config.isTradeByMoney, expactedBuyPrice, avaliableMoney);
+    if (parseFloat(orderedData.volume) != parseFloat(volume)) {
+      console.log(`매수 일 경우 주문할 수량이 다르면 취소: 주문 물량 ${volume}, 대기 물량 ${orderedData.volume}`);
+      return true;
+    }
   }
 
   if (orderedData.side === 'bid') {
