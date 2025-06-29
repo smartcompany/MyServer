@@ -463,16 +463,6 @@ async function trade() {
               orderState.nextOrder = OrderType.BUY;
             }
 
-            cashBalance.restMoney = orderState.avaliableMoney;
-
-            if (orderState.nextOrder === OrderType.BUY) {
-              // 매도 완료시 
-              cashBalance.total = orderState.avaliableMoney;
-            } else {
-              // 매수 완료시 
-              cashBalance.total = orderState.avaliableMoney + orderedData.volume * tetherPrice;
-            }
-
             cashBalance.history.push({ type: orderedData.side === 'bid' ? 'buy' : 'sell',
               date: new Date(), 
               price: orderedData.price,
@@ -511,6 +501,8 @@ async function trade() {
         default:
       }
     }
+
+    updateCashBalnce(orderState, tetherPrice);
     
     console.log(`현재 테더: ${tetherPrice}원, 환율: ${rate}원, 김프: ${kimchiPremium.toFixed(2)}%, 매수가 ${expactedBuyPrice} 원, 매도가 ${expactedSellPrice} 원`);
 
@@ -551,6 +543,36 @@ async function trade() {
       }
         break;
     }
+  }
+}
+
+function updateCashBalnce(orderState, tetherPrice) {
+  let isUpdated = false;
+
+  if (cashBalance.restMoney != orderState.avaliableMoney) {
+    cashBalance.restMoney = orderState.avaliableMoney;
+    isUpdated = true;
+  }
+  
+  if (orderState.nextOrder === OrderType.BUY) {
+    cashBalance.restUsdt = 0;
+    // 보유 테더가 없다고 판단 
+    if (cashBalance.total != orderState.avaliableMoney) {
+      cashBalance.total = orderState.avaliableMoney;
+      isUpdated = true;
+    }
+  } else {
+    // orderState.orderedVolume 은 보유 테더 
+    cashBalance.restUsdt = orderState.orderedVolume;
+    const total = orderState.avaliableMoney + orderState.orderedVolume * tetherPrice;
+    if (cashBalance.total != total) {
+      cashBalance.total = total;
+      isUpdated = true;
+    }
+  }
+
+  if (isUpdated) {
+    saveCashBalance(cashBalance);
   }
 }
 
