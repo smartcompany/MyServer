@@ -91,7 +91,6 @@
   <label>
     <input id="isTrading" type="checkbox" onclick="updateConfig()">
     트레이딩 시작/중지
-    <span>매매 초기화</span>
     <button class="initbutton" onclick="confirmReset()" style="background-color: #f44336;">매매 초기화</button>
   </label>
 
@@ -99,8 +98,8 @@
     
     <div>
       <div style="display: flex; justify-content: center; gap: 10px; margin-bottom: 10px;">
-        <button onclick="showTab('trade')" id="tabTrade" style="flex:1; padding: 10px; background-color: #4CAF50; color: white;">거래 내역</button>
         <button onclick="showTab('log')" id="tabLog" style="flex:1; padding: 10px; background-color: #ddd;">최근 로그</button>
+        <button onclick="showTab('trade')" id="tabTrade" style="flex:1; padding: 10px; background-color: #4CAF50; color: white;">거래 내역</button>
       </div>
       <div id="tradeTab"><pre id="tradeArea">불러오는 중...</pre></div>
       <div id="logTab" style="display: none;"><pre id="logArea">불러오는 중...</pre></div>
@@ -145,6 +144,7 @@
       loadLogs();
       setInterval(loadLogs, 5000);
       setInterval(loadTradeLogs, 5000);
+      showTab('log');
     }
 
     function showLogin() {
