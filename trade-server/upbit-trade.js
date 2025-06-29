@@ -415,9 +415,10 @@ async function trade() {
       }
 
       console.log(
-        `종목: ${asset.currency}, 잔고: ${asset.balance}, 평균 매수가: ${asset.avg_buy_price}`
+        `종목: ${asset.currency}, 잔고: ${asset.balance.toFixed(1)}, 평균 매수가: ${asset.avg_buy_price}`
       );
     });
+    console.log('\n-----------------------------------\n');
 
     const rate = await getExchangeRate();
     const tetherPrice = await getTetherPrice();
@@ -507,10 +508,10 @@ async function trade() {
     console.log(`현재 테더: ${tetherPrice}원, 환율: ${rate}원, 김프: ${kimchiPremium.toFixed(2)}%, 매수가 ${expactedBuyPrice} 원, 매도가 ${expactedSellPrice} 원`);
 
     if (orderState.orderedUuid != null) {
-      console.log('주문 UUID 가 유효함 주문 안함');
+      //console.log('주문 UUID 가 유효함 주문 안함');
       return null;
     }
-
+    
     switch (orderState.nextOrder) {
       case OrderType.BUY:
       {
