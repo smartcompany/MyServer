@@ -60,7 +60,7 @@
     }
 
     .initButton {
-      display: inline-block;
+      float: left;
     }
   </style>
   <meta charset="UTF-8">
@@ -85,6 +85,7 @@
   <label>
     <input id="isTrading" type="checkbox" onclick="updateConfig()">
     트레이딩 시작/중지
+    <span>매매 초기화</span>
     <button class="initbutton" onclick="confirmReset()" style="background-color: #f44336;">매매 초기화</button>
   </label>
 
