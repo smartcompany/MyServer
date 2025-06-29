@@ -408,7 +408,7 @@ async function trade() {
 
   const accountInfo = await getAccountInfo();
   if (accountInfo) {
-    console.log('\n========= 코인 및 현금 정보 ===========');
+    console.log('========= 코인 및 현금 정보 ===========');
     accountInfo.forEach((asset) => {
       if (asset.currency !== 'KRW' && asset.currency !== 'USDT') {
         return; // KRW와 USDT를 제외한 다른 자산은 출력하지 않음
@@ -418,7 +418,7 @@ async function trade() {
         `종목: ${asset.currency}, 잔고: ${Number(asset.balance).toFixed(1)}, 평균 매수가: ${asset.avg_buy_price}`
       );
     });
-    console.log('\n-----------------------------------\n');
+    console.log('-----------------------------------');
 
     const rate = await getExchangeRate();
     const tetherPrice = await getTetherPrice();
