@@ -473,10 +473,14 @@ async function trade() {
           }
           break;
         case 'cancel':
-          console.log('주문이 취소되어서 다시 진행');
+          console.log('주문이 외부에서 취소되면 중단');
           orderState.orderedUuid = null;
           saveOrderState(orderState);
-          break;
+
+          config.isTrading = false;
+          saveConfig(config);
+
+          return null;
         case 'wait':
           if (needToCancelOrder(orderedData, expactedBuyPrice, expactedSellPrice, config, orderState.avaliableMoney)) {
             const cancelResponse = await cancelOrder(orderState.orderedUuid);
