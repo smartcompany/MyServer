@@ -251,7 +251,7 @@
       history.sort((a, b) => new Date(a.time) - new Date(b.time));
       for (const item of history) {
         const li = document.createElement('li');
-        li.textContent = `[${item.time}] ${item.amount} ${item.type}`;
+        li.textContent = `[${item.date}] ${item.type} ${item.price}원 ${item.volume}개 `;
         list.appendChild(li);
       }
     }
