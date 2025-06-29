@@ -463,11 +463,20 @@ async function trade() {
               orderState.nextOrder = OrderType.BUY;
             }
 
+            cashBalance.restMoney = orderState.avaliableMoney;
+
+            if (orderState.nextOrder === OrderType.BUY) {
+              // 매도 완료시 
+              cashBalance.total = orderState.avaliableMoney;
+            } else {
+              // 매수 완료시 
+              cashBalance.total = orderState.avaliableMoney + orderedData.volume * tetherPrice;
+            }
+
             cashBalance.history.push({ type: orderedData.side === 'bid' ? 'buy' : 'sell',
               date: new Date(), 
               price: orderedData.price,
               volume: orderedData.volume });
-            cashBalance.total = orderState.avaliableMoney;
             saveCashBalance(cashBalance);
           } catch (error) {
             console.error('Error processing order:', error);
@@ -502,7 +511,7 @@ async function trade() {
         default:
       }
     }
-
+    
     console.log(`현재 테더: ${tetherPrice}원, 환율: ${rate}원, 김프: ${kimchiPremium.toFixed(2)}%, 매수가 ${expactedBuyPrice} 원, 매도가 ${expactedSellPrice} 원`);
 
     if (orderState.orderedUuid != null) {

@@ -243,10 +243,16 @@
       list.innerHTML = '';
 
       const totalItem = document.createElement('li');
-      totalItem.textContent = `총 금액: ${data.total}`;
+      totalItem.textContent = `평가 금액: ${data.total}`;
       totalItem.style.fontWeight = 'bold';
       totalItem.style.marginBottom = '10px';
       list.appendChild(totalItem);
+
+      const restMoney = document.createElement('li');
+      restMoney.textContent = `잔여 현금: ${data.restMoney}`;
+      restMoney.style.fontWeight = 'bold';
+      restMoney.style.marginBottom = '10px';
+      list.appendChild(restMoney);
       
       history.sort((a, b) => new Date(a.time) - new Date(b.time));
       for (const item of history) {
