@@ -55,7 +55,7 @@ function loadCashBalance () {
   try {
     const data = fs.readFileSync(cashBalanceLogPath, 'utf8');
     cashData = JSON.parse(data);
-  } catch (e) {
+  } catch (err) {
     console.error(err);
     cashData = { history: [], total: 0 };
     fs.writeFileSync(cashBalanceLogPath, JSON.stringify(cashData, null, 2));
