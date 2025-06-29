@@ -119,7 +119,7 @@ app.post('/config', verifyToken, (req, res) => {
 app.get('/logs', verifyToken, (req, res) => {
   fs.readFile(logFilePath, 'utf8', (err, data) => {
     if (err) return res.status(500).send('로그를 읽을 수 없습니다');
-    const lines = data.trim().split('\n').slice(-100).join('\n');
+    const lines = data.trim().split('\n').slice(-20).join('\n');
     res.type('text/plain').send(lines);
   });
 });
