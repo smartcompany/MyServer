@@ -18,6 +18,7 @@ const EXCHANGE_RATE_URL = 'https://rate-history.vercel.app/api/rate-history';
 
 const ordersFilePath = path.join(__dirname, 'orderState.json');
 const cashBalanceLogPath = path.join(__dirname, 'cashBalance.json');
+const configFilePath = path.join(__dirname, 'config.json');
 
 const OrderType = {
   BUY: 'buy',
@@ -66,6 +67,10 @@ function loadCashBalance () {
 
 function saveCashBalance (balance) {
   fs.writeFileSync(cashBalanceLogPath, JSON.stringify(balance));
+}
+
+function saveConfig(config) {
+  fs.writeFileSync(configFilePath, JSON.stringify(config, null, 2));
 }
 
 async function getAccountInfo() {
