@@ -528,7 +528,7 @@ async function trade() {
         break;
       case OrderType.SELL:
       {
-        const volumeToSell = orderState.orderedVolume;
+        const volumeToSell = parseFloat(orderState.orderedVolume);
         console.log(`김치 ${sellThreshold.toFixed(1)}% 에, ${expactedSellPrice} 원에 ${volumeToSell} 매도 주문 걸기`);
         const order = await sellTether(expactedSellPrice, volumeToSell);
         if (order) {
