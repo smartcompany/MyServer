@@ -97,6 +97,7 @@ app.post('/config', verifyToken, (req, res) => {
   }
 
   let changed = false;
+  const prevTradeAmount = config.tradeAmount;
 
   updates.forEach(({ key, value }) => {
     if (key in config) {
@@ -105,6 +106,11 @@ app.post('/config', verifyToken, (req, res) => {
       changed = true;
     }
   });
+
+  if (prevTradeAmount !== config.tradeAmount) {
+    console.log(`물량이 변경되면 초기화`);
+    config.needInit = true;
+  }
 
   if (changed) {
     fs.writeFileSync(configFilePath, JSON.stringify(config, null, 2));
