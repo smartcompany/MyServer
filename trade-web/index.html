@@ -165,7 +165,7 @@
       document.getElementById('buy').value = data.buyThreshold;
       document.getElementById('sell').value = data.sellThreshold;
       document.getElementById('isTrading').checked = data.isTrading;
-      document.getElementById('tradeAmount').value = data.money;
+      document.getElementById('tradeAmount').value = data.tradeAmount;
 
       if (data.isTradeByMoney) {
         document.querySelector('input[name="trade-type"][value="money"]').checked = true;
