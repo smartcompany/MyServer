@@ -51,19 +51,17 @@ function saveCashBalance(balance) {
 }
 
 function loadCashBalance () {
+  let cashData;
   try {
-    if (!fs.existsSync(cashBalanceLogPath)) {
-      fs.writeFileSync(cashBalanceLogPath, JSON.stringify({ history: [], total: 0 }));
-    }
     const data = fs.readFileSync(cashBalanceLogPath, 'utf8');
-    const parsed = JSON.parse(data);
-    if (!parsed.history) parsed.history = [];
-    if (parsed.total == null) parsed.total = 0;
-    return parsed;
-  } catch (err) {
+    cashData = JSON.parse(data);
+  } catch (e) {
     console.error(err);
-    return { history: [], total: 0 };
+    cashData = { history: [], total: 0 };
+    fs.writeFileSync(cashBalanceLogPath, JSON.stringify(cashData, null, 2));
   }
+
+  return cashData;
 }
 
 function saveCashBalance (balance) {
