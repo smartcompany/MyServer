@@ -1,6 +1,7 @@
 {
   "isTrading": true,
-  "volume": 10,
+  "tradeAmount": 100000,
   "buyThreshold": 0.0,
-  "sellThreshold": 2.5
+  "sellThreshold": 2.5,
+  "isTradeByMoney": true
 }
