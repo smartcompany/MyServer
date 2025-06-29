@@ -415,7 +415,7 @@ async function trade() {
       }
 
       console.log(
-        `종목: ${asset.currency}, 잔고: ${asset.balance.toFixed(1)}, 평균 매수가: ${asset.avg_buy_price}`
+        `종목: ${asset.currency}, 잔고: ${Number(asset.balance).toFixed(1)}, 평균 매수가: ${asset.avg_buy_price}`
       );
     });
     console.log('\n-----------------------------------\n');
