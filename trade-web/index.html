@@ -58,6 +58,10 @@
     #loginArea {
       margin-top: 40px;
     }
+
+    .initButton {
+      display: inline-block;
+    }
   </style>
   <meta charset="UTF-8">
   <title>트레이딩 설정</title>
@@ -81,7 +85,7 @@
   <label>
     <input id="isTrading" type="checkbox" onclick="updateConfig()">
     트레이딩 시작/중지
-    <button onclick="confirmReset()" style="background-color: #f44336;">매매 초기화</button>
+    <button class="initbutton" onclick="confirmReset()" style="background-color: #f44336;">매매 초기화</button>
   </label>
 
     <button onclick="updateConfig()">설정 적용</button>
