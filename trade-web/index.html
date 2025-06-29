@@ -236,9 +236,24 @@
         headers: { 'Authorization': 'Bearer ' + token }
       });
 
-      const text = await res.text();
-      console.log('load logs with text:', text);
-      document.getElementById('tradeArea').textContent = text;
+      const data = await res.json();
+
+      const history = data.history || [];
+      const list = document.getElementById('tradeArea');
+      list.innerHTML = '';
+
+      const totalItem = document.createElement('li');
+      totalItem.textContent = `총 금액: ${data.total}`;
+      totalItem.style.fontWeight = 'bold';
+      totalItem.style.marginBottom = '10px';
+      list.appendChild(totalItem);
+      
+      history.sort((a, b) => new Date(a.time) - new Date(b.time));
+      for (const item of history) {
+        const li = document.createElement('li');
+        li.textContent = `[${item.time}] ${item.amount} ${item.type}`;
+        list.appendChild(li);
+      }
     }
 
     async function loadLogs() {
