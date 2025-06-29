@@ -74,12 +74,7 @@ app.post('/init', verifyToken, (req, res) => {
   fs.writeFileSync(logFilePath, '');
   fs.writeFileSync(cashBalanceLogPath, '');
 
-  if (fs.existsSync(orderStateFilePath)) {
-    const data = fs.readFileSync(orderStateFilePath, 'utf8');
-    let history = JSON.parse(data);
-    history.needInit = true; // 초기화 요청
-    fs.writeFileSync(orderStateFilePath, JSON.stringify(history));
-  }
+  needInitForOrderState();
  
   res.sendStatus(200);
 });
@@ -109,7 +104,7 @@ app.post('/config', verifyToken, (req, res) => {
 
   if (prevTradeAmount !== config.tradeAmount) {
     console.log(`물량이 변경되면 초기화`);
-    config.needInit = true;
+    needInitForOrderState();
   }
 
   if (changed) {
@@ -145,3 +140,13 @@ app.get('/auth-check', authMiddleware, (req, res) => {
 app.listen(port, () => {
   console.log(`웹 컨트롤 서버 실행 중: http://localhost:${port}`);
 });
+
+function needInitForOrderState() {
+  if (fs.existsSync(orderStateFilePath)) {
+    const data = fs.readFileSync(orderStateFilePath, 'utf8');
+    let history = JSON.parse(data);
+    history.needInit = true; // 초기화 요청
+    fs.writeFileSync(orderStateFilePath, JSON.stringify(history));
+  }
+}
+
