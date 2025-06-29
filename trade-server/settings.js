@@ -17,7 +17,8 @@ app.use(express.json());
 
 const configFilePath = path.join(__dirname, 'config.json');
 const logFilePath = path.join(__dirname, 'trade-logs.txt');
-const ordersFilePath = path.join(__dirname, 'orderHistory.json');
+const orderStateFilePath = path.join(__dirname, 'orderState.json');
+const cashBalanceLogPath = path.join(__dirname, 'cashBalance.json');
 
 let config = {};
 if (fs.existsSync(configFilePath)) {
@@ -69,14 +70,17 @@ function authMiddleware(req, res, next) {
 }
 
 app.post('/init', verifyToken, (req, res) => {
-  // log 파일 삭제
-  // history 파일 삭제
+  // log, cashBalance 파일 삭제
   fs.writeFileSync(logFilePath, '');
+  fs.writeFileSync(cashBalanceLogPath, '');
 
-  const data = fs.readFileSync(ordersFilePath, 'utf8');
-  let history = JSON.parse(data);
-  history.needInit = true; // 초기화 요청
-  fs.writeFileSync(ordersFilePath, JSON.stringify(history));
+  if (fs.existsSync(orderStateFilePath)) {
+    const data = fs.readFileSync(orderStateFilePath, 'utf8');
+    let history = JSON.parse(data);
+    history.needInit = true; // 초기화 요청
+    fs.writeFileSync(orderStateFilePath, JSON.stringify(history));
+  }
+ 
   res.sendStatus(200);
 });
 
