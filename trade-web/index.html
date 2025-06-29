@@ -254,6 +254,12 @@
       restMoney.style.marginBottom = '10px';
       list.appendChild(restMoney);
       
+      const restUsdt = document.createElement('li');
+      restUsdt.textContent = `잔여 테더: ${data.restUsdt}`;
+      restUsdt.style.fontWeight = 'bold';
+      restUsdt.style.marginBottom = '10px';
+      list.appendChild(restUsdt);
+
       history.sort((a, b) => new Date(a.time) - new Date(b.time));
       for (const item of history) {
         const li = document.createElement('li');
