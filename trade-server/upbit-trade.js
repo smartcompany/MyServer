@@ -353,7 +353,9 @@ function calcuratedVolume(isTradeByMoney, targetUSDTPrice, avaliableMoney) {
     return tradeAmount;
   }
 
-  return avaliableMoney / targetUSDTPrice;
+  let volume = avaliableMoney / targetUSDTPrice;
+  volume = parseFloat(volume.toFixed(1));
+  return volume;
 }
 
 async function trade() {
