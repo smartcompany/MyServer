@@ -80,8 +80,14 @@
     <h3>김치 프리미엄 기준 설정</h3>
     매수 기준: <input id="buy" type="number" step="0.01"><br>
     매도 기준: <input id="sell" type="number" step="0.01"><br>
-    매매 수량: <input id="volume" type="number" step="1"><br>
-     <h3>트레이딩 설정</h3>
+    <label>
+      <input type="radio" name="tradeType" value="money" checked onclick="toggleInput('money')"> 금액으로 매매
+    </label>
+    <label> 
+      <input type="radio" name="tradeType" value="volume" onclick="toggleInput('volume')"> 수량으로 매매
+    </label>
+    <input id="tradeAmount" type="number" step="1"><br>
+    <h3>트레이딩 설정</h3>
   <label>
     <input id="isTrading" type="checkbox" onclick="updateConfig()">
     트레이딩 시작/중지
@@ -159,7 +165,13 @@
       document.getElementById('buy').value = data.buyThreshold;
       document.getElementById('sell').value = data.sellThreshold;
       document.getElementById('isTrading').checked = data.isTrading;
-      document.getElementById('volume').value = data.volume;
+      document.getElementById('tradeAmount').value = data.money;
+
+      if (data.isTradeByMoney) {
+        document.querySelector('input[name="trade-type"][value="money"]').checked = true;
+      } else {
+        document.querySelector('input[name="trade-type"][value="volume"]').checked = true;
+      }
     }
 
     async function updateConfig() {
@@ -167,7 +179,10 @@
       const buy = parseFloat(document.getElementById('buy').value);
       const sell = parseFloat(document.getElementById('sell').value);
       const isTrading = document.getElementById('isTrading').checked;
-      const volume = parseFloat(document.getElementById('volume').value);
+
+      const tradeAmount = parseFloat(document.getElementById('tradeAmount').value);
+      const tradeType = document.querySelector('input[name="trade-type"]:checked').value;
+      const isTradeByMoney = (tradeType === 'money') ? true : false;
 
       console.log('설정 업데이트 :', { buy, sell });
       console.log('call update config API with token:', token);
@@ -182,7 +197,8 @@
             { key: 'buyThreshold', value: buy },
             { key: 'sellThreshold', value: sell },
             { key: 'isTrading', value: isTrading },
-            { key: 'volume', value: volume }
+            { key: 'tradeAmount', value: tradeAmount },
+            { key: 'isTradeByMoney', value: isTradeByMoney }
           ]
         })
       });
@@ -288,6 +304,21 @@
         logBtn.style.color = 'white';
       }
     }
+
+
+function toggleInput(type) {
+  /*
+  if (type === 'volume') {
+    document.getElementById('volume').disabled = false;
+    document.getElementById('amount').disabled = true;
+    document.getElementById('amountInput').style.display = 'block';
+  } else {
+    document.getElementById('volume').disabled = true;
+    document.getElementById('amount').disabled = false;
+    document.getElementById('amountInput').style.display = 'block';
+  }
+  */
+}
 
 </script>
 </body>
