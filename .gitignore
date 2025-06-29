@@ -1,3 +1,6 @@
 node_modules
 .env
 service-account.json
+trade-server/cashBalance.json
+trade-server/orderState.json
+trade-server/trade-logs.txt
