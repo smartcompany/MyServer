@@ -16,7 +16,7 @@ const SECRET_KEY = process.env.UPBIT_SEC_KEY;
 const SERVER_URL = 'https://api.upbit.com';
 const EXCHANGE_RATE_URL = 'https://rate-history.vercel.app/api/rate-history';
 
-const ordersFilePath = path.join(__dirname, 'orderHistory.json');
+const ordersFilePath = path.join(__dirname, 'orderState.json');
 const cashBalanceLogPath = path.join(__dirname, 'cashBalance.json');
 
 const OrderType = {
@@ -26,7 +26,7 @@ const OrderType = {
 
 let cashBalance = loadCashBalance();
 
-function loadOrderHistory() {
+function loadOrderState() {
   try {
     if (!fs.existsSync(ordersFilePath)) {
       fs.writeFileSync(ordersFilePath, '{ "nextOrder": "buy" }');
@@ -39,8 +39,8 @@ function loadOrderHistory() {
   }
 }
 
-function saveOrderHistory(history) {
-  fs.writeFileSync(ordersFilePath, JSON.stringify(history));
+function saveOrderState(state) {
+  fs.writeFileSync(ordersFilePath, JSON.stringify(state));
 }
 
 
@@ -317,7 +317,11 @@ function floorToHalf(num) {
   return Math.floor(num * 2) / 2;
 }
 
-function needToCancelOrder(orderedData, expactedBuyPrice, expactedSellPrice, volume) {
+function needToCancelOrder(orderedData, expactedBuyPrice, expactedSellPrice, config, avaliableMoney) {
+  const volume = calcuratedVolume(config.isTradeByMoney, 
+    (orderedData.side === 'bid') ? expactedBuyPrice : expactedSellPrice, 
+    avaliableMoney);
+
   if (parseFloat(orderedData.volume) != parseFloat(volume)) {
     console.log(`주문할 수량이 다르면 취소: 주문 물량 ${volume}, 대기 물량 ${orderedData.volume}`);
     return true;
@@ -346,19 +350,21 @@ function needToCancelOrder(orderedData, expactedBuyPrice, expactedSellPrice, vol
   return false;
 }
 
+function calcuratedVolume(isTradeByMoney, targetUSDTPrice, avaliableMoney) {
+  if (isTradeByMoney == false) {
+    return tradeAmount;
+  }
+
+  return avaliableMoney / targetUSDTPrice;
+}
+
 async function trade() {
   const prevConfig = require('./config');
   delete require.cache[require.resolve('./config')];
   const config = require('./config');
-  const volume = config.volume;
 
-  let orderHistory = loadOrderHistory();
-
-  if (volume == null || volume == undefined) {
-    console.log('수량 정의가 필요');
-    return;
-  }
-
+  let orderState = loadOrderState();
+ 
   if (prevConfig.isTrading == true) {
     if (config.isTrading == false) {
       console.log('트레이딩 중지');
@@ -373,22 +379,23 @@ async function trade() {
     return; 
   }
 
-  if (orderHistory.needInit) {
-    if (orderHistory.orderedUuid) {
+  if (orderState.needInit) {
+    if (orderState.orderedUuid) {
       console.log('초기화 필요 주문 취소 시작');
-      const canceledData = await cancelOrder(orderHistory.orderedUuid);
+      const canceledData = await cancelOrder(orderState.orderedUuid);
       if (canceledData) {
-        orderHistory.orderedUuid = null;
+        orderState.orderedUuid = null;
         console.log('초기화 필요 주문 취소 성공');
       } else {
         console.log('초기화 필요 주문 취소 실패');
         return;
       }
-    } 
-    
-    orderHistory = {};
-    orderHistory.nextOrder = OrderType.BUY;
-    saveOrderHistory(orderHistory);
+    }
+
+    orderState = {};
+    orderState.nextOrder = OrderType.BUY;
+    orderState.needInit = false;
+    saveOrderState(orderState);
   }
   
   const buyThreshold = config.buyThreshold ?? 0.5;  
@@ -416,8 +423,19 @@ async function trade() {
     // 김치 프리미엄 계산
     const kimchiPremium = ((tetherPrice - rate)/rate) * 100;
 
-    if (orderHistory.orderedUuid) {
-      const orderedData = await checkOrderedData(orderHistory.orderedUuid);
+    if (orderState.avaliableMoney == null || orderState.avaliableMoney == undefined) {
+      console.log('처음 사용 가능한 돈이 정의가 안되어 있으니 config 값으로 설정');
+      if (config.isTradeByMoney == true) {
+        orderState.avaliableMoney = config.tradeAmount
+      } else {
+        orderState.avaliableMoney = config.tradeAmount * expactedBuyPrice;
+      }
+
+      saveOrderState(orderState);
+    }
+
+    if (orderState.orderedUuid) {
+      const orderedData = await checkOrderedData(orderState.orderedUuid);
       if (orderedData == null) {
         console.log(`주문 상태 확인 실패시 로직 멈춤`);
         return null;
@@ -427,41 +445,45 @@ async function trade() {
         case 'done':
           console.log('주문이 처리 됨');
           try {
+            const orderedMoney = (orderedData.volume * orderedData.price);
             if (orderedData.side === 'bid') {
               console.log(`매수 주문 처리됨: ${orderedData.price}`);
-              orderHistory.nextOrder = OrderType.SELL;
-
-              cashBalance.history.push({ type: 'sell', date: new Date(), price: orderedData.price, volume: orderedData.volume });
-              cashBalance.total -= (orderedData.volume * orderedData.price);
-              saveCashBalance(cashBalance);
+              
+              orderState.avaliableMoney -= orderedMoney;
+              orderState.nextOrder = OrderType.SELL;
             } else if (orderedData.side === 'ask') {
               console.log(`매도 주문 처리됨: ${orderedData.price}`);
-              orderHistory.nextOrder = OrderType.BUY;
 
-              cashBalance.history.push({ type: 'buy', date: new Date(), price: orderedData.price, volume: orderedData.volume });
-              cashBalance.total += (orderedData.volume * orderedData.price);
-              saveCashBalance(cashBalance);
+              orderState.avaliableMoney += orderedMoney;
+              orderState.nextOrder = OrderType.BUY;
             }
+
+            cashBalance.history.push({ type: orderedData.side === 'bid' ? 'buy' : 'sell',
+              date: new Date(), 
+              price: orderedData.price,
+              volume: orderedData.volume });
+            cashBalance.total = orderState.avaliableMoney;
+            saveCashBalance(cashBalance);
           } catch (error) {
             console.error('Error processing order:', error);
             return null;
           } finally {
-            orderHistory.orderedUuid = null;
-            saveOrderHistory(orderHistory);
+            orderState.orderedUuid = null;
+            saveOrderState(orderState);
           }
           break;
         case 'cancel':
           console.log('주문이 취소되어서 다시 진행');
-          orderHistory.orderedUuid = null;
-          saveOrderHistory(orderHistory);
+          orderState.orderedUuid = null;
+          saveOrderState(orderState);
           break;
         case 'wait':
-          if (needToCancelOrder(orderedData, expactedBuyPrice, expactedSellPrice, volume)) {
-            const cancelResponse = await cancelOrder(orderHistory.orderedUuid);
+          if (needToCancelOrder(orderedData, expactedBuyPrice, expactedSellPrice, config, orderState.avaliableMoney)) {
+            const cancelResponse = await cancelOrder(orderState.orderedUuid);
             if (cancelResponse) {
-              console.log(`주문 취소 성공 ${orderHistory.orderedUuid}`);
-              orderHistory.orderedUuid = null;
-              saveOrderHistory(orderHistory);
+              console.log(`주문 취소 성공 ${orderState.orderedUuid}`);
+              orderState.orderedUuid = null;
+              saveOrderState(orderState);
             } else {
               console.log(`주문 취소가 실패시 로직 멈춤`);
               return null;
@@ -474,39 +496,39 @@ async function trade() {
 
     console.log(`현재 테더: ${tetherPrice}원, 환율: ${rate}원, 김프: ${kimchiPremium.toFixed(2)}%, 매수가 ${expactedBuyPrice} 원, 매도가 ${expactedSellPrice} 원`);
 
-    if (orderHistory.orderedUuid != null) {
+    if (orderState.orderedUuid != null) {
       console.log('주문 UUID 가 유효함 주문 안함');
       return null;
     }
 
-    switch (orderHistory.nextOrder) {
+    switch (orderState.nextOrder) {
       case OrderType.BUY:
       {
-        const volumeToBuy = volume; 
+        const volumeToBuy = calcuratedVolume(config.isTradeByMoney, expactedBuyPrice, orderState.avaliableMoney); 
         console.log(`김치 ${buyThreshold.toFixed(1)}% 에, ${expactedBuyPrice} 원에 ${volumeToBuy} 매수 주문 걸기`);
         const order = await buyTether(expactedBuyPrice, volumeToBuy);
         if (order) {
           console.log(`매수 주문 성공, UUID: ${order.uuid}`);
-          orderHistory.orderedUuid = order.uuid;
-          orderHistory.orderedSide = order.side;
-          orderHistory.orderedPrice = order.price;
-          orderHistory.orderedVolume = order.volume;
-          saveOrderHistory(orderHistory);
+          orderState.orderedUuid = order.uuid;
+          orderState.orderedSide = order.side;
+          orderState.orderedPrice = order.price;
+          orderState.orderedVolume = order.volume;
+          saveOrderState(orderState);
         }
       }
         break;
       case OrderType.SELL:
       {
-        const volumeToSell = volume;
+        const volumeToSell = calcuratedVolume(config.isTradeByMoney, expactedSellPrice, orderState.avaliableMoney);
         console.log(`김치 ${sellThreshold.toFixed(1)}% 에, ${expactedSellPrice} 원에 ${volumeToSell} 매도 주문 걸기`);
         const order = await sellTether(expactedSellPrice, volumeToSell);
         if (order) {
           console.log(`매도 주문 성공, UUID: ${order.uuid}`);
-          orderHistory.orderedUuid = order.uuid;
-          orderHistory.orderedSide = order.side;
-          orderHistory.orderedPrice = order.price;
-          orderHistory.orderedVolume = order.volume;
-          saveOrderHistory(orderHistory);
+          orderState.orderedUuid = order.uuid;
+          orderState.orderedSide = order.side;
+          orderState.orderedPrice = order.price;
+          orderState.orderedVolume = order.volume;
+          saveOrderState(orderState);
         }
       }
         break;
