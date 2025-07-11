@@ -91,3 +91,4 @@ async function runBot() {
 }
 
 runBot();
+setInterval(runBot, 60 * 60 * 1000);
