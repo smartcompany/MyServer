@@ -42,6 +42,12 @@ async function summarizeNews(newsList) {
                 1. 제목은 사람이 쓴 것처럼 흥미를 끌 수 있게 만들어줘. 너무 딱딱하거나 기계적으로 보이면 안 돼.
                 2. 기사 앞부분엔 2~3줄 요약을 붙여줘.
                 3. 본문은 자연스럽고 친근한 말투로 작성해줘. 중요한 숫자나 용어는 유지하되, 초보자도 이해할 수 있게 설명해줘.
+                4. 반드시 아래 JSON 형식으로만 응답해줘. 마크다운, 백틱 없이 JSON만. 
+                
+                {
+                  "title": "제목",
+                  "content": "본문"
+                }
 
                 \n[뉴스 원문]:\n${newsText}`,
         },
@@ -55,10 +61,21 @@ async function summarizeNews(newsList) {
     }
   );
 
-  return {
-    summary: res.data.choices[0].message.content,
-    rawNews: newsText,
-  };
+  const content = res.data.choices[0].message.content;
+  
+  try {
+    const parsedResponse = JSON.parse(content);
+    return parsedResponse;
+  } catch (error) {
+    console.error('❌ JSON 파싱 실패:', error.message);
+    console.log('원본 응답:', content);
+    
+    // JSON 파싱 실패 시 기본값 반환
+    return {
+      title: '암호화폐 시장 동향',
+      content: content
+    };
+  }
 }
 
 async function uploadToBoard(title, content) {
@@ -79,39 +96,21 @@ async function uploadToBoard(title, content) {
   }
 }
 
-async function extractTitleFromContent(content) {
-  // AI 응답에서 첫 번째 # 또는 ## 제목을 찾기
-  const titleMatch = content.match(/^#+\s*(.+)$/m);
-  if (titleMatch) {
-    return titleMatch[1].trim();
-  }
-  
-  // 첫 번째 줄이 제목처럼 보이면 사용
-  const firstLine = content.split('\n')[0].trim();
-  if (firstLine.length > 10 && firstLine.length < 100) {
-    return firstLine;
-  }
-  
-  // 기본 타이틀 사용
-  const today = new Date();
-  return `${today.toLocaleDateString()} 암호화폐 뉴스`;
-}
-
 async function runBot() {
   try {
     console.log('🚀 암호화폐 뉴스 가져오는 중...');
     const newsList = await fetchCryptoNews();
 
     console.log('🧠 요약 중...');
-    const { summary, rawNews } = await summarizeNews(newsList);
+    const response = await summarizeNews(newsList);
 
-    // AI가 생성한 내용에서 타이틀 추출
-    const extractedTitle = await extractTitleFromContent(summary);
-    const title = `${extractedTitle}`;
-    const content = `${summary}\n\n🔗 원문 링크들:\n${rawNews}`;
+    console.log('📝 요약 완료:', response);
+
+    // AI가 생성한 내용에서 타이틀과 컨텐츠 추출
+    const title = response.title || '암호화폐 시장 동향';
+    const content = response.content || '뉴스 요약을 가져오는 중입니다.';
 
     console.log('📤 Supabase에 업로드 중...');
-    console.log('📝 추출된 타이틀:', extractedTitle);
     await uploadToBoard(title, content);
   } catch (err) {
     console.error('❗ 에러 발생:', err.message);
