@@ -31,11 +31,19 @@ async function summarizeNews(newsList) {
   const res = await axios.post(
     'https://api.openai.com/v1/chat/completions',
     {
-      model: 'gpt-3.5-turbo',
+      model: 'gpt-4o',
       messages: [
         {
           role: 'user',
-          content: `아래 암호화폐 뉴스들을 한글로 요약해줘:\n${newsText}`,
+          content: `
+                다음 암호화폐 뉴스를 읽기 쉬운 기사 형식으로 다시 작성해줘.
+
+                조건:
+                1. 제목은 사람이 쓴 것처럼 흥미를 끌 수 있게 만들어줘. 너무 딱딱하거나 기계적으로 보이면 안 돼.
+                2. 기사 앞부분엔 2~3줄 요약을 붙여줘.
+                3. 본문은 자연스럽고 친근한 말투로 작성해줘. 중요한 숫자나 용어는 유지하되, 초보자도 이해할 수 있게 설명해줘.
+
+                \n[뉴스 원문]:\n${newsText}`,
         },
       ],
     },
@@ -91,4 +99,4 @@ async function runBot() {
 }
 
 runBot();
-setInterval(runBot, 60 * 60 * 1000);
+setInterval(runBot, 60 * 60 * 3000);
