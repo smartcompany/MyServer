@@ -79,6 +79,24 @@ async function uploadToBoard(title, content) {
   }
 }
 
+async function extractTitleFromContent(content) {
+  // AI 응답에서 첫 번째 # 또는 ## 제목을 찾기
+  const titleMatch = content.match(/^#+\s*(.+)$/m);
+  if (titleMatch) {
+    return titleMatch[1].trim();
+  }
+  
+  // 첫 번째 줄이 제목처럼 보이면 사용
+  const firstLine = content.split('\n')[0].trim();
+  if (firstLine.length > 10 && firstLine.length < 100) {
+    return firstLine;
+  }
+  
+  // 기본 타이틀 사용
+  const today = new Date();
+  return `${today.toLocaleDateString()} 암호화폐 뉴스`;
+}
+
 async function runBot() {
   try {
     console.log('🚀 암호화폐 뉴스 가져오는 중...');
@@ -87,11 +105,13 @@ async function runBot() {
     console.log('🧠 요약 중...');
     const { summary, rawNews } = await summarizeNews(newsList);
 
-    const today = new Date();
-    const title = `[자동요약] ${today.toLocaleDateString()} 암호화폐 뉴스`;
+    // AI가 생성한 내용에서 타이틀 추출
+    const extractedTitle = await extractTitleFromContent(summary);
+    const title = `${extractedTitle}`;
     const content = `${summary}\n\n🔗 원문 링크들:\n${rawNews}`;
 
     console.log('📤 Supabase에 업로드 중...');
+    console.log('📝 추출된 타이틀:', extractedTitle);
     await uploadToBoard(title, content);
   } catch (err) {
     console.error('❗ 에러 발생:', err.message);
