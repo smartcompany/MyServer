@@ -114,6 +114,10 @@ async function runBot() {
     await uploadToBoard(title, content);
   } catch (err) {
     console.error('❗ 에러 발생:', err.message);
+    if (err.response) {
+      console.error('🔎 상태 코드:', err.response.status);
+      console.error('📄 응답 내용:', err.response.data);
+    }
   }
 }
 
