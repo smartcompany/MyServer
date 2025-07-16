@@ -84,6 +84,7 @@ async function uploadToBoard(title, content) {
       title,
       content,
       author: '코인봇 🤖',
+      board_type: 'coin_news',
       views: 0,
       likes: 0,
     },
@@ -93,6 +94,62 @@ async function uploadToBoard(title, content) {
     console.error('❌ 게시물 업로드 실패:', error.message);
   } else {
     console.log('✅ 게시물 업로드 성공:', data);
+  }
+}
+
+// 자유 게시판용 글 생성 함수
+async function generateFunnyFreeBoardPost() {
+  const res = await axios.post(
+    'https://api.openai.com/v1/chat/completions',
+    {
+      model: 'gpt-4o',
+      messages: [
+        {
+          role: 'user',
+          content: `최근 코인의 트렌드를 바탕으로 코인에 관심 많은 사용자가 코인 자유 게시판에 올릴만한 재밌는 글을 써줘 때로는 시크하고 농담 조로 웃긴 글이 좋아. 가급적 반말로 해줘 커뮤니티 말투로 \n
+                    그리고 웃기고 재치있는 닉네임을 한글로 1개만 출력해 제목과 본문, 닉네임을 아래 JSON 형식으로만 응답해줘. 마크다운, 백틱 없이 JSON만. \n{\n  "title": "제목",\n  "content": "본문"\n, "author": "닉네임"\n}
+                    `,
+        },
+      ],
+    },
+    {
+      headers: {
+        Authorization: `Bearer ${OPENAI_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+    }
+  );
+
+  const content =  res.data.choices[0].message.content
+  .replace(/```json/g, '')
+  .replace(/```/g, '')
+  .trim();
+
+  try {
+    console.log('🔍 자유게시판 글 생성 완료:', content);
+    const parsed = JSON.parse(content);
+    return parsed;
+  } catch (e) {
+    return { title: '코인 자유게시판', content };
+  }
+}
+
+// 자유 게시판에 글 업로드
+async function uploadToFreeBoard(title, content, author) {
+  const { data, error } = await supabase.from('posts').insert([
+    {
+      title,
+      content,
+      author,
+      board_type: 'free_board',
+      views: 0,
+      likes: 0,
+    },
+  ]);
+  if (error) {
+    console.error('❌ 자유게시판 업로드 실패:', error.message);
+  } else {
+    console.log('✅ 자유게시판 업로드 성공:', data);
   }
 }
 
@@ -121,5 +178,26 @@ async function runBot() {
   }
 }
 
+// 자유게시판 봇 실행
+async function runFreeBoardBot() {
+  try {
+    console.log('✍️ 자유게시판 글 생성 중...');
+    const { title, content, author } = await generateFunnyFreeBoardPost();
+    console.log('📤 자유게시판에 업로드 중...');
+    await uploadToFreeBoard(title, content, author);
+  } catch (err) {
+    console.error('❗ 자유게시판 봇 에러:', err.message);
+    if (err.response) {
+      console.error('🔎 상태 코드:', err.response.status);
+      console.error('📄 응답 내용:', err.response.data);
+    }
+  }
+}
+
+// 기존 runBot()은 뉴스 게시판용, runFreeBoardBot()은 자유게시판용
 runBot();
-setInterval(runBot, 60 * 60 * 3000);
+setTimeout(() => {
+  runFreeBoardBot();
+  setInterval(runFreeBoardBot, 3 * 60 * 60 * 1000);
+}, 5000); // 1분 뒤에 자유게시판 봇 시작
+setInterval(runBot, 3 * 60 * 60 * 1000);
