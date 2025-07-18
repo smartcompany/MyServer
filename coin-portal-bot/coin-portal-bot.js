@@ -12,15 +12,101 @@ const {
 const supabase = createClient(COIN_PORTAL_SUPABASE_URL, COIN_PORTAL_SUPABASE_ANON_KEY);
 
 async function fetchCryptoNews() {
-  const res = await axios.get('https://cryptopanic.com/api/v1/posts/', {
-    params: {
-      auth_token: CRYPTOPANIC_API_KEY,
-      filter: 'news',
-      currencies: 'BTC,ETH',
-      public: true,
-    },
-  });
-  return res.data.results;
+  try {
+    console.log('🔍 CryptoPanic API로 뉴스 가져오는 중...');
+    const res = await axios.get('https://cryptopanic.com/api/v1/posts/', {
+      params: {
+        auth_token: CRYPTOPANIC_API_KEY,
+        filter: 'news',
+        currencies: 'BTC,ETH',
+        public: true,
+      },
+    });
+    console.log('✅ CryptoPanic API 성공');
+    return res.data.results;
+  } catch (error) {
+    console.log('❌ CryptoPanic API 실패, NewsData.io API로 대체...');
+    console.error('CryptoPanic 에러:', error.message);
+    
+    try {
+      console.log('🔍 NewsData.io API로 뉴스 가져오는 중...');
+      
+      // API 키 확인
+      const apiKey = process.env.NEWSDATA_API_KEY;
+      if (!apiKey) {
+        console.log('⚠️ NewsData.io API 키가 없습니다. 무료 뉴스 API를 사용합니다.');
+        
+        // 무료 뉴스 API 사용 (API 키 불필요)
+        const freeNewsRes = await axios.get('https://gnews.io/api/v4/search', {
+          params: {
+            q: 'cryptocurrency bitcoin ethereum',
+            lang: 'en',
+            country: 'us',
+            max: 10,
+            token: process.env.GNEWS_API_KEY || 'demo' // GNews API 키 (선택사항)
+          }
+        });
+        
+        const transformedNews = freeNewsRes.data.articles.map(article => ({
+          title: article.title,
+          url: article.url,
+          published_at: article.publishedAt,
+          currencies: [{ code: 'CRYPTO' }],
+          source: { title: article.source.name || 'GNews' }
+        }));
+        
+        console.log('✅ GNews API 성공');
+        return transformedNews;
+      }
+      
+      const newsDataRes = await axios.get('https://newsdata.io/api/1/news', {
+        params: {
+          apikey: apiKey,
+          q: 'cryptocurrency OR bitcoin OR ethereum OR crypto',
+          language: 'en',
+          category: 'business',
+          country: 'us'  // 단일 국가만 지정
+        }
+      });
+      
+      // NewsData.io API 응답을 CryptoPanic 형식으로 변환
+      const transformedNews = newsDataRes.data.results.map(article => ({
+        title: article.title,
+        url: article.link,
+        published_at: article.pubDate,
+        currencies: [{ code: 'CRYPTO' }],
+        source: { title: article.source_id || 'NewsData.io' }
+      }));
+      
+      console.log('✅ NewsData.io API 성공');
+      return transformedNews;
+    } catch (newsDataError) {
+      console.error('❌ NewsData.io API 실패:', newsDataError.message);
+      if (newsDataError.response) {
+        console.error('🔎 상태 코드:', newsDataError.response.status);
+        console.error('📄 응답 내용:', newsDataError.response.data);
+      }
+      
+      try {
+        console.log('🔍 CryptoCompare API로 뉴스 가져오는 중...');
+        const cryptoCompareRes = await axios.get('https://min-api.cryptocompare.com/data/v2/news/?categories=BTC,ETH,ADA,SOL&excludeCategories=Sponsored');
+        
+        const transformedNews = cryptoCompareRes.data.Data.map(article => ({
+          title: article.title,
+          url: article.url,
+          published_at: new Date(article.published_on * 1000).toISOString(),
+          currencies: article.categories ? article.categories.split(',').map(cat => ({ code: cat.trim() })) : [{ code: 'CRYPTO' }],
+          source: { title: article.source || 'CryptoCompare' }
+        }));
+        
+        console.log('✅ CryptoCompare API 성공');
+        return transformedNews;
+      } catch (cryptoCompareError) {
+        console.error('❌ CryptoCompare API도 실패:', cryptoCompareError.message);
+        throw new Error('모든 뉴스 API가 실패했습니다');
+      }
+    }
+  }
 }
 
 async function summarizeNews(newsList) {
@@ -198,6 +284,6 @@ async function runFreeBoardBot() {
 runBot();
 setTimeout(() => {
   runFreeBoardBot();
-  setInterval(runFreeBoardBot, 3 * 60 * 60 * 1000);
-}, 5000); // 1분 뒤에 자유게시판 봇 시작
-setInterval(runBot, 3 * 60 * 60 * 1000);
+  setInterval(runFreeBoardBot, 6 * 60 * 60 * 1000);
+}, 10000); 
+setInterval(runBot, 6 * 60 * 60 * 1000);
