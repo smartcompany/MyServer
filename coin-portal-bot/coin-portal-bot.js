@@ -284,6 +284,6 @@ async function runFreeBoardBot() {
 runBot();
 setTimeout(() => {
   runFreeBoardBot();
-  setInterval(runFreeBoardBot, 6 * 60 * 60 * 1000);
+  setInterval(runFreeBoardBot, 24 * 60 * 60 * 1000);
 }, 10000); 
-setInterval(runBot, 6 * 60 * 60 * 1000);
+setInterval(runBot, 12 * 60 * 60 * 1000);
