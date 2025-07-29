@@ -147,7 +147,10 @@ async function summarizeNews(newsList) {
     }
   );
 
-  const content = res.data.choices[0].message.content;
+  const content =  res.data.choices[0].message.content
+  .replace(/```json/g, '')
+  .replace(/```/g, '')
+  .trim();
   
   try {
     const parsedResponse = JSON.parse(content);
