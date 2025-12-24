@@ -26,6 +26,14 @@ yarn-error.log*
 .env*.local
 .env
 
+# Service account credentials (보안상 중요!)
+service-account.json
+*.json
+!package.json
+!package-lock.json
+!tsconfig.json
+!next.config.js
+
 # Vercel
 .vercel
 
