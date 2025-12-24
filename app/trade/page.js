@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { isTokenValid } from './utils';
 
 export default function TradePage() {
   const [loginArea, setLoginArea] = useState(true);
@@ -34,7 +35,7 @@ export default function TradePage() {
     }
   }, [mainArea]);
 
-  async function checkAuth() {
+  function checkAuth() {
     const token = localStorage.getItem('token');
     if (!token) {
       setLoginArea(true);
@@ -42,20 +43,12 @@ export default function TradePage() {
       return;
     }
 
-    try {
-      const res = await fetch('/api/trade/auth-check', {
-        headers: {
-          Authorization: `Bearer ${token}`
-        }
-      });
-
-      if (res.ok) {
-        showMain();
-      } else {
-        showLogin();
-      }
-    } catch (error) {
-      console.error('인증 확인 실패:', error);
+    // 클라이언트 사이드에서 토큰 유효성만 확인 (서버 호출 없음)
+    if (isTokenValid(token)) {
+      showMain();
+    } else {
+      // 토큰이 만료되었거나 유효하지 않음
+      localStorage.removeItem('token');
       showLogin();
     }
   }
