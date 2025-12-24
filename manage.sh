@@ -13,23 +13,30 @@ if ! command -v pm2 &> /dev/null; then
     exit 1
 fi
 
+# ecosystem.config.js에서 정의된 앱 이름들
+APPS=("nextjs-server")
+
 case "$1" in
     start)
-        echo "🚀 모든 서버 시작 중..."
+        echo "🚀 서버 시작 중..."
         pm2 start ecosystem.config.js
         pm2 save
-        echo "✅ 모든 서버가 시작되었습니다."
+        echo "✅ 서버가 시작되었습니다."
         echo "상태 확인: ./manage.sh status"
         ;;
     stop)
-        echo "🛑 모든 서버 중지 중..."
-        pm2 stop all
-        echo "✅ 모든 서버가 중지되었습니다."
+        echo "🛑 서버 중지 중..."
+        for app in "${APPS[@]}"; do
+            pm2 stop "$app" 2>/dev/null && echo "✅ $app 중지됨" || echo "⚠️  $app 없음"
+        done
+        echo "✅ 서버 중지 완료"
         ;;
     restart)
-        echo "🔄 모든 서버 재시작 중..."
-        pm2 restart all
-        echo "✅ 모든 서버가 재시작되었습니다."
+        echo "🔄 서버 재시작 중..."
+        for app in "${APPS[@]}"; do
+            pm2 restart "$app" 2>/dev/null && echo "✅ $app 재시작됨" || echo "⚠️  $app 없음"
+        done
+        echo "✅ 서버 재시작 완료"
         ;;
     status)
         echo "📊 서버 상태 확인:"
@@ -75,9 +82,11 @@ case "$1" in
         echo "✅ 저장되었습니다. 재부팅 시 자동으로 시작됩니다."
         ;;
     delete)
-        echo "🗑️  모든 PM2 프로세스 삭제 중..."
-        pm2 delete all
-        echo "✅ 모든 프로세스가 삭제되었습니다."
+        echo "🗑️  PM2 프로세스 삭제 중..."
+        for app in "${APPS[@]}"; do
+            pm2 delete "$app" 2>/dev/null && echo "✅ $app 삭제됨" || echo "⚠️  $app 없음"
+        done
+        echo "✅ 프로세스 삭제 완료"
         ;;
     *)
         echo "📖 서버 관리 스크립트"
