@@ -30,11 +30,14 @@ yarn-error.log*
 service-account.json
 **/service-account.json
 
-# Sensitive JSON files (보안상 중요!)
-aiRequest.json
+# Runtime data files (런타임에 생성되는 데이터 파일)
 cashBalance.json
 orderState.json
-config.json
+trade-logs.txt
+
+# Server-specific config (서버별로 다를 수 있는 설정 파일)
+# config.json은 서버에서 생성되므로 제외
+trade-server/config.json
 
 # Vercel
 .vercel
@@ -52,3 +55,5 @@ logs/
 .vscode/
 *.swp
 *.swo
+DEPLOY-SECRETS.md
+deploy-secrets.sh
