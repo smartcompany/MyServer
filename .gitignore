@@ -28,11 +28,13 @@ yarn-error.log*
 
 # Service account credentials (보안상 중요!)
 service-account.json
-*.json
-!package.json
-!package-lock.json
-!tsconfig.json
-!next.config.js
+**/service-account.json
+
+# Sensitive JSON files (보안상 중요!)
+aiRequest.json
+cashBalance.json
+orderState.json
+config.json
 
 # Vercel
 .vercel
