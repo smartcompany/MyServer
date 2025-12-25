@@ -19,7 +19,7 @@ APPS=("nextjs-server")
 case "$1" in
     start)
         echo "🚀 서버 시작 중..."
-        pm2 start ecosystem.config.js
+        pm2 start npm --name nextjs-server -- start
         pm2 save
         echo "✅ 서버가 시작되었습니다."
         echo "상태 확인: ./manage.sh status"

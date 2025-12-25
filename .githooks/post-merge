@@ -34,7 +34,9 @@ if pm2 list | grep -q "nextjs-server"; then
     fi
     
     echo "🔄 Next.js 서버 재시작 중..."
-    pm2 restart nextjs-server
+    pm2 delete nextjs-server 2>/dev/null
+    pm2 start npm --name nextjs-server -- start
+    pm2 save
     
     echo "✅ 자동 재시작 완료!"
 else

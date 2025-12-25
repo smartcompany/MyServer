@@ -39,7 +39,8 @@ fi
 
 echo ""
 echo "🔄 서버 재시작 중..."
-pm2 restart nextjs-server 2>/dev/null
+pm2 delete nextjs-server 2>/dev/null
+pm2 start npm --name nextjs-server -- start
 pm2 save
 
 echo ""
