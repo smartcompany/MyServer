@@ -4,7 +4,7 @@ module.exports = {
       name: 'nextjs-server',
       script: 'npm',
       args: 'start',
-      cwd: '/home/smart/project/ai_chat',
+      cwd: '/home/smart/project/home',
       env: {
         NODE_ENV: 'production',
         PORT: 3000
