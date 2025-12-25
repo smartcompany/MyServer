@@ -139,9 +139,55 @@ case "$1" in
             echo "✅ 백업 완료: $BACKUP_FILE"
         fi
         
-        # 간소화된 설정 생성
+        # 간소화된 설정 생성 (HTTP + HTTPS)
         echo "📝 새로운 Nginx 설정 생성 중..."
-        sudo tee "$NGINX_CONFIG" > /dev/null << 'EOF'
+        
+        # SSL 인증서 경로 확인
+        SSL_CERT="/etc/letsencrypt/live/smartzero.duckdns.org/fullchain.pem"
+        SSL_KEY="/etc/letsencrypt/live/smartzero.duckdns.org/privkey.pem"
+        
+        if [ -f "$SSL_CERT" ] && [ -f "$SSL_KEY" ]; then
+            echo "✅ SSL 인증서 발견, HTTPS 설정 포함"
+            sudo tee "$NGINX_CONFIG" > /dev/null << EOF
+# HTTP에서 HTTPS로 리다이렉트
+server {
+    listen 80;
+    server_name smartzero.duckdns.org;
+    return 301 https://\$server_name\$request_uri;
+}
+
+# HTTPS 서버
+server {
+    listen 443 ssl http2;
+    server_name smartzero.duckdns.org;
+
+    # SSL 인증서 설정
+    ssl_certificate $SSL_CERT;
+    ssl_certificate_key $SSL_KEY;
+    
+    # SSL 보안 설정
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_prefer_server_ciphers on;
+    ssl_ciphers ECDHE-RSA-AES128-GCM-SHA256:ECDHE-RSA-AES256-GCM-SHA384;
+
+    # 모든 요청을 Next.js 서버로 프록시
+    location / {
+        proxy_pass http://127.0.0.1:3000;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade \$http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
+        proxy_cache_bypass \$http_upgrade;
+    }
+}
+EOF
+        else
+            echo "⚠️  SSL 인증서가 없습니다. HTTP만 설정합니다."
+            echo "   HTTPS를 사용하려면: sudo certbot --nginx -d smartzero.duckdns.org"
+            sudo tee "$NGINX_CONFIG" > /dev/null << 'EOF'
 server {
     listen 80;
     server_name smartzero.duckdns.org;
@@ -160,6 +206,7 @@ server {
     }
 }
 EOF
+        fi
         
         # 설정 테스트
         echo ""
