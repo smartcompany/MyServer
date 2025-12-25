@@ -156,7 +156,7 @@
     async function loadConfig() {
       const token = localStorage.getItem('token');
       console.log('call get config API with token:', token);
-      const res = await fetch('/trade-api/config', {
+      const res = await fetch('/api/trade/config', {
         method: 'GET',
         headers: { 'Authorization': 'Bearer ' + token }
       });
@@ -186,7 +186,7 @@
 
       console.log('설정 업데이트 :', { buy, sell });
       console.log('call update config API with token:', token);
-      const res = await fetch('/trade-api/config', {
+      const res = await fetch('/api/trade/config', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -213,7 +213,7 @@
     async function confirmReset() {
       if (confirm("매매 초기화를 진행하시겠습니까?")) {
         const token = localStorage.getItem('token');
-        const res = await fetch('/trade-api/init', {
+        const res = await fetch('/api/trade/init', {
           method: 'POST',
           headers: {
             'Authorization': 'Bearer ' + token
@@ -231,7 +231,7 @@
       const token = localStorage.getItem('token');
       console.log('call get logs API with token:', token);
 
-      const res = await fetch('/trade-api/cashBalance', {
+      const res = await fetch('/api/trade/cashBalance', {
         method: 'GET',
         headers: { 'Authorization': 'Bearer ' + token }
       });
@@ -271,7 +271,7 @@
     async function loadLogs() {
       const token = localStorage.getItem('token');
       console.log('call get logs API with token:', token);
-      const res = await fetch('/trade-api/logs', {
+      const res = await fetch('/api/trade/logs', {
         method: 'GET',
         headers: { 'Authorization': 'Bearer ' + token }
       });
@@ -281,28 +281,56 @@
       document.getElementById('logArea').textContent = text;
     }
 
-    async function checkAuth() {
+    // JWT 토큰 디코딩 함수
+    function decodeJWT(token) {
+      try {
+        const parts = token.split('.');
+        if (parts.length !== 3) {
+          return null;
+        }
+        const payload = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')));
+        return payload;
+      } catch (error) {
+        console.error('JWT 디코딩 실패:', error);
+        return null;
+      }
+    }
+
+    // 토큰 유효성 검사 (클라이언트 사이드)
+    function isTokenValid(token) {
+      if (!token) {
+        return false;
+      }
+      const payload = decodeJWT(token);
+      if (!payload) {
+        return false;
+      }
+      // 만료 시간 확인
+      if (payload.exp) {
+        const now = Math.floor(Date.now() / 1000);
+        if (now >= payload.exp) {
+          return false; // 만료됨
+        }
+      }
+      return true;
+    }
+
+    function checkAuth() {
       console.log('✅ auth-check start:'); 
       const token = localStorage.getItem('token');
       if (!token) {
         console.log('토큰 없으면 로그인 폼 보여주기'); 
-        // 토큰 없으면 로그인 폼 보여주기
         document.querySelector('#loginArea').style.display = 'block';
         return;
       }
 
-      console.log('call auth-check API with token:', token);  // <-- 1. 토큰 확인
-      const res = await fetch('/trade-api/auth-check', {
-        headers: {
-          Authorization: `Bearer ${token}`
-        }
-      });
-
-      console.log('✅ auth-check 응답 상태:', res.status);  // <-- 2. 응답 상태 확인
-      if (res.ok) {
+      // 클라이언트 사이드에서 토큰 유효성만 확인 (서버 호출 없음)
+      if (isTokenValid(token)) {
+        console.log('✅ 토큰 유효, 메인 화면 표시');
         showMain();
       } else {
-        console.error('❌ auth-check fetch 실패:', err);
+        console.log('❌ 토큰 만료 또는 유효하지 않음');
+        localStorage.removeItem('token');
         showLogin();
       }
     }
