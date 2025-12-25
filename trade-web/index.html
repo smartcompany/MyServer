@@ -117,7 +117,7 @@
       const id = document.getElementById('id').value;
       const pw = document.getElementById('pw').value;
 
-      const res = await fetch('/trade-api/login', {
+      const res = await fetch('/api/trade/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id, password: pw })
