@@ -15,12 +15,27 @@ echo "📥 Git pull 중..."
 git pull origin main
 
 echo ""
-echo "📦 의존성 확인 중..."
-npm install --production
+# 변경된 파일 확인
+CHANGED_FILES=$(git diff-tree -r --name-only --no-commit-id ORIG_HEAD HEAD 2>/dev/null || echo "")
+
+# package.json이나 package-lock.json이 변경되었는지 확인
+if echo "$CHANGED_FILES" | grep -qE "(package\.json|package-lock\.json)"; then
+    echo "📦 의존성 파일 변경됨, 설치 중..."
+    npm install --production
+else
+    echo "ℹ️  의존성 파일 변경 없음, 설치 스킵"
+fi
 
 echo ""
-echo "🔨 Next.js 빌드 중..."
-npm run build
+# 빌드가 필요한 파일이 변경되었는지 확인
+# app/ 디렉토리, next.config.js, package.json 변경 시에만 빌드 필요
+# 정적 파일(trade-web/, dashboard/static/ 등)은 빌드 불필요
+if echo "$CHANGED_FILES" | grep -qE "(^app/|^next\.config\.js|^package\.json)"; then
+    echo "🔨 빌드 필요한 파일 변경됨, 빌드 중..."
+    npm run build
+else
+    echo "ℹ️  빌드 필요한 파일 변경 없음, 빌드 스킵 (정적 파일만 변경된 경우 재시작만)"
+fi
 
 echo ""
 echo "🔄 서버 재시작 중..."
