@@ -19,9 +19,36 @@ APPS=("nextjs-server")
 case "$1" in
     start)
         echo "🚀 서버 시작 중..."
+        
+        # 프로젝트 디렉토리로 이동
+        cd /home/smart/project/home || {
+            echo "❌ 프로젝트 디렉토리로 이동 실패: /home/smart/project/home"
+            exit 1
+        }
+        
+        # Nginx 상태 확인 및 시작
+        if ! systemctl is-active --quiet nginx; then
+            echo "📦 Nginx가 실행 중이 아닙니다. 시작 중..."
+            sudo systemctl start nginx
+            if [ $? -eq 0 ]; then
+                echo "✅ Nginx 시작 완료"
+            else
+                echo "⚠️  Nginx 시작 실패 (권한 문제일 수 있음)"
+            fi
+        else
+            echo "✅ Nginx 이미 실행 중"
+        fi
+        
+        # Next.js 서버 시작
         pm2 start npm --name nextjs-server -- start
         pm2 save
-        echo "✅ 서버가 시작되었습니다."
+        
+        echo ""
+        echo "✅ PM2 서버가 시작되었습니다."
+        echo ""
+        echo "📋 서버 상태:"
+        pm2 list | grep nextjs-server || echo "⚠️  nextjs-server가 목록에 없습니다"
+        echo ""
         echo "상태 확인: ./manage.sh status"
         ;;
     stop)
@@ -88,6 +115,54 @@ case "$1" in
         done
         echo "✅ 프로세스 삭제 완료"
         ;;
+    init-nginx)
+        echo "🔧 Nginx 설정 초기화 중..."
+        
+        NGINX_CONFIG="/etc/nginx/sites-available/default"
+        BACKUP_FILE="/etc/nginx/sites-available/default.backup.$(date +%Y%m%d_%H%M%S)"
+        
+        # 기존 설정 백업
+        if [ -f "$NGINX_CONFIG" ]; then
+            echo "📦 기존 설정 백업 중: $BACKUP_FILE"
+            sudo cp "$NGINX_CONFIG" "$BACKUP_FILE"
+            echo "✅ 백업 완료: $BACKUP_FILE"
+        fi
+        
+        # 간소화된 설정 생성
+        echo "📝 새로운 Nginx 설정 생성 중..."
+        sudo tee "$NGINX_CONFIG" > /dev/null << 'EOF'
+server {
+    listen 80;
+    server_name smartzero.duckdns.org;
+
+    # 모든 요청을 Next.js 서버로 프록시
+    location / {
+        proxy_pass http://127.0.0.1:3000;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_cache_bypass $http_upgrade;
+    }
+}
+EOF
+        
+        # 설정 테스트
+        echo ""
+        echo "🧪 Nginx 설정 테스트 중..."
+        if sudo nginx -t; then
+            echo "✅ Nginx 설정이 올바릅니다."
+            echo ""
+            echo "⚠️  Nginx를 재시작하려면: sudo systemctl restart nginx"
+        else
+            echo "❌ Nginx 설정에 오류가 있습니다!"
+            echo "백업에서 복원하려면: sudo cp $BACKUP_FILE $NGINX_CONFIG"
+            exit 1
+        fi
+        ;;
     *)
         echo "📖 서버 관리 스크립트"
         echo ""
@@ -104,11 +179,15 @@ case "$1" in
         echo "  monitor        - PM2 모니터링 대시보드"
         echo "  save           - 현재 설정 저장 (재부팅 시 자동 시작)"
         echo "  delete         - 모든 프로세스 삭제"
+        echo "  kill-port      - 포트 3000 사용 중인 프로세스 강제 종료"
+        echo "  init-nginx     - Nginx 설정 초기화 (간소화된 설정으로 변경)"
         echo ""
         echo "예시:"
         echo "  ./manage.sh start"
         echo "  ./manage.sh restart-one trade-api"
         echo "  ./manage.sh logs dashboard-api"
+        echo "  ./manage.sh init-nginx"
+        echo "  ./manage.sh init-nginx"
         ;;
 esac
 
