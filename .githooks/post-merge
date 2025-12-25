@@ -1,0 +1,28 @@
+#!/bin/bash
+
+# Git pull 후 자동으로 빌드 및 재시작하는 hook
+
+echo "🔄 Git pull 완료, 자동 재시작 시작..."
+
+# PM2가 설치되어 있는지 확인
+if ! command -v pm2 &> /dev/null; then
+    echo "⚠️  PM2가 설치되어 있지 않습니다. 스킵합니다."
+    exit 0
+fi
+
+# Next.js 서버가 실행 중인지 확인
+if pm2 list | grep -q "nextjs-server"; then
+    echo "📦 의존성 확인 중..."
+    npm install --production
+    
+    echo "🔨 Next.js 빌드 중..."
+    npm run build
+    
+    echo "🔄 Next.js 서버 재시작 중..."
+    pm2 restart nextjs-server
+    
+    echo "✅ 자동 재시작 완료!"
+else
+    echo "ℹ️  nextjs-server가 실행 중이 아니므로 스킵합니다."
+fi
+
