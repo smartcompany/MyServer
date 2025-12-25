@@ -39,7 +39,18 @@ case "$1" in
             echo "✅ Nginx 이미 실행 중"
         fi
         
-        # Next.js 서버 시작
+        # Next.js 서버 시작 (이미 실행 중인 것들은 모두 삭제 후 새로 시작)
+        if pm2 list | grep -q "nextjs-server"; then
+            echo "🗑️  기존 nextjs-server 프로세스 삭제 중..."
+            pm2 delete nextjs-server 2>/dev/null
+            # 여러 개가 있을 수 있으므로 반복 삭제
+            while pm2 list | grep -q "nextjs-server"; do
+                pm2 delete nextjs-server 2>/dev/null
+            done
+            echo "✅ 기존 프로세스 삭제 완료"
+        fi
+        
+        echo "🚀 nextjs-server 시작 중..."
         pm2 start npm --name nextjs-server -- start
         pm2 save
         
