@@ -24,7 +24,7 @@ npm run build
 
 echo ""
 echo "🔄 서버 재시작 중..."
-pm2 restart nextjs-server 2>/dev/null || pm2 start ecosystem.config.js
+pm2 restart nextjs-server 2>/dev/null
 pm2 save
 
 echo ""
