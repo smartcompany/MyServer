@@ -76,9 +76,10 @@ export async function register() {
       console.log(`📁 [instrumentation] resolve된 경로: ${resolvedPath}`);
       
       // createRequire를 프로젝트 루트의 package.json 기준으로 생성
-      // 이렇게 하면 프로젝트 루트를 기준으로 모듈을 찾을 수 있음
+      // createRequire는 URL을 받아야 하므로 pathToFileURL로 변환
       const packageJsonPath = join(projectRoot, 'package.json');
-      const projectRequire = createRequire(packageJsonPath);
+      const packageJsonURL = pathToFileURL(packageJsonPath).href;
+      const projectRequire = createRequire(packageJsonURL);
       console.log(`📁 [instrumentation] createRequire 생성 완료 (기준: ${packageJsonPath})`);
       
       // 상대 경로로 require (프로젝트 루트 기준)
