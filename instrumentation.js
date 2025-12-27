@@ -21,12 +21,9 @@ export async function register() {
     try {
       // 프로젝트 루트 찾기: instrumentation.js는 .next/server/에 있으므로
       // .next 디렉토리를 찾아서 그 부모를 프로젝트 루트로 사용
-      // createRequire를 사용하여 CommonJS 모듈 로드
       const instrumentationRequire = createRequire(import.meta.url);
       const fs = instrumentationRequire('fs');
       
-      // 프로젝트 루트 찾기: instrumentation.js는 .next/server/에 있으므로
-      // .next 디렉토리를 찾아서 그 부모를 프로젝트 루트로 사용
       let projectRoot = __dirname;
       const parts = projectRoot.split('/');
       const nextIndex = parts.findIndex(part => part === '.next');
@@ -75,32 +72,27 @@ export async function register() {
       const resolvedPath = resolve(upbitTradePath);
       console.log(`📁 [instrumentation] resolve된 경로: ${resolvedPath}`);
       
-      // createRequire를 프로젝트 루트의 package.json 기준으로 생성
-      // createRequire는 URL을 받아야 하므로 pathToFileURL로 변환
-      const packageJsonPath = join(projectRoot, 'package.json');
-      const packageJsonURL = pathToFileURL(packageJsonPath).href;
-      const projectRequire = createRequire(packageJsonURL);
-      console.log(`📁 [instrumentation] createRequire 생성 완료 (기준: ${packageJsonPath})`);
+      // 절대 경로를 URL로 변환
+      const upbitTradeURL = pathToFileURL(resolvedPath).href;
+      console.log(`📁 [instrumentation] import() 시도: ${upbitTradeURL}`);
       
-      // 상대 경로로 require (프로젝트 루트 기준)
-      const relativePath = './trade-server/upbit-trade.js';
-      console.log(`📁 [instrumentation] require 시도: ${relativePath} (프로젝트 루트: ${projectRoot})`);
+      // dynamic import 사용 (Next.js/Webpack 환경에서 가장 안전함)
+      // CommonJS 모듈을 import하면 module.exports가 default에 담깁니다.
+      const upbitModule = await import(upbitTradeURL);
+      const upbitTrade = upbitModule.default || upbitModule;
       
-      // require 시도
-      console.log(`📁 [instrumentation] require 시도 직전...`);
-      const upbitTrade = projectRequire(relativePath);
-      console.log(`✅ [instrumentation] require 성공, upbitTrade 타입: ${typeof upbitTrade}`);
-      
-      if (upbitTrade && upbitTrade.start) {
+      console.log(`✅ [instrumentation] 모듈 로드 성공, 타입: ${typeof upbitTrade}`);
+
+      if (upbitTrade && typeof upbitTrade.start === 'function') {
         console.log('🚀 Upbit Trade 루프 시작...');
         upbitTrade.start();
       } else {
-        console.log('⚠️  upbit-trade.js 모듈을 찾을 수 없거나 start 함수가 없습니다.');
-        console.log('   upbitTrade:', upbitTrade);
+        console.log('⚠️  upbit-trade.js 모듈에서 start 함수를 찾을 수 없습니다.');
+        console.log('   upbitTrade 내용:', JSON.stringify(upbitTrade));
       }
     } catch (error) {
       console.error('❌ Upbit Trade 루프 시작 실패:', error);
+      console.error('   에러 메시지:', error.message);
       console.error('   스택:', error.stack);
     }  
 }
-

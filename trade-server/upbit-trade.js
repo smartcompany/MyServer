@@ -5,13 +5,12 @@ const fs = require('fs');
 console.log('📦 [upbit-trade] 모듈 로드 시작...');
 
 // 프로젝트 루트: instrumentation.js에서 이미 process.chdir()로 설정했으므로 process.cwd() 사용
-const projectRoot = __dirname;
+const projectRoot = process.cwd();
 
 // 디버깅: 경로 정보 출력
+console.log('📦 [upbit-trade] 모듈 로드 시작...');
 console.log('🔍 [upbit-trade] 디버깅 정보:');
-console.log(`   __dirname: ${__dirname}`);
 console.log(`   process.cwd(): ${process.cwd()}`);
-console.log(`   찾은 projectRoot: ${projectRoot}`);
 console.log(`   .env 파일 경로: ${path.join(projectRoot, '.env')}`);
 console.log(`   .env 파일 존재: ${fs.existsSync(path.join(projectRoot, '.env'))}`);
 
