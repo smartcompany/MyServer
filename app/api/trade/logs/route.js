@@ -18,8 +18,6 @@ export async function GET(request) {
       });
     }
 
-    console.log('logFilePath:', logFilePath);
-
     const data = fs.readFileSync(logFilePath, 'utf8');
     const lines = data.trim().split('\n').slice(-20).join('\n');
     
