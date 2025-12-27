@@ -23,10 +23,33 @@ export async function register() {
       // .next 디렉토리를 찾아서 그 부모를 프로젝트 루트로 사용
       const fs = require('fs');
       
-      let projectRoot = __dirname; 
-      console.log(`📁 projectRoot: ${projectRoot}`);
+      // 프로젝트 루트 찾기: instrumentation.js는 .next/server/에 있으므로
+      // .next 디렉토리를 찾아서 그 부모를 프로젝트 루트로 사용
+      let projectRoot = __dirname;
+      const parts = projectRoot.split('/');
+      const nextIndex = parts.findIndex(part => part === '.next');
       
-      const upbitTrade = require('./trade-server/upbit-trade.js');
+      if (nextIndex > 0) {
+        // .next 디렉토리의 부모가 프로젝트 루트
+        projectRoot = parts.slice(0, nextIndex).join('/');
+      } else {
+        // .next가 없으면 __dirname에서 위로 올라가며 찾기
+        while (projectRoot !== '/' && projectRoot !== dirname(projectRoot)) {
+          if (fs.existsSync(join(projectRoot, 'package.json')) || 
+              fs.existsSync(join(projectRoot, 'next.config.js'))) {
+            break;
+          }
+          projectRoot = dirname(projectRoot);
+        }
+      }
+      
+      console.log(`📁 [instrumentation] __dirname: ${__dirname}`);
+      console.log(`📁 [instrumentation] 찾은 projectRoot: ${projectRoot}`);
+      
+      // 절대 경로로 require (빌드 시 복사되지 않으므로 원본 파일을 직접 로드)
+      const upbitTradePath = join(projectRoot, 'trade-server', 'upbit-trade.js');
+      console.log(`📁 [instrumentation] upbitTradePath: ${upbitTradePath}`);
+      const upbitTrade = require(upbitTradePath);
       
       if (upbitTrade && upbitTrade.start) {
         console.log('🚀 Upbit Trade 루프 시작...');

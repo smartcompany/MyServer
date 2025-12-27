@@ -3,7 +3,7 @@ const path = require('path');
 const fs = require('fs');
 
 // 프로젝트 루트: instrumentation.js에서 이미 process.chdir()로 설정했으므로 process.cwd() 사용
-const projectRoot = process.cwd();
+const projectRoot = __dirname;
 
 // 디버깅: 경로 정보 출력
 console.log('🔍 [upbit-trade] 디버깅 정보:');
