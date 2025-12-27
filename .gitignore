@@ -46,8 +46,6 @@ trade-server/config.json
 *.tsbuildinfo
 next-env.d.ts
 
-# PM2
-logs/
 .pm2
 
 # IDE
