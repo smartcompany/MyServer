@@ -104,7 +104,7 @@ case "$1" in
         if [ -z "$2" ]; then
             echo "❌ 서버 이름을 지정해주세요."
             echo "사용법: ./manage.sh restart-one [서버이름]"
-            echo "사용 가능한 서버: nextjs-server, upbit-trade, my-bot"
+            echo "사용 가능한 서버: nextjs-server"
             exit 1
         fi
         echo "🔄 $2 서버 재시작 중..."

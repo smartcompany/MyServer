@@ -15,7 +15,6 @@
   },
   "name": "myserver",
   "version": "1.0.0",
-  "main": "my-bot.js",
   "scripts": {
     "dev": "next dev",
     "build": "next build",

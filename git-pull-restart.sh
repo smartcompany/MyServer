@@ -29,7 +29,7 @@ fi
 echo ""
 # 빌드가 필요한 파일이 변경되었는지 확인
 # app/ 디렉토리, next.config.js, package.json 변경 시에만 빌드 필요
-# 정적 파일(trade-web/, dashboard/static/ 등)은 빌드 불필요
+# 정적 파일은 빌드 불필요
 if echo "$CHANGED_FILES" | grep -qE "(^app/|^next\.config\.js|^package\.json)"; then
     echo "🔨 빌드 필요한 파일 변경됨, 빌드 중..."
     npm run build

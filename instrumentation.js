@@ -46,9 +46,14 @@ export async function register() {
       console.log(`📁 [instrumentation] __dirname: ${__dirname}`);
       console.log(`📁 [instrumentation] 찾은 projectRoot: ${projectRoot}`);
       
-      // 절대 경로로 require (빌드 시 복사되지 않으므로 원본 파일을 직접 로드)
-      const upbitTradePath = join(projectRoot, 'trade-server', 'upbit-trade.js');
+      // 작업 디렉토리를 프로젝트 루트로 변경
+      process.chdir(projectRoot);
+      console.log(`📁 [instrumentation] 변경 후 process.cwd(): ${process.cwd()}`);
+      
+      // 상대 경로로 require (작업 디렉토리가 프로젝트 루트이므로)
+      const upbitTradePath = './trade-server/upbit-trade.js';
       console.log(`📁 [instrumentation] upbitTradePath: ${upbitTradePath}`);
+      console.log(`📁 [instrumentation] 파일 존재 확인: ${fs.existsSync(join(process.cwd(), 'trade-server', 'upbit-trade.js'))}`);
       const upbitTrade = require(upbitTradePath);
       
       if (upbitTrade && upbitTrade.start) {
