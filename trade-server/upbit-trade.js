@@ -679,6 +679,7 @@ let tradeLoopInterval = null;
 let isLoopRunning = false;
 
 async function loop() {
+  console.log('upbit-trade loop 시작');
   while (true) {
     try {
       await trade();
