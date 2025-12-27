@@ -10,7 +10,13 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 export async function register() {
-  if (process.env.NEXT_RUNTIME === 'nodejs') {
+    if (process.env.NEXT_RUNTIME !== 'nodejs') {
+        console.log('❌ Next.js 서버 시작 실패');
+        return;
+    }
+
+    console.log('✅ Next.js 서버 시작');
+     
     // 서버 사이드에서만 실행
     try {
       // 프로젝트 루트 찾기: instrumentation.js는 .next/server/에 있으므로
@@ -32,7 +38,6 @@ export async function register() {
     } catch (error) {
       console.error('❌ Upbit Trade 루프 시작 실패:', error);
       console.error('   스택:', error.stack);
-    }
-  }
+    }  
 }
 
