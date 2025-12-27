@@ -286,6 +286,13 @@ async function cancelOrder(orderedUuid) {
     }
   } catch (error) {
     const errorData = error.response?.data;
+
+    // 이미 취소된 주문이면 성공으로 간주하고 진행
+    if (errorData?.error?.name === 'canceled_order') {
+      console.log(`ℹ️ [upbit-trade] 이미 취소된 주문입니다. (ID: ${orderedUuid})`);
+      return { uuid: orderedUuid, state: 'done' };
+    }
+
     console.error('❌ 주문 취소 실패 (401 등):');
     if (errorData) {
       console.error(`   Upbit 응답 상세: ${JSON.stringify(errorData)}`);
