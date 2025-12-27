@@ -16,6 +16,7 @@ export default function TradePage() {
   });
   const [logs, setLogs] = useState('불러오는 중...');
   const [tradeData, setTradeData] = useState(null);
+  const [processStatus, setProcessStatus] = useState(null);
 
   useEffect(() => {
     checkAuth();
@@ -26,11 +27,14 @@ export default function TradePage() {
       loadConfig();
       loadTradeLogs();
       loadLogs();
+      loadProcessStatus();
       const logInterval = setInterval(loadLogs, 5000);
       const tradeInterval = setInterval(loadTradeLogs, 5000);
+      const statusInterval = setInterval(loadProcessStatus, 10000);
       return () => {
         clearInterval(logInterval);
         clearInterval(tradeInterval);
+        clearInterval(statusInterval);
       };
     }
   }, [mainArea]);
@@ -199,6 +203,20 @@ export default function TradePage() {
     }
   }
 
+  async function loadProcessStatus() {
+    const token = localStorage.getItem('token');
+    try {
+      const res = await fetch('/api/trade/status', {
+        method: 'GET',
+        headers: { 'Authorization': 'Bearer ' + token }
+      });
+      const data = await res.json();
+      setProcessStatus(data.upbitTrade);
+    } catch (error) {
+      console.error('프로세스 상태 로드 실패:', error);
+    }
+  }
+
   return (
     <div style={{
       fontFamily: 'sans-serif',
@@ -283,9 +301,28 @@ export default function TradePage() {
             fontSize: '16px'
           }} /><br />
           <h3 style={{ textAlign: 'center' }}>트레이딩 설정</h3>
+          {processStatus && (
+            <div style={{
+              padding: '10px',
+              marginBottom: '10px',
+              backgroundColor: processStatus.running ? '#e8f5e9' : '#ffebee',
+              borderRadius: '4px',
+              fontSize: '14px'
+            }}>
+              <strong>프로세스 상태:</strong> {processStatus.running ? '✅ 실행 중' : '❌ 중지됨'}
+              {processStatus.running && processStatus.uptime && (
+                <span style={{ marginLeft: '10px', color: '#666' }}>
+                  (가동 시간: {Math.floor((Date.now() - processStatus.uptime) / 1000 / 60)}분)
+                </span>
+              )}
+            </div>
+          )}
           <label style={{ display: 'block', marginBottom: '10px' }}>
             <input id="isTrading" type="checkbox" defaultChecked={config.isTrading} onChange={updateConfig} />
             트레이딩 시작/중지
+            <span style={{ fontSize: '12px', color: '#666', marginLeft: '5px' }}>
+              (체크박스 변경 시 즉시 적용됩니다)
+            </span>
             <button onClick={confirmReset} style={{
               backgroundColor: '#f44336',
               color: 'white',

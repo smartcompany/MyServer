@@ -602,6 +602,9 @@ async function getActiveOrder(uuid) {
   return activeOrder;
 }
 
+let tradeLoopInterval = null;
+let isLoopRunning = false;
+
 async function loop() {
   while (true) {
     try {
@@ -613,6 +616,26 @@ async function loop() {
   }
 }
 
-loop(); // 루프 시작
+// 모듈로 export하여 Next.js에서 사용 가능하도록
+if (require.main === module) {
+  // 직접 실행 시에만 루프 시작
+  loop();
+} else {
+  // 모듈로 import된 경우
+  module.exports = {
+    start: () => {
+      if (!isLoopRunning) {
+        isLoopRunning = true;
+        loop();
+      }
+    },
+    stop: () => {
+      isLoopRunning = false;
+      // 루프는 while(true)이므로 실제로는 trade() 함수 내부에서 isTrading을 확인하여 중지
+    },
+    trade: trade,
+    loop: loop
+  };
+}
 
 //main();
