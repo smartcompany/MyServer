@@ -34,12 +34,19 @@ const moment = require('moment-timezone');
 const ACCESS_KEY = process.env.UPBIT_ACC_KEY;
 const SECRET_KEY = process.env.UPBIT_SEC_KEY;
 
-// 환경 변수 확인
+// 환경 변수 확인 및 디버깅
 if (!ACCESS_KEY || !SECRET_KEY) {
   console.error('❌ 업비트 API 키가 설정되지 않았습니다.');
   console.error('   UPBIT_ACC_KEY와 UPBIT_SEC_KEY 환경 변수를 확인하세요.');
   console.error(`   프로젝트 루트: ${projectRoot}`);
   console.error(`   .env 파일 경로: ${path.join(projectRoot, '.env')}`);
+  console.error(`   .env 파일 존재: ${fs.existsSync(path.join(projectRoot, '.env'))}`);
+  console.error(`   ACCESS_KEY 존재: ${!!ACCESS_KEY}`);
+  console.error(`   SECRET_KEY 존재: ${!!SECRET_KEY}`);
+} else {
+  console.log('✅ 업비트 API 키 로드 성공');
+  console.log(`   ACCESS_KEY 길이: ${ACCESS_KEY.length}`);
+  console.log(`   SECRET_KEY 길이: ${SECRET_KEY.length}`);
 } 
 const SERVER_URL = 'https://api.upbit.com';
 const EXCHANGE_RATE_URL = 'https://rate-history.vercel.app/api/rate-history';
@@ -137,6 +144,12 @@ function saveConfig(config) {
 
 async function getAccountInfo() {
   try {
+    // API 키 확인
+    if (!ACCESS_KEY || !SECRET_KEY) {
+      console.error('❌ API 키가 없어서 계정 정보를 가져올 수 없습니다.');
+      return null;
+    }
+
     // JWT 생성
     const payload = {
       access_key: ACCESS_KEY,
@@ -157,7 +170,17 @@ async function getAccountInfo() {
       return null;
     }
   } catch (error) {
-    console.error('Error fetching account info:', error.message);
+    if (error.response) {
+      console.error(`Error fetching account info: ${error.response.status} - ${error.response.statusText}`);
+      if (error.response.status === 401) {
+        console.error('❌ 인증 실패: API 키가 잘못되었거나 만료되었습니다.');
+        console.error('   UPBIT_ACC_KEY와 UPBIT_SEC_KEY를 확인하세요.');
+        console.error(`   ACCESS_KEY 존재: ${!!ACCESS_KEY}, 길이: ${ACCESS_KEY ? ACCESS_KEY.length : 0}`);
+        console.error(`   SECRET_KEY 존재: ${!!SECRET_KEY}, 길이: ${SECRET_KEY ? SECRET_KEY.length : 0}`);
+      }
+    } else {
+      console.error('Error fetching account info:', error.message);
+    }
     return null;
   }
 }

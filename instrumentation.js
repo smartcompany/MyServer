@@ -16,7 +16,17 @@ export async function register() {
       // 프로젝트 루트로 작업 디렉토리 변경 (환경 변수 로딩을 위해)
       // instrumentation.js는 .next/server/에 있으므로 프로젝트 루트로 이동
       const projectRoot = join(__dirname, '../..');
+      const originalCwd = process.cwd();
+      
+      console.log(`📁 현재 작업 디렉토리: ${originalCwd}`);
+      console.log(`📁 프로젝트 루트: ${projectRoot}`);
+      
       process.chdir(projectRoot);
+      console.log(`📁 작업 디렉토리 변경: ${process.cwd()}`);
+      
+      // 환경 변수 확인 (디버깅)
+      console.log(`🔑 UPBIT_ACC_KEY 존재: ${!!process.env.UPBIT_ACC_KEY}`);
+      console.log(`🔑 UPBIT_SEC_KEY 존재: ${!!process.env.UPBIT_SEC_KEY}`);
       
       const upbitTrade = require('./trade-server/upbit-trade.js');
       
