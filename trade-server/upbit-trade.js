@@ -4,17 +4,51 @@ const fs = require('fs');
 
 // 프로젝트 루트 경로 찾기
 function getProjectRoot() {
+  // 1. process.cwd() 먼저 확인 (instrumentation.js에서 chdir 했을 수 있음)
+  const cwd = process.cwd();
+  if (fs.existsSync(path.join(cwd, 'package.json')) || 
+      fs.existsSync(path.join(cwd, 'next.config.js'))) {
+    // .next 디렉토리가 아니어야 함
+    if (!cwd.includes('.next')) {
+      return cwd;
+    }
+  }
+  
+  // 2. __dirname에서 .next 디렉토리 감지 및 처리
   let currentDir = __dirname;
-  // trade-server 디렉토리에서 시작하여 프로젝트 루트 찾기
+  if (currentDir.includes('.next')) {
+    // .next 디렉토리의 부모를 찾기
+    // 예: /home/smart/project/home/.next/server/trade-server
+    //     -> /home/smart/project/home
+    const parts = currentDir.split(path.sep);
+    const nextIndex = parts.findIndex(part => part === '.next');
+    if (nextIndex > 0) {
+      const projectRoot = parts.slice(0, nextIndex).join(path.sep);
+      if (fs.existsSync(path.join(projectRoot, 'package.json')) || 
+          fs.existsSync(path.join(projectRoot, 'next.config.js'))) {
+        return projectRoot;
+      }
+    }
+  }
+  
+  // 3. 일반적인 방법: __dirname에서 위로 올라가며 찾기 (.next 제외)
+  currentDir = __dirname;
   while (currentDir !== '/' && currentDir !== path.dirname(currentDir)) {
+    // .next 디렉토리는 건너뛰기
+    if (currentDir.includes('.next')) {
+      currentDir = path.dirname(currentDir);
+      continue;
+    }
+    
     if (fs.existsSync(path.join(currentDir, 'package.json')) || 
         fs.existsSync(path.join(currentDir, 'next.config.js'))) {
       return currentDir;
     }
     currentDir = path.dirname(currentDir);
   }
-  // 찾지 못하면 trade-server의 부모 디렉토리 사용
-  return path.resolve(__dirname, '..');
+  
+  // 4. 마지막 수단: 하드코딩된 경로
+  return '/home/smart/project/home';
 }
 
 const projectRoot = getProjectRoot();
