@@ -8,7 +8,6 @@ console.log('📦 [upbit-trade] 모듈 로드 시작...');
 const projectRoot = process.cwd();
 
 // 디버깅: 경로 정보 출력
-console.log('📦 [upbit-trade] 모듈 로드 시작...');
 console.log('🔍 [upbit-trade] 디버깅 정보:');
 console.log(`   process.cwd(): ${process.cwd()}`);
 console.log(`   .env 파일 경로: ${path.join(projectRoot, '.env')}`);
@@ -20,7 +19,9 @@ console.log(`   로드 전 UPBIT_SEC_KEY: ${process.env.UPBIT_SEC_KEY ? '존재'
 
 // 환경 변수 로드 (프로젝트 루트의 .env 파일 사용)
 const envPath = path.join(projectRoot, '.env');
-const envResult = require('dotenv').config({ path: envPath });
+console.log(`🔍 .env 경로 확인: ${envPath}`);
+const dotenv = require('dotenv');
+const envResult = dotenv.config({ path: envPath });
 
 if (envResult.error) {
   console.error(`   ❌ .env 파일 로드 실패: ${envResult.error.message}`);

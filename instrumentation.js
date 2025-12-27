@@ -1,98 +1,47 @@
 // Next.js 서버 시작 시 자동으로 실행되는 파일
 // Next.js 13+ App Router에서 지원
 
-import { createRequire } from 'module';
-import { fileURLToPath } from 'url';
-import { dirname, join, resolve } from 'path';
-import { pathToFileURL } from 'url';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-
 export async function register() {
-    if (process.env.NEXT_RUNTIME !== 'nodejs') {
-        console.log('❌ Next.js 서버 시작 실패');
-        return;
-    }
+    if (process.env.NEXT_RUNTIME !== 'nodejs') return;
 
-    console.log('✅ Next.js 서버 시작');
+    console.log('✅ Next.js 서버 시작 (instrumentation)');
      
-    // 서버 사이드에서만 실행
     try {
-      // 프로젝트 루트 찾기: instrumentation.js는 .next/server/에 있으므로
-      // .next 디렉토리를 찾아서 그 부모를 프로젝트 루트로 사용
-      const instrumentationRequire = createRequire(import.meta.url);
-      const fs = instrumentationRequire('fs');
+      const path = await import('path');
+      const fs = await import('fs');
       
-      let projectRoot = __dirname;
-      const parts = projectRoot.split('/');
-      const nextIndex = parts.findIndex(part => part === '.next');
+      // 프로젝트 루트 찾기 (__dirname은 빌드된 위치이므로 process.cwd() 기준으로 탐색)
+      let projectRoot = process.cwd();
       
-      if (nextIndex > 0) {
-        // .next 디렉토리의 부모가 프로젝트 루트
-        projectRoot = parts.slice(0, nextIndex).join('/');
-      } else {
-        // .next가 없으면 __dirname에서 위로 올라가며 찾기
-        while (projectRoot !== '/' && projectRoot !== dirname(projectRoot)) {
-          if (fs.existsSync(join(projectRoot, 'package.json')) || 
-              fs.existsSync(join(projectRoot, 'next.config.js'))) {
-            break;
-          }
-          projectRoot = dirname(projectRoot);
-        }
+      // 만약 .next 내부에서 실행 중이라면 루트로 이동
+      if (projectRoot.includes('.next')) {
+        projectRoot = projectRoot.split('.next')[0];
       }
-      
-      console.log(`📁 [instrumentation] __dirname: ${__dirname}`);
-      console.log(`📁 [instrumentation] 찾은 projectRoot: ${projectRoot}`);
-      
-      // 작업 디렉토리를 프로젝트 루트로 변경
-      process.chdir(projectRoot);
-      console.log(`📁 [instrumentation] 변경 후 process.cwd(): ${process.cwd()}`);
-      
-      // 파일 경로 확인
-      const upbitTradePath = join(projectRoot, 'trade-server', 'upbit-trade.js');
-      console.log(`📁 [instrumentation] upbitTradePath: ${upbitTradePath}`);
-      
-      // 파일 존재 확인
-      if (!fs.existsSync(upbitTradePath)) {
-        throw new Error(`파일이 존재하지 않습니다: ${upbitTradePath}`);
-      }
-      
-      // 파일 읽기 권한 확인
-      try {
-        fs.accessSync(upbitTradePath, fs.constants.R_OK);
-      } catch (err) {
-        throw new Error(`파일 읽기 권한이 없습니다: ${upbitTradePath}`);
-      }
-      
-      console.log(`📁 [instrumentation] 파일 존재 확인: true`);
-      console.log(`📁 [instrumentation] 파일 크기: ${fs.statSync(upbitTradePath).size} bytes`);
-      
-      // 절대 경로를 resolve로 정규화
-      const resolvedPath = resolve(upbitTradePath);
-      console.log(`📁 [instrumentation] resolve된 경로: ${resolvedPath}`);
-      
-      // 절대 경로를 URL로 변환
-      const upbitTradeURL = pathToFileURL(resolvedPath).href;
-      console.log(`📁 [instrumentation] import() 시도: ${upbitTradeURL}`);
-      
-      // dynamic import 사용 (Next.js/Webpack 환경에서 가장 안전함)
-      // CommonJS 모듈을 import하면 module.exports가 default에 담깁니다.
-      const upbitModule = await import(upbitTradeURL);
-      const upbitTrade = upbitModule.default || upbitModule;
-      
-      console.log(`✅ [instrumentation] 모듈 로드 성공, 타입: ${typeof upbitTrade}`);
 
+      // 작업 디렉토리를 프로젝트 루트로 변경 (upbit-trade.js 내부 경로 해결을 위해)
+      process.chdir(projectRoot);
+      console.log(`📁 작업 디렉토리 설정: ${process.cwd()}`);
+
+      const upbitTradePath = path.join(projectRoot, 'trade-server', 'upbit-trade.js');
+      
+      if (!fs.existsSync(upbitTradePath)) {
+        console.error(`❌ upbit-trade.js 파일을 찾을 수 없습니다: ${upbitTradePath}`);
+        return;
+      }
+
+      // Webpack 번들링을 피하기 위해 eval('require') 사용
+      // 이렇게 하면 런타임에 실제 파일 시스템에서 모듈을 로드합니다.
+      const nativeRequire = eval('require');
+      const upbitTrade = nativeRequire(upbitTradePath);
+      
       if (upbitTrade && typeof upbitTrade.start === 'function') {
-        console.log('🚀 Upbit Trade 루프 시작...');
+        console.log('🚀 Upbit Trade 루프 시작 중...');
         upbitTrade.start();
       } else {
-        console.log('⚠️  upbit-trade.js 모듈에서 start 함수를 찾을 수 없습니다.');
-        console.log('   upbitTrade 내용:', JSON.stringify(upbitTrade));
+        console.error('❌ upbit-trade.js 모듈에 start 함수가 없습니다.');
       }
     } catch (error) {
-      console.error('❌ Upbit Trade 루프 시작 실패:', error);
-      console.error('   에러 메시지:', error.message);
-      console.error('   스택:', error.stack);
+      console.error('❌ instrumentation 등록 중 에러 발생:', error.message);
+      console.error(error.stack);
     }  
 }
