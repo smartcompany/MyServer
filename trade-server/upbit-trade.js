@@ -1,24 +1,86 @@
-require('dotenv').config();
-require('./log');
+// 필수 모듈 먼저 로드
+const path = require('path');
+const fs = require('fs');
+
+// 프로젝트 루트 경로 찾기
+function getProjectRoot() {
+  let currentDir = __dirname;
+  // trade-server 디렉토리에서 시작하여 프로젝트 루트 찾기
+  while (currentDir !== '/' && currentDir !== path.dirname(currentDir)) {
+    if (fs.existsSync(path.join(currentDir, 'package.json')) || 
+        fs.existsSync(path.join(currentDir, 'next.config.js'))) {
+      return currentDir;
+    }
+    currentDir = path.dirname(currentDir);
+  }
+  // 찾지 못하면 trade-server의 부모 디렉토리 사용
+  return path.resolve(__dirname, '..');
+}
+
+const projectRoot = getProjectRoot();
+
+// 환경 변수 로드 (프로젝트 루트의 .env 파일 사용)
+require('dotenv').config({ path: path.join(projectRoot, '.env') });
 
 const axios = require('axios');
 const querystring = require('querystring');
 const crypto = require('crypto');
 const jwt = require('jsonwebtoken');
 const uuid = require('uuid');
-const path = require('path');
-const fs = require('fs');
+const moment = require('moment-timezone');
 
 // filepath: /path/to/file
 // 업비트 API 키 설정
 const ACCESS_KEY = process.env.UPBIT_ACC_KEY;
-const SECRET_KEY = process.env.UPBIT_SEC_KEY; 
+const SECRET_KEY = process.env.UPBIT_SEC_KEY;
+
+// 환경 변수 확인
+if (!ACCESS_KEY || !SECRET_KEY) {
+  console.error('❌ 업비트 API 키가 설정되지 않았습니다.');
+  console.error('   UPBIT_ACC_KEY와 UPBIT_SEC_KEY 환경 변수를 확인하세요.');
+  console.error(`   프로젝트 루트: ${projectRoot}`);
+  console.error(`   .env 파일 경로: ${path.join(projectRoot, '.env')}`);
+} 
 const SERVER_URL = 'https://api.upbit.com';
 const EXCHANGE_RATE_URL = 'https://rate-history.vercel.app/api/rate-history';
 
-const ordersFilePath = path.join(__dirname, 'orderState.json');
-const cashBalanceLogPath = path.join(__dirname, 'cashBalance.json');
-const configFilePath = path.join(__dirname, 'config.json');
+// projectRoot는 위에서 이미 정의됨
+const tradeServerDir = path.join(projectRoot, 'trade-server');
+
+const ordersFilePath = path.join(tradeServerDir, 'orderState.json');
+const cashBalanceLogPath = path.join(tradeServerDir, 'cashBalance.json');
+const configFilePath = path.join(tradeServerDir, 'config.json');
+const logFilePath = path.join(tradeServerDir, 'trade-logs.txt');
+
+// log.js 대신 직접 로그 함수 구현 (경로 문제 해결)
+const formatDate = () => {
+  return moment().tz("Asia/Seoul").format("YYYY-MM-DD HH:mm:ss");
+};
+
+const originalLog = console.log;
+const originalError = console.error;
+
+console.log = (...args) => {
+  const dateString = formatDate();
+  const message = `[${dateString}] ${args.join(' ')}\n`;
+  try {
+    fs.appendFileSync(logFilePath, message);
+  } catch (err) {
+    // 로그 파일 쓰기 실패해도 계속 진행
+  }
+  originalLog(...args);
+};
+
+console.error = (...args) => {
+  const dateString = formatDate();
+  const message = `[${dateString}] ERROR: ${args.join(' ')}\n`;
+  try {
+    fs.appendFileSync(logFilePath, message);
+  } catch (err) {
+    // 로그 파일 쓰기 실패해도 계속 진행
+  }
+  originalError(...args);
+};
 
 const OrderType = {
   BUY: 'buy',
