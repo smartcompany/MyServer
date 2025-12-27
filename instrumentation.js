@@ -13,10 +13,12 @@ export async function register() {
   if (process.env.NEXT_RUNTIME === 'nodejs') {
     // 서버 사이드에서만 실행
     try {
-      // 프로젝트 루트로 작업 디렉토리 변경 (환경 변수 로딩을 위해)
-      // instrumentation.js는 .next/server/에 있으므로 프로젝트 루트로 이동
-      const projectRoot = join(__dirname, '../..');
-      process.chdir(projectRoot);
+      // 프로젝트 루트 찾기: instrumentation.js는 .next/server/에 있으므로
+      // .next 디렉토리를 찾아서 그 부모를 프로젝트 루트로 사용
+      const fs = require('fs');
+      
+      let projectRoot = __dirname; 
+      console.log(`📁 projectRoot: ${projectRoot}`);
       
       const upbitTrade = require('./trade-server/upbit-trade.js');
       
