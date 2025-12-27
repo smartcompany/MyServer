@@ -19,8 +19,30 @@ function getProjectRoot() {
 
 const projectRoot = getProjectRoot();
 
+// 디버깅: 경로 정보 출력
+console.log('🔍 [upbit-trade] 디버깅 정보:');
+console.log(`   __dirname: ${__dirname}`);
+console.log(`   process.cwd(): ${process.cwd()}`);
+console.log(`   찾은 projectRoot: ${projectRoot}`);
+console.log(`   .env 파일 경로: ${path.join(projectRoot, '.env')}`);
+console.log(`   .env 파일 존재: ${fs.existsSync(path.join(projectRoot, '.env'))}`);
+
+// 환경 변수 로드 전 상태
+console.log(`   로드 전 UPBIT_ACC_KEY: ${process.env.UPBIT_ACC_KEY ? '존재' : '없음'}`);
+console.log(`   로드 전 UPBIT_SEC_KEY: ${process.env.UPBIT_SEC_KEY ? '존재' : '없음'}`);
+
 // 환경 변수 로드 (프로젝트 루트의 .env 파일 사용)
-require('dotenv').config({ path: path.join(projectRoot, '.env') });
+const envPath = path.join(projectRoot, '.env');
+const envResult = require('dotenv').config({ path: envPath });
+
+if (envResult.error) {
+  console.error(`   ❌ .env 파일 로드 실패: ${envResult.error.message}`);
+} else {
+  console.log(`   ✅ .env 파일 로드 성공`);
+  if (envResult.parsed) {
+    console.log(`   로드된 키 개수: ${Object.keys(envResult.parsed).length}`);
+  }
+}
 
 const axios = require('axios');
 const querystring = require('querystring');
@@ -34,19 +56,15 @@ const moment = require('moment-timezone');
 const ACCESS_KEY = process.env.UPBIT_ACC_KEY;
 const SECRET_KEY = process.env.UPBIT_SEC_KEY;
 
-// 환경 변수 확인 및 디버깅
+// 환경 변수 확인
+console.log(`   로드 후 UPBIT_ACC_KEY: ${ACCESS_KEY ? `존재 (길이: ${ACCESS_KEY.length})` : '없음'}`);
+console.log(`   로드 후 UPBIT_SEC_KEY: ${SECRET_KEY ? `존재 (길이: ${SECRET_KEY.length})` : '없음'}`);
+
 if (!ACCESS_KEY || !SECRET_KEY) {
   console.error('❌ 업비트 API 키가 설정되지 않았습니다.');
   console.error('   UPBIT_ACC_KEY와 UPBIT_SEC_KEY 환경 변수를 확인하세요.');
   console.error(`   프로젝트 루트: ${projectRoot}`);
-  console.error(`   .env 파일 경로: ${path.join(projectRoot, '.env')}`);
-  console.error(`   .env 파일 존재: ${fs.existsSync(path.join(projectRoot, '.env'))}`);
-  console.error(`   ACCESS_KEY 존재: ${!!ACCESS_KEY}`);
-  console.error(`   SECRET_KEY 존재: ${!!SECRET_KEY}`);
-} else {
-  console.log('✅ 업비트 API 키 로드 성공');
-  console.log(`   ACCESS_KEY 길이: ${ACCESS_KEY.length}`);
-  console.log(`   SECRET_KEY 길이: ${SECRET_KEY.length}`);
+  console.error(`   .env 파일 경로: ${envPath}`);
 } 
 const SERVER_URL = 'https://api.upbit.com';
 const EXCHANGE_RATE_URL = 'https://rate-history.vercel.app/api/rate-history';
@@ -144,12 +162,6 @@ function saveConfig(config) {
 
 async function getAccountInfo() {
   try {
-    // API 키 확인
-    if (!ACCESS_KEY || !SECRET_KEY) {
-      console.error('❌ API 키가 없어서 계정 정보를 가져올 수 없습니다.');
-      return null;
-    }
-
     // JWT 생성
     const payload = {
       access_key: ACCESS_KEY,
@@ -170,17 +182,7 @@ async function getAccountInfo() {
       return null;
     }
   } catch (error) {
-    if (error.response) {
-      console.error(`Error fetching account info: ${error.response.status} - ${error.response.statusText}`);
-      if (error.response.status === 401) {
-        console.error('❌ 인증 실패: API 키가 잘못되었거나 만료되었습니다.');
-        console.error('   UPBIT_ACC_KEY와 UPBIT_SEC_KEY를 확인하세요.');
-        console.error(`   ACCESS_KEY 존재: ${!!ACCESS_KEY}, 길이: ${ACCESS_KEY ? ACCESS_KEY.length : 0}`);
-        console.error(`   SECRET_KEY 존재: ${!!SECRET_KEY}, 길이: ${SECRET_KEY ? SECRET_KEY.length : 0}`);
-      }
-    } else {
-      console.error('Error fetching account info:', error.message);
-    }
+    console.error('Error fetching account info:', error.message);
     return null;
   }
 }
