@@ -3,7 +3,7 @@
 
 import { createRequire } from 'module';
 import { fileURLToPath } from 'url';
-import { dirname, join } from 'path';
+import { dirname, join, resolve } from 'path';
 
 const require = createRequire(import.meta.url);
 const __filename = fileURLToPath(import.meta.url);
@@ -50,11 +50,32 @@ export async function register() {
       process.chdir(projectRoot);
       console.log(`📁 [instrumentation] 변경 후 process.cwd(): ${process.cwd()}`);
       
-      // 절대 경로로 require (상대 경로는 모듈 위치 기준으로 해석될 수 있음)
+      // 파일 경로 확인
       const upbitTradePath = join(projectRoot, 'trade-server', 'upbit-trade.js');
       console.log(`📁 [instrumentation] upbitTradePath: ${upbitTradePath}`);
-      console.log(`📁 [instrumentation] 파일 존재 확인: ${fs.existsSync(upbitTradePath)}`);
-      const upbitTrade = require(upbitTradePath);
+      
+      // 파일 존재 확인
+      if (!fs.existsSync(upbitTradePath)) {
+        throw new Error(`파일이 존재하지 않습니다: ${upbitTradePath}`);
+      }
+      
+      // 파일 읽기 권한 확인
+      try {
+        fs.accessSync(upbitTradePath, fs.constants.R_OK);
+      } catch (err) {
+        throw new Error(`파일 읽기 권한이 없습니다: ${upbitTradePath}`);
+      }
+      
+      console.log(`📁 [instrumentation] 파일 존재 확인: true`);
+      console.log(`📁 [instrumentation] 파일 크기: ${fs.statSync(upbitTradePath).size} bytes`);
+      
+      // 절대 경로를 resolve로 정규화하여 require
+      const resolvedPath = resolve(upbitTradePath);
+      console.log(`📁 [instrumentation] resolve된 경로: ${resolvedPath}`);
+      console.log(`📁 [instrumentation] require 시도 (절대 경로)`);
+      
+      // require 시도 (절대 경로는 resolve로 정규화된 경로 사용)
+      const upbitTrade = require(resolvedPath);
       
       if (upbitTrade && upbitTrade.start) {
         console.log('🚀 Upbit Trade 루프 시작...');
