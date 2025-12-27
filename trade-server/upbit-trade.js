@@ -229,11 +229,17 @@ async function buyTether(price, volume) {
       //console.log('지정가 매수 주문 성공:', response.data);
       return response.data;
     } else {
-      console.error(`Error: ${response.status}, ${response.data}`);
+      console.error(`❌ 매수 주문 API 응답 에러: HTTP ${response.status}`, response.data);
       return null;
     }
   } catch (error) {
-    console.error('Error placing limit buy order:', error.response?.data || error.message);
+    const errorData = error.response?.data;
+    console.error('❌ 매수 주문 실패 (401 등):');
+    if (errorData) {
+      console.error(`   Upbit 응답 상세: ${JSON.stringify(errorData)}`);
+    } else {
+      console.error(`   에러 메시지: ${error.message}`);
+    }
     return null;
   }
 }
@@ -275,11 +281,17 @@ async function cancelOrder(orderedUuid) {
       //console.log('주문 취소 성공:', response.data);
       return response.data;
     } else {
-      console.error(`Error: ${response.status}, ${response.data}`);
+      console.error(`❌ 주문 취소 API 응답 에러: HTTP ${response.status}`, response.data);
       return null;
     }
   } catch (error) {
-    console.error('Error canceling order:', error.message);
+    const errorData = error.response?.data;
+    console.error('❌ 주문 취소 실패 (401 등):');
+    if (errorData) {
+      console.error(`   Upbit 응답 상세: ${JSON.stringify(errorData)}`);
+    } else {
+      console.error(`   에러 메시지: ${error.message}`);
+    }
     return null;
   }
 }
