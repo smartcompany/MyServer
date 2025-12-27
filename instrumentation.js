@@ -4,8 +4,8 @@
 import { createRequire } from 'module';
 import { fileURLToPath } from 'url';
 import { dirname, join, resolve } from 'path';
+import { pathToFileURL } from 'url';
 
-const require = createRequire(import.meta.url);
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
@@ -21,7 +21,9 @@ export async function register() {
     try {
       // 프로젝트 루트 찾기: instrumentation.js는 .next/server/에 있으므로
       // .next 디렉토리를 찾아서 그 부모를 프로젝트 루트로 사용
-      const fs = require('fs');
+      // createRequire를 사용하여 CommonJS 모듈 로드
+      const instrumentationRequire = createRequire(import.meta.url);
+      const fs = instrumentationRequire('fs');
       
       // 프로젝트 루트 찾기: instrumentation.js는 .next/server/에 있으므로
       // .next 디렉토리를 찾아서 그 부모를 프로젝트 루트로 사용
@@ -69,13 +71,22 @@ export async function register() {
       console.log(`📁 [instrumentation] 파일 존재 확인: true`);
       console.log(`📁 [instrumentation] 파일 크기: ${fs.statSync(upbitTradePath).size} bytes`);
       
-      // 절대 경로를 resolve로 정규화하여 require
+      // 절대 경로를 resolve로 정규화
       const resolvedPath = resolve(upbitTradePath);
       console.log(`📁 [instrumentation] resolve된 경로: ${resolvedPath}`);
-      console.log(`📁 [instrumentation] require 시도 (절대 경로)`);
       
-      // require 시도 (절대 경로는 resolve로 정규화된 경로 사용)
-      const upbitTrade = require(resolvedPath);
+      // createRequire를 프로젝트 루트의 package.json 기준으로 생성
+      // 이렇게 하면 프로젝트 루트를 기준으로 모듈을 찾을 수 있음
+      const packageJsonPath = join(projectRoot, 'package.json');
+      const projectRequire = createRequire(packageJsonPath);
+      console.log(`📁 [instrumentation] createRequire 생성 완료 (기준: ${packageJsonPath})`);
+      
+      // 상대 경로로 require (프로젝트 루트 기준)
+      const relativePath = './trade-server/upbit-trade.js';
+      console.log(`📁 [instrumentation] require 시도: ${relativePath} (프로젝트 루트: ${projectRoot})`);
+      
+      // require 시도
+      const upbitTrade = projectRequire(relativePath);
       
       if (upbitTrade && upbitTrade.start) {
         console.log('🚀 Upbit Trade 루프 시작...');
