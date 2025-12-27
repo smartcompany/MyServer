@@ -1,9 +1,9 @@
 import { verifyToken } from '../middleware';
+import { getTradeServerPath } from '../utils';
 import fs from 'fs';
-import path from 'path';
 
-const configFilePath = path.join(process.cwd(), 'trade-server', 'config.json');
-const orderStateFilePath = path.join(process.cwd(), 'trade-server', 'orderState.json');
+const configFilePath = getTradeServerPath('config.json');
+const orderStateFilePath = getTradeServerPath('orderState.json');
 
 let config = {};
 if (fs.existsSync(configFilePath)) {

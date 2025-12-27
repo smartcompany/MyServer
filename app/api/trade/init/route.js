@@ -1,10 +1,10 @@
 import { verifyToken } from '../middleware';
+import { getTradeServerPath } from '../utils';
 import fs from 'fs';
-import path from 'path';
 
-const logFilePath = path.join(process.cwd(), 'trade-server', 'trade-logs.txt');
-const cashBalanceLogPath = path.join(process.cwd(), 'trade-server', 'cashBalance.json');
-const orderStateFilePath = path.join(process.cwd(), 'trade-server', 'orderState.json');
+const logFilePath = getTradeServerPath('trade-logs.txt');
+const cashBalanceLogPath = getTradeServerPath('cashBalance.json');
+const orderStateFilePath = getTradeServerPath('orderState.json');
 
 function needInitForOrderState() {
   if (fs.existsSync(orderStateFilePath)) {

@@ -1,6 +1,6 @@
 import { verifyToken } from '../middleware';
+import { getTradeServerPath } from '../utils';
 import fs from 'fs';
-import path from 'path';
 
 export async function GET(request) {
   const auth = verifyToken(request);
@@ -10,7 +10,7 @@ export async function GET(request) {
 
   try {
     // config.json에서 isTrading 상태 확인
-    const configFilePath = path.join(process.cwd(), 'trade-server', 'config.json');
+    const configFilePath = getTradeServerPath('config.json');
     let isTrading = false;
     
     if (fs.existsSync(configFilePath)) {

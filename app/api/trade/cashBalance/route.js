@@ -1,8 +1,8 @@
 import { verifyToken } from '../middleware';
+import { getTradeServerPath } from '../utils';
 import fs from 'fs';
-import path from 'path';
 
-const cashBalanceLogPath = path.join(process.cwd(), 'trade-server', 'cashBalance.json');
+const cashBalanceLogPath = getTradeServerPath('cashBalance.json');
 
 export async function GET(request) {
   const auth = verifyToken(request);
