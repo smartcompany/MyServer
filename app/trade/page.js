@@ -196,10 +196,25 @@ export default function TradePage() {
         method: 'GET',
         headers: { 'Authorization': 'Bearer ' + token }
       });
+      
+      if (!res.ok) {
+        console.error('로그 API 응답 실패:', res.status, res.statusText);
+        setLogs(`로그를 불러올 수 없습니다. (HTTP ${res.status})`);
+        return;
+      }
+      
+      const contentType = res.headers.get('content-type');
+      if (contentType && contentType.includes('text/html')) {
+        console.error('HTML 응답이 반환되었습니다. API 라우트를 확인하세요.');
+        setLogs('로그 API가 올바르게 작동하지 않습니다. 서버 로그를 확인하세요.');
+        return;
+      }
+      
       const text = await res.text();
       setLogs(text);
     } catch (error) {
       console.error('로그 로드 실패:', error);
+      setLogs(`로그 로드 실패: ${error.message}`);
     }
   }
 
