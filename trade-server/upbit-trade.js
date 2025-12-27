@@ -2,6 +2,8 @@
 const path = require('path');
 const fs = require('fs');
 
+console.log('📦 [upbit-trade] 모듈 로드 시작...');
+
 // 프로젝트 루트: instrumentation.js에서 이미 process.chdir()로 설정했으므로 process.cwd() 사용
 const projectRoot = __dirname;
 
@@ -691,25 +693,31 @@ async function loop() {
 }
 
 // 모듈로 export하여 Next.js에서 사용 가능하도록
-if (require.main === module) {
-  // 직접 실행 시에만 루프 시작
+// 항상 module.exports를 설정 (createRequire 사용 시 require.main 판정이 부정확할 수 있음)
+const upbitTradeModule = {
+  start: () => {
+    if (!isLoopRunning) {
+      isLoopRunning = true;
+      console.log('✅ [upbit-trade] 트레이딩 루프 시작 요청');
+      loop();
+    } else {
+      console.log('ℹ️ [upbit-trade] 트레이딩 루프가 이미 실행 중입니다.');
+    }
+  },
+  stop: () => {
+    isLoopRunning = false;
+    console.log('🛑 [upbit-trade] 트레이딩 루프 중지 요청');
+  },
+  trade: trade,
+  loop: loop
+};
+
+module.exports = upbitTradeModule;
+console.log('✅ [upbit-trade] module.exports 설정 완료');
+
+// 직접 실행 시에만 루프 시작 (Node.js에서 단독 실행할 때만 적용)
+if (typeof require !== 'undefined' && require.main === module) {
   loop();
-} else {
-  // 모듈로 import된 경우
-  module.exports = {
-    start: () => {
-      if (!isLoopRunning) {
-        isLoopRunning = true;
-        loop();
-      }
-    },
-    stop: () => {
-      isLoopRunning = false;
-      // 루프는 while(true)이므로 실제로는 trade() 함수 내부에서 isTrading을 확인하여 중지
-    },
-    trade: trade,
-    loop: loop
-  };
 }
 
 //main();

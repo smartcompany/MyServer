@@ -87,7 +87,9 @@ export async function register() {
       console.log(`📁 [instrumentation] require 시도: ${relativePath} (프로젝트 루트: ${projectRoot})`);
       
       // require 시도
+      console.log(`📁 [instrumentation] require 시도 직전...`);
       const upbitTrade = projectRequire(relativePath);
+      console.log(`✅ [instrumentation] require 성공, upbitTrade 타입: ${typeof upbitTrade}`);
       
       if (upbitTrade && upbitTrade.start) {
         console.log('🚀 Upbit Trade 루프 시작...');
