@@ -9,8 +9,9 @@ const axios = require('axios');
 const { getFirestore, Timestamp } = require('firebase-admin/firestore');
 const serviceAccount = require('./service-account.json');
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
-
-console.log('API KEY:', OPENAI_API_KEY); 
+// 상수는 env로 빼지 않고 코드에 고정 (API KEY만 env 유지)
+const OPENAI_MODEL = 'gpt-5-q';
+const OPENAI_MAX_COMPLETION_TOKENS = 100;
 
 admin.initializeApp({
   credential: admin.credential.cert(serviceAccount)
@@ -140,13 +141,13 @@ async function askOpenAI(messagesText) {
     console.log('User Prompt:', userPrompt);
  
     const body = {
-              model: "gpt-4o",
+              model: OPENAI_MODEL,
               messages: [
                 { role: "system", content: systemPrompt},
                 { role: "user", content: userPrompt}
               ],
-              max_tokens: 100,
-              temperature: 0.7,
+              // USDTSignal과 동일하게 max_completion_tokens 사용 (gpt-5 계열 호환성 ↑)
+              max_completion_tokens: OPENAI_MAX_COMPLETION_TOKENS
             };
 
     const response = await axios.post(
