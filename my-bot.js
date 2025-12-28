@@ -11,7 +11,7 @@ const aiRequest = require('./aiRequest.json');
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 // 상수는 env로 빼지 않고 코드에 고정 (API KEY만 env 유지)
 const OPENAI_MODEL = 'gpt-5-nano';
-const OPENAI_MAX_COMPLETION_TOKENS = 100;
+const OPENAI_MAX_COMPLETION_TOKENS = 2000;
 
 admin.initializeApp({
   credential: admin.credential.cert(serviceAccount)
@@ -143,7 +143,6 @@ async function askOpenAI(messagesText) {
                 { role: "system", content: systemPrompt},
                 { role: "user", content: userPrompt}
               ],
-              // USDTSignal과 동일하게 max_completion_tokens 사용 (gpt-5 계열 호환성 ↑)
               max_completion_tokens: OPENAI_MAX_COMPLETION_TOKENS
             };
 
