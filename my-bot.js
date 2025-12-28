@@ -10,7 +10,7 @@ const serviceAccount = require('./service-account.json');
 const aiRequest = require('./aiRequest.json');
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 // 상수는 env로 빼지 않고 코드에 고정 (API KEY만 env 유지)
-const OPENAI_MODEL = 'gpt-5-q';
+const OPENAI_MODEL = 'gpt-5-nano';
 const OPENAI_MAX_COMPLETION_TOKENS = 100;
 
 admin.initializeApp({
