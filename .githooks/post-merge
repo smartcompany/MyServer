@@ -37,5 +37,15 @@ pm2 delete nextjs-server 2>/dev/null
 pm2 start npm --name nextjs-server -- start
 pm2 save
 
+# my-bot.js 변경 시 봇 재시작
+if echo "$CHANGED_FILES" | grep -qE "(^my-bot\.js$)"; then
+    echo "🤖 my-bot.js 변경됨, my-bot 재시작..."
+    pm2 delete my-bot 2>/dev/null
+    pm2 start my-bot.js --name my-bot
+    pm2 save
+else
+    echo "ℹ️  my-bot.js 변경 없음, my-bot 재시작 스킵"
+fi
+
 echo "✅ 자동 재시작 완료!"
 

@@ -42,7 +42,7 @@ const moment = require('moment-timezone');
 // filepath: /path/to/file
 // 업비트 API 키 설정
 const ACCESS_KEY = process.env.UPBIT_ACC_KEY;
-const SECRET_KEY = process.env.UPBIT_SEC_KEY;
+const SECRET_KEY = process.env.UPBIT_SEC_KEY; 
 
 // 환경 변수 확인
 console.log(`   로드 후 UPBIT_ACC_KEY: ${ACCESS_KEY ? `존재 (길이: ${ACCESS_KEY.length})` : '없음'}`);

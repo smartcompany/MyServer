@@ -2,12 +2,12 @@
 
 require('dotenv').config();
 
-const fs = require('fs');
 const { v4: uuidv4 } = require('uuid');
 const admin = require('firebase-admin');
 const axios = require('axios');
 const { getFirestore, Timestamp } = require('firebase-admin/firestore');
 const serviceAccount = require('./service-account.json');
+const aiRequest = require('./aiRequest.json');
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 // 상수는 env로 빼지 않고 코드에 고정 (API KEY만 env 유지)
 const OPENAI_MODEL = 'gpt-5-q';
@@ -131,12 +131,9 @@ messagesRef
 
 async function askOpenAI(messagesText) {
   try {
-    const jsonData = fs.readFileSync('./aiRequest.json', 'utf-8');
-    const aiRequest = JSON.parse(jsonData);
-
     const systemPrompt = aiRequest.system;
     let userPrompt = aiRequest.user.replace('{{content}}', messagesText);
-;
+    
     console.log('System Prompt:', systemPrompt);
     console.log('User Prompt:', userPrompt);
  
