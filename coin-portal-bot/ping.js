@@ -150,17 +150,19 @@ async function ping() {
     ]);
 
     const lastIp = loadLastIp();
-    if (lastIp && lastIp !== ip) {
-      console.log(`[${now}] IP 변경 감지: ${targetHost} ${lastIp} -> ${ip}`);
+    // lastIp가 없으면 "초기 설정(=업데이트)"으로 보고 메일/duckdns를 1회 수행
+    if (!lastIp || lastIp !== ip) {
+      const label = lastIp ? `${lastIp} -> ${ip}` : `N/A -> ${ip} (init)`;
+      console.log(`[${now}] IP 업데이트 감지: ${targetHost} ${label}`);
 
       // IP 변경 시 DuckDNS 업데이트 (기존 duck.sh 역할)
       await updateDuckDns(ip);
 
       try {
         await sendIpChangeEmail({ oldIp: lastIp, newIp: ip });
-        console.log(`[${now}] IP 변경 메일 발송 완료: to=${ALERT_TO}`);
+        console.log(`[${now}] IP 업데이트 메일 발송 완료: to=${ALERT_TO}`);
       } catch (e) {
-        console.error(`[${now}] IP 변경 메일 발송 실패: ${e.message}`);
+        console.error(`[${now}] IP 업데이트 메일 발송 실패: ${e.message}`);
       }
     }
 
