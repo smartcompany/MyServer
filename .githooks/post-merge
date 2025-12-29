@@ -101,8 +101,11 @@ else
 fi
 
 # Next.js 서버는 항상 재시작 (git pull 이후 코드 반영 목적)
+# 주의: pm2의 --name 옵션은 "--" 구분자보다 앞에 와야 함 (npm start의 "--" 때문에 순서 중요)
 echo "🔄 Next.js 서버 시작 중..."
-pm2_recreate "nextjs-server" "npm -- start" && NEED_PM2_SAVE=1
+pm2 delete nextjs-server 2>/dev/null || true
+pm2 start npm --name nextjs-server -- start
+NEED_PM2_SAVE=1
 
 # 나머지 봇들은 변경된 경우에만 재시작
 for file_path in "${MONITOR_FILES[@]}"; do
