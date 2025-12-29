@@ -17,6 +17,7 @@ export default function TradePage() {
   const [logs, setLogs] = useState('불러오는 중...');
   const [tradeData, setTradeData] = useState(null);
   const [processStatus, setProcessStatus] = useState(null);
+  const [configLoaded, setConfigLoaded] = useState(false);
 
   useEffect(() => {
     checkAuth();
@@ -105,23 +106,29 @@ export default function TradePage() {
       setConfig({
         buy: data.buyThreshold || '',
         sell: data.sellThreshold || '',
-        isTrading: data.isTrading || false,
+        isTrading: Boolean(data.isTrading),
         tradeAmount: data.tradeAmount || '',
         isTradeByMoney: data.isTradeByMoney !== false
       });
+      setConfigLoaded(true);
     } catch (error) {
       console.error('설정 로드 실패:', error);
     }
   }
 
-  async function updateConfig() {
+  async function updateConfig(nextConfig) {
     const token = localStorage.getItem('token');
-    const buy = parseFloat(document.getElementById('buy').value);
-    const sell = parseFloat(document.getElementById('sell').value);
-    const isTrading = document.getElementById('isTrading').checked;
-    const tradeAmount = parseFloat(document.getElementById('tradeAmount').value);
-    const tradeType = document.querySelector('input[name="trade-type"]:checked').value;
-    const isTradeByMoney = tradeType === 'money';
+    const c = nextConfig || config;
+    if (!configLoaded) {
+      console.warn('설정이 아직 로드되지 않았습니다. 잠시 후 다시 시도하세요.');
+      return;
+    }
+
+    const buy = c.buy === '' ? null : Number(c.buy);
+    const sell = c.sell === '' ? null : Number(c.sell);
+    const tradeAmount = c.tradeAmount === '' ? null : Number(c.tradeAmount);
+    const isTrading = Boolean(c.isTrading);
+    const isTradeByMoney = c.isTradeByMoney !== false;
 
     try {
       const res = await fetch('/api/trade/config', {
@@ -132,10 +139,10 @@ export default function TradePage() {
         },
         body: JSON.stringify({
           updates: [
-            { key: 'buyThreshold', value: buy },
-            { key: 'sellThreshold', value: sell },
+            ...(Number.isFinite(buy) ? [{ key: 'buyThreshold', value: buy }] : []),
+            ...(Number.isFinite(sell) ? [{ key: 'sellThreshold', value: sell }] : []),
             { key: 'isTrading', value: isTrading },
-            { key: 'tradeAmount', value: tradeAmount },
+            ...(Number.isFinite(tradeAmount) ? [{ key: 'tradeAmount', value: tradeAmount }] : []),
             { key: 'isTradeByMoney', value: isTradeByMoney }
           ]
         })
@@ -285,7 +292,7 @@ export default function TradePage() {
       {mainArea && (
         <div id="mainArea">
           <h3 style={{ textAlign: 'center' }}>김치 프리미엄 기준 설정</h3>
-          매수 기준: <input id="buy" type="number" step="0.01" defaultValue={config.buy} style={{
+          매수 기준: <input id="buy" type="number" step="0.01" value={config.buy} onChange={(e) => setConfig((prev) => ({ ...prev, buy: e.target.value }))} style={{
             width: '100%',
             padding: '12px',
             marginTop: '5px',
@@ -293,7 +300,7 @@ export default function TradePage() {
             boxSizing: 'border-box',
             fontSize: '16px'
           }} /><br />
-          매도 기준: <input id="sell" type="number" step="0.01" defaultValue={config.sell} style={{
+          매도 기준: <input id="sell" type="number" step="0.01" value={config.sell} onChange={(e) => setConfig((prev) => ({ ...prev, sell: e.target.value }))} style={{
             width: '100%',
             padding: '12px',
             marginTop: '5px',
@@ -302,12 +309,20 @@ export default function TradePage() {
             fontSize: '16px'
           }} /><br />
           <label style={{ display: 'block', marginBottom: '10px' }}>
-            <input type="radio" name="trade-type" value="money" defaultChecked={config.isTradeByMoney} /> 금액으로 매매
+            <input type="radio" name="trade-type" value="money" checked={config.isTradeByMoney} onChange={() => {
+              const next = { ...config, isTradeByMoney: true };
+              setConfig(next);
+              updateConfig(next);
+            }} /> 금액으로 매매
           </label>
           <label style={{ display: 'block', marginBottom: '10px' }}>
-            <input type="radio" name="trade-type" value="volume" defaultChecked={!config.isTradeByMoney} /> 수량으로 매매
+            <input type="radio" name="trade-type" value="volume" checked={!config.isTradeByMoney} onChange={() => {
+              const next = { ...config, isTradeByMoney: false };
+              setConfig(next);
+              updateConfig(next);
+            }} /> 수량으로 매매
           </label>
-          <input id="tradeAmount" type="number" step="1" defaultValue={config.tradeAmount} style={{
+          <input id="tradeAmount" type="number" step="1" value={config.tradeAmount} onChange={(e) => setConfig((prev) => ({ ...prev, tradeAmount: e.target.value }))} style={{
             width: '100%',
             padding: '12px',
             marginTop: '5px',
@@ -333,7 +348,16 @@ export default function TradePage() {
             </div>
           )}
           <label style={{ display: 'block', marginBottom: '10px' }}>
-            <input id="isTrading" type="checkbox" defaultChecked={config.isTrading} onChange={updateConfig} />
+            <input
+              id="isTrading"
+              type="checkbox"
+              checked={config.isTrading}
+              onChange={(e) => {
+                const next = { ...config, isTrading: e.target.checked };
+                setConfig(next);
+                updateConfig(next);
+              }}
+            />
             트레이딩 시작/중지
             <span style={{ fontSize: '12px', color: '#666', marginLeft: '5px' }}>
               (체크박스 변경 시 즉시 적용됩니다)

@@ -5,17 +5,17 @@ import fs from 'fs';
 const configFilePath = getTradeServerPath('config.json');
 const orderStateFilePath = getTradeServerPath('orderState.json');
 
-let config = {};
-if (fs.existsSync(configFilePath)) {
+function readConfigFresh() {
+  if (!fs.existsSync(configFilePath)) {
+    console.log('현재 설정값 참조 파일 없음', configFilePath);
+    return {};
+  }
   try {
-    config = JSON.parse(fs.readFileSync(configFilePath, 'utf8'));
-    console.log('현재 설정값 파일 읽기');
-    console.log(JSON.stringify(config, null, 2));
+    return JSON.parse(fs.readFileSync(configFilePath, 'utf8'));
   } catch (error) {
     console.error('설정 파일 읽기 실패:', error);
+    return {};
   }
-} else {
-  console.log('현재 설정값 참조 파일 없음', configFilePath);
 }
 
 function needInitForOrderState() {
@@ -33,6 +33,8 @@ export async function GET(request) {
     return Response.json({ error: auth.error }, { status: auth.status });
   }
 
+  // 매 요청마다 파일을 읽어야 최신 상태(모바일에서 본 체크 상태 등)가 반영됨
+  const config = readConfigFresh();
   return Response.json(config);
 }
 
@@ -49,6 +51,8 @@ export async function POST(request) {
       return Response.json({ error: 'Invalid payload' }, { status: 400 });
     }
 
+    // 다른 코드(upbit-trade 등)가 파일을 수정할 수 있으므로 최신 파일을 기준으로 업데이트
+    const config = readConfigFresh();
     let changed = false;
     const prevTradeAmount = config.tradeAmount;
 
