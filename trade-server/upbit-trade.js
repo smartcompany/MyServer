@@ -181,7 +181,8 @@ async function sellTether(price, volume) {
     const orderData = {
       market: 'KRW-USDT', // 테더 시장
       side: 'ask',        // 매도
-      price: Number(price.toFixed(1)),       // 지정가 (원화)
+      // 주문 가격은 정수(원 단위)로 보냄
+      price: Math.round(Number(price)),
       volume: Number(volume.toFixed(1)),     // 매도 수량 (USDT)
       ord_type: 'limit',  // 지정가 주문
     };
@@ -213,7 +214,8 @@ async function buyTether(price, volume) {
     const orderData = {
       market: 'KRW-USDT', // 테더 시장
       side: 'bid',        // 매수
-      price: Number(price.toFixed(1)),       // 지정가 (원화)
+      // 주문 가격은 정수(원 단위)로 보냄
+      price: Math.round(Number(price)),
       volume: Number(volume.toFixed(1)),     // 매수 수량 (USDT)
       ord_type: 'limit',  // 지정가 주문
     };
@@ -518,8 +520,9 @@ async function trade() {
     const rate = await getExchangeRate();
     const tetherPrice = await getTetherPrice();
 
-    const expactedBuyPrice = floorToHalf(rate * (1 + buyThreshold / 100));
-    const expactedSellPrice = floorToHalf(rate * (1 + sellThreshold / 100));
+    // 주문 가격은 정수(원 단위)로 맞춤
+    const expactedBuyPrice = Math.round(rate * (1 + buyThreshold / 100));
+    const expactedSellPrice = Math.round(rate * (1 + sellThreshold / 100));
 
     // 김치 프리미엄 계산
     const kimchiPremium = ((tetherPrice - rate)/rate) * 100;
