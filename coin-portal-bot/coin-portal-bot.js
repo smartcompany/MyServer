@@ -117,7 +117,7 @@ async function summarizeNews(newsList) {
   const res = await axios.post(
     'https://api.openai.com/v1/chat/completions',
     {
-      model: 'gpt-4o',
+      model: 'gpt-5-nano',
       messages: [
         {
           role: 'user',
@@ -285,8 +285,9 @@ async function runFreeBoardBot() {
 
 // 기존 runBot()은 뉴스 게시판용, runFreeBoardBot()은 자유게시판용
 runBot();
-setTimeout(() => {
-  runFreeBoardBot();
-  setInterval(runFreeBoardBot, 24 * 60 * 60 * 1000);
-}, 10000); 
 setInterval(runBot, 12 * 60 * 60 * 1000);
+
+// setTimeout(() => {
+//   runFreeBoardBot();
+//   setInterval(runFreeBoardBot, 24 * 60 * 60 * 1000);
+// }, 10000); 
