@@ -453,7 +453,8 @@ function calcuratedVolume(isTradeByMoney, targetUSDTPrice, avaliableMoney) {
   }
 
   let volume = avaliableMoney / targetUSDTPrice;
-  volume = parseFloat(volume.toFixed(1));
+  // 소숫점 이하 절삭 (정수 수량으로 주문)
+  volume = Math.floor(volume);
   return volume;
 }
 
