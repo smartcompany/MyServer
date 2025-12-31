@@ -454,7 +454,22 @@ export default function TradePage() {
             }}>매매 초기화</button>
           </label>
 
-          <button onClick={updateConfig} style={{
+          <button onClick={() => {
+            // 현재 입력 필드의 값을 직접 읽어서 전달
+            const buyInput = document.getElementById('buy');
+            const sellInput = document.getElementById('sell');
+            const tradeAmountInput = document.getElementById('tradeAmount');
+            const isTradingInput = document.getElementById('isTrading');
+            const isTradeByMoneyRadio = document.querySelector('input[name="trade-type"]:checked');
+            
+            updateConfig({
+              buy: buyInput?.value || '',
+              sell: sellInput?.value || '',
+              tradeAmount: tradeAmountInput?.value || '',
+              isTrading: isTradingInput?.checked || false,
+              isTradeByMoney: isTradeByMoneyRadio?.value === 'money'
+            });
+          }} style={{
             width: '100%',
             padding: '12px',
             fontSize: '16px',

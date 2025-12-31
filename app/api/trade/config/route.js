@@ -57,12 +57,18 @@ export async function POST(request) {
     const prevTradeAmount = config.tradeAmount;
 
     updates.forEach(({ key, value }) => {
+      console.log(`📥 [config API] 업데이트 요청: ${key} = ${value} (타입: ${typeof value})`);
       if (key in config) {
+        const oldValue = config[key];
         config[key] = value;
-        console.log(`🔧 설정 변경됨: ${key} = ${value}`);
+        console.log(`🔧 설정 변경됨: ${key} = ${value} (이전: ${oldValue})`);
         changed = true;
+      } else {
+        console.log(`⚠️ [config API] 알 수 없는 설정 키: ${key}`);
       }
     });
+    
+    console.log(`📋 [config API] 최종 config:`, JSON.stringify(config, null, 2));
 
     if (prevTradeAmount !== config.tradeAmount) {
       console.log(`물량이 변경되면 초기화`);
