@@ -29,9 +29,14 @@ export async function GET(request) {
 
   try {
     const orderState = readOrderState();
+    // 모든 주문의 allocatedAmount 합계 계산 (총 사용 가능한 투자 금액)
+    const totalAllocatedAmount = (orderState.orders || []).reduce((sum, order) => {
+      return sum + (order.allocatedAmount || 0);
+    }, 0);
+    
     return Response.json({
       orders: orderState.orders || [],
-      avaliableMoney: orderState.avaliableMoney
+      totalAllocatedAmount: totalAllocatedAmount // 모든 주문의 투자 금액 합계
     });
   } catch (error) {
     console.error('주문 목록 조회 실패:', error);

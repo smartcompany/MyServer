@@ -19,7 +19,7 @@ export default function TradePage() {
   const [processStatus, setProcessStatus] = useState(null);
   const [configLoaded, setConfigLoaded] = useState(false);
   const [orders, setOrders] = useState([]);
-  const [avaliableMoney, setAvaliableMoney] = useState(null);
+  const [totalAllocatedAmount, setTotalAllocatedAmount] = useState(null);
 
   useEffect(() => {
     checkAuth();
@@ -272,7 +272,7 @@ export default function TradePage() {
       });
       const data = await res.json();
       setOrders(data.orders || []);
-      setAvaliableMoney(data.avaliableMoney);
+      setTotalAllocatedAmount(data.totalAllocatedAmount);
     } catch (error) {
       console.error('주문 목록 로드 실패:', error);
     }
@@ -537,7 +537,7 @@ export default function TradePage() {
             {activeTab === 'orders' && (
               <div id="ordersTab">
                 <div style={{ marginBottom: '10px', padding: '10px', backgroundColor: '#e3f2fd', borderRadius: '4px' }}>
-                  <strong>사용 가능 금액:</strong> {avaliableMoney !== null ? `${Number(avaliableMoney).toLocaleString()}원` : '로딩 중...'}
+                  <strong>총 투자 금액:</strong> {totalAllocatedAmount !== null ? `${Number(totalAllocatedAmount).toLocaleString()}원` : '로딩 중...'}
                 </div>
                 <div style={{ marginBottom: '10px', fontSize: '14px', color: '#666' }}>
                   활성 주문: {orders.filter(o => o.status === 'buy_waiting' || o.status === 'sell_waiting').length}개
@@ -585,6 +585,11 @@ export default function TradePage() {
                           )}
                           {order.volume && (
                             <div>수량: {Number(order.volume).toFixed(1)} USDT</div>
+                          )}
+                          {order.allocatedAmount !== undefined && order.allocatedAmount !== null && (
+                            <div style={{ marginTop: '5px', fontWeight: 'bold', color: '#2196F3' }}>
+                              투자 금액: {Number(order.allocatedAmount).toLocaleString()}원
+                            </div>
                           )}
                           {order.buyUuid && (
                             <div style={{ fontSize: '12px', color: '#666' }}>
