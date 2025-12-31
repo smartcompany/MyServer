@@ -18,6 +18,8 @@ export default function TradePage() {
   const [tradeData, setTradeData] = useState(null);
   const [processStatus, setProcessStatus] = useState(null);
   const [configLoaded, setConfigLoaded] = useState(false);
+  const [orders, setOrders] = useState([]);
+  const [totalAllocatedAmount, setTotalAllocatedAmount] = useState(null);
 
   useEffect(() => {
     checkAuth();
@@ -29,13 +31,16 @@ export default function TradePage() {
       loadTradeLogs();
       loadLogs();
       loadProcessStatus();
+      loadOrders();
       const logInterval = setInterval(loadLogs, 5000);
       const tradeInterval = setInterval(loadTradeLogs, 5000);
       const statusInterval = setInterval(loadProcessStatus, 10000);
+      const ordersInterval = setInterval(loadOrders, 5000);
       return () => {
         clearInterval(logInterval);
         clearInterval(tradeInterval);
         clearInterval(statusInterval);
+        clearInterval(ordersInterval);
       };
     }
   }, [mainArea]);
@@ -102,16 +107,35 @@ export default function TradePage() {
         method: 'GET',
         headers: { 'Authorization': 'Bearer ' + token }
       });
+      
+      if (!res.ok) {
+        const errorData = await res.json();
+        const errorMsg = errorData.error || `HTTP ${res.status} 에러`;
+        const details = errorData.details || '';
+        alert(`❌ 설정 로드 실패: ${errorMsg}\n${details ? `상세: ${details}` : ''}`);
+        console.error('설정 로드 실패:', errorMsg, details);
+        return;
+      }
+      
       const data = await res.json();
+      
+      // 에러 응답인지 확인
+      if (data.error) {
+        alert(`❌ 설정 로드 실패: ${data.error}\n${data.details ? `상세: ${data.details}` : ''}`);
+        console.error('설정 API 에러:', data);
+        return;
+      }
+      
       setConfig({
-        buy: data.buyThreshold || '',
-        sell: data.sellThreshold || '',
+        buy: data.buyThreshold ?? '',
+        sell: data.sellThreshold ?? '',
         isTrading: Boolean(data.isTrading),
-        tradeAmount: data.tradeAmount || '',
+        tradeAmount: data.tradeAmount ?? '',
         isTradeByMoney: data.isTradeByMoney !== false
       });
       setConfigLoaded(true);
     } catch (error) {
+      alert(`❌ 설정 로드 실패: ${error.message || '알 수 없는 오류'}`);
       console.error('설정 로드 실패:', error);
     }
   }
@@ -236,6 +260,63 @@ export default function TradePage() {
       setProcessStatus(data.upbitTrade);
     } catch (error) {
       console.error('프로세스 상태 로드 실패:', error);
+    }
+  }
+
+  async function loadOrders() {
+    const token = localStorage.getItem('token');
+    try {
+      const res = await fetch('/api/trade/orders', {
+        method: 'GET',
+        headers: { 'Authorization': 'Bearer ' + token }
+      });
+      const data = await res.json();
+      setOrders(data.orders || []);
+      setTotalAllocatedAmount(data.totalAllocatedAmount);
+    } catch (error) {
+      console.error('주문 목록 로드 실패:', error);
+    }
+  }
+
+  async function deleteOrder(orderId) {
+    if (!confirm('이 주문을 삭제하시겠습니까?')) {
+      return;
+    }
+    
+    const token = localStorage.getItem('token');
+    try {
+      const res = await fetch(`/api/trade/orders?id=${orderId}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': 'Bearer ' + token }
+      });
+      
+      if (res.ok) {
+        alert('주문이 삭제되었습니다');
+        loadOrders();
+      } else {
+        alert('주문 삭제 실패!');
+      }
+    } catch (error) {
+      console.error('주문 삭제 실패:', error);
+      alert('주문 삭제 실패!');
+    }
+  }
+
+  function getStatusText(status) {
+    switch (status) {
+      case 'buy_waiting': return '매수 대기';
+      case 'sell_waiting': return '매도 대기';
+      case 'completed': return '완료';
+      default: return status;
+    }
+  }
+
+  function getStatusColor(status) {
+    switch (status) {
+      case 'buy_waiting': return '#2196F3';
+      case 'sell_waiting': return '#FF9800';
+      case 'completed': return '#4CAF50';
+      default: return '#666';
     }
   }
 
@@ -373,7 +454,22 @@ export default function TradePage() {
             }}>매매 초기화</button>
           </label>
 
-          <button onClick={updateConfig} style={{
+          <button onClick={() => {
+            // 현재 입력 필드의 값을 직접 읽어서 전달
+            const buyInput = document.getElementById('buy');
+            const sellInput = document.getElementById('sell');
+            const tradeAmountInput = document.getElementById('tradeAmount');
+            const isTradingInput = document.getElementById('isTrading');
+            const isTradeByMoneyRadio = document.querySelector('input[name="trade-type"]:checked');
+            
+            updateConfig({
+              buy: buyInput?.value || '',
+              sell: sellInput?.value || '',
+              tradeAmount: tradeAmountInput?.value || '',
+              isTrading: isTradingInput?.checked || false,
+              isTradeByMoney: isTradeByMoneyRadio?.value === 'money'
+            });
+          }} style={{
             width: '100%',
             padding: '12px',
             fontSize: '16px',
@@ -404,6 +500,15 @@ export default function TradePage() {
                 borderRadius: '4px',
                 cursor: 'pointer'
               }}>거래 내역</button>
+              <button onClick={() => setActiveTab('orders')} style={{
+                flex: 1,
+                padding: '10px',
+                backgroundColor: activeTab === 'orders' ? '#4CAF50' : '#ddd',
+                color: activeTab === 'orders' ? 'white' : 'black',
+                border: 'none',
+                borderRadius: '4px',
+                cursor: 'pointer'
+              }}>주문 목록</button>
             </div>
             {activeTab === 'trade' && (
               <div id="tradeTab">
@@ -442,6 +547,85 @@ export default function TradePage() {
                   whiteSpace: 'pre-wrap',
                   wordWrap: 'break-word'
                 }}>{logs}</pre>
+              </div>
+            )}
+            {activeTab === 'orders' && (
+              <div id="ordersTab">
+                <div style={{ marginBottom: '10px', padding: '10px', backgroundColor: '#e3f2fd', borderRadius: '4px' }}>
+                  <strong>총 투자 금액:</strong> {totalAllocatedAmount !== null ? `${Number(totalAllocatedAmount).toLocaleString()}원` : '로딩 중...'}
+                </div>
+                <div style={{ marginBottom: '10px', fontSize: '14px', color: '#666' }}>
+                  활성 주문: {orders.filter(o => o.status === 'buy_waiting' || o.status === 'sell_waiting').length}개
+                </div>
+                {orders.length === 0 ? (
+                  <div style={{ padding: '20px', textAlign: 'center', color: '#666' }}>
+                    주문이 없습니다
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                    {orders.map((order) => (
+                      <div key={order.id} style={{
+                        border: '1px solid #ddd',
+                        borderRadius: '4px',
+                        padding: '15px',
+                        backgroundColor: '#fff'
+                      }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                          <div>
+                            <strong style={{ color: getStatusColor(order.status) }}>
+                              {getStatusText(order.status)}
+                            </strong>
+                            <span style={{ marginLeft: '10px', fontSize: '12px', color: '#666' }}>
+                              ID: {order.id.substring(0, 8)}...
+                            </span>
+                          </div>
+                          {(order.status === 'buy_waiting' || order.status === 'sell_waiting') && (
+                            <button onClick={() => deleteOrder(order.id)} style={{
+                              backgroundColor: '#f44336',
+                              color: 'white',
+                              border: 'none',
+                              borderRadius: '4px',
+                              padding: '5px 10px',
+                              cursor: 'pointer',
+                              fontSize: '12px'
+                            }}>삭제</button>
+                          )}
+                        </div>
+                        <div style={{ fontSize: '14px', lineHeight: '1.6' }}>
+                          {order.buyPrice && (
+                            <div>매수가: {Number(order.buyPrice).toLocaleString()}원</div>
+                          )}
+                          {order.sellPrice && (
+                            <div>매도가: {Number(order.sellPrice).toLocaleString()}원</div>
+                          )}
+                          {order.volume && (
+                            <div>수량: {Number(order.volume).toFixed(1)} USDT</div>
+                          )}
+                          {order.allocatedAmount !== undefined && order.allocatedAmount !== null && (
+                            <div style={{ marginTop: '5px', fontWeight: 'bold', color: '#2196F3' }}>
+                              투자 금액: {Number(order.allocatedAmount).toLocaleString()}원
+                            </div>
+                          )}
+                          {order.buyUuid && (
+                            <div style={{ fontSize: '12px', color: '#666' }}>
+                              매수 UUID: {order.buyUuid.substring(0, 20)}...
+                            </div>
+                          )}
+                          {order.sellUuid && (
+                            <div style={{ fontSize: '12px', color: '#666' }}>
+                              매도 UUID: {order.sellUuid.substring(0, 20)}...
+                            </div>
+                          )}
+                          {order.createdAt && (
+                            <div style={{ fontSize: '12px', color: '#666', marginTop: '5px' }}>
+                              생성: {new Date(order.createdAt).toLocaleString('ko-KR')}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
           </div>

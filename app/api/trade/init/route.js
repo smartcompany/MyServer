@@ -1,19 +1,9 @@
 import { verifyToken } from '../middleware';
-import { getTradeServerPath } from '../utils';
+import { getTradeServerPath, needInitForOrderState } from '../utils';
 import fs from 'fs';
 
 const logFilePath = getTradeServerPath('trade-logs.txt');
 const cashBalanceLogPath = getTradeServerPath('cashBalance.json');
-const orderStateFilePath = getTradeServerPath('orderState.json');
-
-function needInitForOrderState() {
-  if (fs.existsSync(orderStateFilePath)) {
-    const data = fs.readFileSync(orderStateFilePath, 'utf8');
-    let history = JSON.parse(data);
-    history.needInit = true;
-    fs.writeFileSync(orderStateFilePath, JSON.stringify(history));
-  }
-}
 
 export async function POST(request) {
   const auth = verifyToken(request);

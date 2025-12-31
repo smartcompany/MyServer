@@ -10,6 +10,7 @@ if [ -n "$ROOT_DIR" ]; then
   cd "$ROOT_DIR" || exit 1
 fi
 
+
 # PM2가 설치되어 있는지 확인
 if ! command -v pm2 &> /dev/null; then
     echo "⚠️  PM2가 설치되어 있지 않습니다. 스킵합니다."
@@ -85,9 +86,17 @@ pm2_recreate_by_file() {
 # package.json이나 package-lock.json이 변경되었는지 확인
 if echo "$CHANGED_FILES" | grep -qE "(package\.json|package-lock\.json)"; then
     echo "📦 의존성 파일 변경됨, 설치 중..."
-    npm install --production
+    npm install
 else
     echo "ℹ️  의존성 파일 변경 없음, 설치 스킵"
+fi
+
+# node_modules가 없거나 next가 없으면 설치 (안전장치)
+# next는 dependencies에 있으므로 --production으로도 설치되어야 하지만,
+# 혹시 모를 상황을 대비한 체크
+if [ ! -d "node_modules" ] || [ ! -f "node_modules/.bin/next" ]; then
+    echo "⚠️  node_modules가 없거나 next가 없음, 설치 중..."
+    npm install
 fi
 
 # 빌드가 필요한 파일이 변경되었는지 확인
@@ -104,7 +113,10 @@ fi
 # 주의: pm2의 --name 옵션은 "--" 구분자보다 앞에 와야 함 (npm start의 "--" 때문에 순서 중요)
 echo "🔄 Next.js 서버 시작 중..."
 pm2 delete nextjs-server 2>/dev/null || true
-pm2 start npm --name nextjs-server -- start
+
+# 작업 디렉토리를 명시적으로 설정하여 next 명령어를 찾을 수 있도록 함
+cd "$ROOT_DIR" || exit 1
+pm2 start npm --name nextjs-server --cwd "$ROOT_DIR" -- start
 NEED_PM2_SAVE=1
 
 # 나머지 봇들은 변경된 경우에만 재시작
