@@ -527,10 +527,25 @@ function calcuratedVolume(isTradeByMoney, targetUSDTPrice, avaliableMoney) {
   return volume;
 }
 
+function loadConfig() {
+  try {
+    const data = fs.readFileSync(configFilePath, 'utf8');
+    return JSON.parse(data);
+  } catch (err) {
+    console.error('설정 파일 읽기 실패:', err);
+    return {
+      isTrading: false,
+      tradeAmount: 100000,
+      buyThreshold: 0.5,
+      sellThreshold: 2.5,
+      isTradeByMoney: true
+    };
+  }
+}
+
 async function trade() {
-  const prevConfig = require('./config');
-  delete require.cache[require.resolve('./config')];
-  const config = require('./config');
+  const prevConfig = loadConfig();
+  const config = loadConfig();
 
   let orderState = loadOrderState();
  
