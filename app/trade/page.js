@@ -18,8 +18,11 @@ export default function TradePage() {
   const [tradeData, setTradeData] = useState(null);
   const [processStatus, setProcessStatus] = useState(null);
   const [configLoaded, setConfigLoaded] = useState(false);
-  const [orders, setOrders] = useState([]);
-  const [totalAllocatedAmount, setTotalAllocatedAmount] = useState(null);
+  const [balance, setBalance] = useState({ restMoney: 0, restUsdt: 0 });
+  const [initialTabSet, setInitialTabSet] = useState(false);
+  const [monitorData, setMonitorData] = useState(null);
+  const [tasks, setTasks] = useState([]);
+  const [taskTab, setTaskTab] = useState('tasks'); // 'tasks' or 'logs'
 
   useEffect(() => {
     checkAuth();
@@ -31,16 +34,19 @@ export default function TradePage() {
       loadTradeLogs();
       loadLogs();
       loadProcessStatus();
-      loadOrders();
+      loadMonitorData();
+      loadTasks();
       const logInterval = setInterval(loadLogs, 5000);
       const tradeInterval = setInterval(loadTradeLogs, 5000);
       const statusInterval = setInterval(loadProcessStatus, 10000);
-      const ordersInterval = setInterval(loadOrders, 5000);
+      const monitorInterval = setInterval(loadMonitorData, 3000);
+      const tasksInterval = setInterval(loadTasks, 3000);
       return () => {
         clearInterval(logInterval);
         clearInterval(tradeInterval);
         clearInterval(statusInterval);
-        clearInterval(ordersInterval);
+        clearInterval(monitorInterval);
+        clearInterval(tasksInterval);
       };
     }
   }, [mainArea]);
@@ -91,7 +97,8 @@ export default function TradePage() {
   function showMain() {
     setLoginArea(false);
     setMainArea(true);
-    setActiveTab('log');
+    // 기본 탭은 매수로 설정 (tradeData는 useEffect에서 로드됨)
+    setActiveTab('buy');
   }
 
   function showLogin() {
@@ -215,6 +222,20 @@ export default function TradePage() {
       });
       const data = await res.json();
       setTradeData(data);
+      // 보유 금액과 테더 정보 업데이트
+      const newBalance = {
+        restMoney: data.restMoney || 0,
+        restUsdt: data.restUsdt || 0
+      };
+      setBalance(newBalance);
+      
+      // 테더가 있으면 매도 탭으로 전환 (처음 로드 시에만)
+      if (!initialTabSet && newBalance.restUsdt > 0) {
+        setActiveTab('sell');
+        setInitialTabSet(true);
+      } else if (!initialTabSet) {
+        setInitialTabSet(true);
+      }
     } catch (error) {
       console.error('거래 내역 로드 실패:', error);
     }
@@ -263,46 +284,218 @@ export default function TradePage() {
     }
   }
 
-  async function loadOrders() {
+  async function loadMonitorData() {
     const token = localStorage.getItem('token');
     try {
-      const res = await fetch('/api/trade/orders', {
+      const res = await fetch('/api/trade/monitor', {
         method: 'GET',
         headers: { 'Authorization': 'Bearer ' + token }
       });
-      const data = await res.json();
-      setOrders(data.orders || []);
-      setTotalAllocatedAmount(data.totalAllocatedAmount);
+      if (res.ok) {
+        const data = await res.json();
+        setMonitorData(data);
+        // 모니터링 데이터에서 잔액 정보도 업데이트
+        if (data.balance) {
+          setBalance({
+            restMoney: data.balance.restMoney || 0,
+            restUsdt: data.balance.restUsdt || 0
+          });
+        }
+      }
     } catch (error) {
-      console.error('주문 목록 로드 실패:', error);
+      console.error('모니터링 데이터 로드 실패:', error);
     }
   }
 
-  async function deleteOrder(orderId) {
-    if (!confirm('이 주문을 삭제하시겠습니까?')) {
-      return;
-    }
-    
+  async function loadTasks() {
     const token = localStorage.getItem('token');
     try {
-      const res = await fetch(`/api/trade/orders?id=${orderId}`, {
+      const res = await fetch('/api/trade/tasks', {
+        method: 'GET',
+        headers: { 'Authorization': 'Bearer ' + token }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setTasks(data.tasks || []);
+      }
+    } catch (error) {
+      console.error('작업 목록 로드 실패:', error);
+    }
+  }
+
+  async function addBuyTask() {
+    const token = localStorage.getItem('token');
+    const buyInput = document.getElementById('buy');
+    const tradeAmountInput = document.getElementById('tradeAmount');
+    const isTradeByMoneyRadio = document.querySelector('input[name="trade-type"]:checked');
+    const amount = tradeAmountInput?.value;
+    
+    if (!amount || Number(amount) <= 0) {
+      alert('매수 금액/수량을 입력해주세요');
+      return;
+    }
+
+    // 설정 먼저 적용
+    try {
+      const buy = buyInput?.value === '' ? null : Number(buyInput?.value);
+      const tradeAmount = amount === '' ? null : Number(amount);
+      const isTradeByMoney = isTradeByMoneyRadio?.value === 'money';
+
+      const configRes = await fetch('/api/trade/config', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ' + token
+        },
+        body: JSON.stringify({
+          updates: [
+            ...(Number.isFinite(buy) ? [{ key: 'buyThreshold', value: buy }] : []),
+            ...(Number.isFinite(tradeAmount) ? [{ key: 'tradeAmount', value: tradeAmount }] : []),
+            { key: 'isTradeByMoney', value: isTradeByMoney }
+          ]
+        })
+      });
+
+      if (!configRes.ok) {
+        console.error('설정 적용 실패');
+      } else {
+        // 설정이 적용되었으면 config 상태도 업데이트
+        setConfig(prev => ({
+          ...prev,
+          buy: buyInput?.value || '',
+          tradeAmount: amount,
+          isTradeByMoney: isTradeByMoney
+        }));
+      }
+    } catch (error) {
+      console.error('설정 적용 실패:', error);
+    }
+
+    // 작업 추가
+    try {
+      const res = await fetch('/api/trade/tasks', {
+        method: 'POST',
+        headers: {
+          'Authorization': 'Bearer ' + token,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          type: 'buy',
+          amount: Number(amount)
+        })
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        alert(data.message || '매수 작업이 추가되었습니다');
+        loadTasks();
+        loadConfig(); // 설정 다시 로드
+      } else {
+        const error = await res.json();
+        alert(error.error || '매수 작업 추가 실패');
+      }
+    } catch (error) {
+      console.error('매수 작업 추가 실패:', error);
+      alert('매수 작업 추가 실패');
+    }
+  }
+
+  async function addSellTask() {
+    const token = localStorage.getItem('token');
+    const sellInput = document.getElementById('sell');
+    const sellAmountInput = document.getElementById('sellAmount');
+    const amount = sellAmountInput?.value;
+    
+    if (!amount || Number(amount) <= 0) {
+      alert('매도 수량을 입력해주세요');
+      return;
+    }
+
+    // 설정 먼저 적용 (매도 기준만)
+    try {
+      const sell = sellInput?.value === '' ? null : Number(sellInput?.value);
+
+      const configRes = await fetch('/api/trade/config', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ' + token
+        },
+        body: JSON.stringify({
+          updates: [
+            ...(Number.isFinite(sell) ? [{ key: 'sellThreshold', value: sell }] : [])
+          ]
+        })
+      });
+
+      if (!configRes.ok) {
+        console.error('설정 적용 실패');
+      } else {
+        // 설정이 적용되었으면 config 상태도 업데이트
+        setConfig(prev => ({
+          ...prev,
+          sell: sellInput?.value || ''
+        }));
+      }
+    } catch (error) {
+      console.error('설정 적용 실패:', error);
+    }
+
+    // 작업 추가
+    try {
+      const res = await fetch('/api/trade/tasks', {
+        method: 'POST',
+        headers: {
+          'Authorization': 'Bearer ' + token,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          type: 'sell',
+          amount: Number(amount)
+        })
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        alert(data.message || '매도 작업이 추가되었습니다');
+        loadTasks();
+        loadConfig(); // 설정 다시 로드
+      } else {
+        const error = await res.json();
+        alert(error.error || '매도 작업 추가 실패');
+      }
+    } catch (error) {
+      console.error('매도 작업 추가 실패:', error);
+      alert('매도 작업 추가 실패');
+    }
+  }
+
+  async function deleteTask(taskId) {
+    if (!confirm('이 작업을 삭제하시겠습니까?')) {
+      return;
+    }
+
+    const token = localStorage.getItem('token');
+    try {
+      const res = await fetch(`/api/trade/tasks?id=${taskId}`, {
         method: 'DELETE',
         headers: { 'Authorization': 'Bearer ' + token }
       });
-      
+
       if (res.ok) {
-        alert('주문이 삭제되었습니다');
-        loadOrders();
+        alert('작업이 삭제되었습니다');
+        loadTasks();
       } else {
-        alert('주문 삭제 실패!');
+        const error = await res.json();
+        alert(error.error || '작업 삭제 실패');
       }
     } catch (error) {
-      console.error('주문 삭제 실패:', error);
-      alert('주문 삭제 실패!');
+      console.error('작업 삭제 실패:', error);
+      alert('작업 삭제 실패');
     }
   }
 
-  function getStatusText(status) {
+  function getTaskStatusText(status) {
     switch (status) {
       case 'buy_waiting': return '매수 대기';
       case 'sell_waiting': return '매도 대기';
@@ -311,7 +504,7 @@ export default function TradePage() {
     }
   }
 
-  function getStatusColor(status) {
+  function getTaskStatusColor(status) {
     switch (status) {
       case 'buy_waiting': return '#2196F3';
       case 'sell_waiting': return '#FF9800';
@@ -319,6 +512,7 @@ export default function TradePage() {
       default: return '#666';
     }
   }
+
 
   return (
     <div style={{
@@ -372,215 +566,303 @@ export default function TradePage() {
 
       {mainArea && (
         <div id="mainArea">
-          <h3 style={{ textAlign: 'center' }}>김치 프리미엄 기준 설정</h3>
-          매수 기준: <input id="buy" type="number" step="0.01" value={config.buy} onChange={(e) => setConfig((prev) => ({ ...prev, buy: e.target.value }))} style={{
-            width: '100%',
-            padding: '12px',
-            marginTop: '5px',
-            marginBottom: '15px',
-            boxSizing: 'border-box',
-            fontSize: '16px'
-          }} /><br />
-          매도 기준: <input id="sell" type="number" step="0.01" value={config.sell} onChange={(e) => setConfig((prev) => ({ ...prev, sell: e.target.value }))} style={{
-            width: '100%',
-            padding: '12px',
-            marginTop: '5px',
-            marginBottom: '15px',
-            boxSizing: 'border-box',
-            fontSize: '16px'
-          }} /><br />
-          <label style={{ display: 'block', marginBottom: '10px' }}>
-            <input type="radio" name="trade-type" value="money" checked={config.isTradeByMoney} onChange={() => {
-              const next = { ...config, isTradeByMoney: true };
-              setConfig(next);
-              updateConfig(next);
-            }} /> 금액으로 매매
-          </label>
-          <label style={{ display: 'block', marginBottom: '10px' }}>
-            <input type="radio" name="trade-type" value="volume" checked={!config.isTradeByMoney} onChange={() => {
-              const next = { ...config, isTradeByMoney: false };
-              setConfig(next);
-              updateConfig(next);
-            }} /> 수량으로 매매
-          </label>
-          <input id="tradeAmount" type="number" step="1" value={config.tradeAmount} onChange={(e) => setConfig((prev) => ({ ...prev, tradeAmount: e.target.value }))} style={{
-            width: '100%',
-            padding: '12px',
-            marginTop: '5px',
-            marginBottom: '15px',
-            boxSizing: 'border-box',
-            fontSize: '16px'
-          }} /><br />
-          <h3 style={{ textAlign: 'center' }}>트레이딩 설정</h3>
-          {processStatus && (
+          {/* 보유 금액 및 테더 표시 */}
+          <div style={{
+            backgroundColor: '#e3f2fd',
+            padding: '15px',
+            borderRadius: '8px',
+            marginBottom: '20px',
+            display: 'flex',
+            justifyContent: 'space-around',
+            alignItems: 'center'
+          }}>
+            <div style={{ textAlign: 'center' }}>
+              <div style={{ fontSize: '12px', color: '#666', marginBottom: '5px' }}>보유 금액</div>
+              <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#1976d2' }}>
+                {Number(balance.restMoney || 0).toLocaleString()}원
+              </div>
+            </div>
+            <div style={{ width: '1px', height: '40px', backgroundColor: '#bbb' }}></div>
+            <div style={{ textAlign: 'center' }}>
+              <div style={{ fontSize: '12px', color: '#666', marginBottom: '5px' }}>보유 테더</div>
+              <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#1976d2' }}>
+                {Number(balance.restUsdt || 0).toFixed(1)} USDT
+              </div>
+            </div>
+          </div>
+
+          {/* 모니터링 정보 */}
+          {monitorData && (
             <div style={{
-              padding: '10px',
-              marginBottom: '10px',
-              backgroundColor: processStatus.running ? '#e8f5e9' : '#ffebee',
-              borderRadius: '4px',
-              fontSize: '14px'
+              backgroundColor: '#f5f5f5',
+              padding: '15px',
+              borderRadius: '8px',
+              marginBottom: '20px'
             }}>
-              <strong>프로세스 상태:</strong> {processStatus.running ? '✅ 실행 중' : '❌ 중지됨'}
-              {processStatus.running && processStatus.uptime && (
-                <span style={{ marginLeft: '10px', color: '#666' }}>
-                  (가동 시간: {Math.floor((Date.now() - processStatus.uptime) / 1000 / 60)}분)
-                </span>
+              <div style={{ fontSize: '14px', fontWeight: 'bold', marginBottom: '10px' }}>📊 실시간 모니터링</div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '10px' }}>
+                <div style={{ padding: '10px', backgroundColor: '#fff', borderRadius: '4px' }}>
+                  <div style={{ fontSize: '12px', color: '#666' }}>모듈 상태</div>
+                  <div style={{ fontSize: '14px', fontWeight: 'bold', color: monitorData.module?.loaded ? '#4CAF50' : '#f44336' }}>
+                    {monitorData.module?.loaded ? '✅ 로드됨' : '❌ 미로드'}
+                  </div>
+                </div>
+                <div style={{ padding: '10px', backgroundColor: '#fff', borderRadius: '4px' }}>
+                  <div style={{ fontSize: '12px', color: '#666' }}>트레이딩 상태</div>
+                  <div style={{ fontSize: '14px', fontWeight: 'bold', color: monitorData.trading?.isTrading ? '#4CAF50' : '#999' }}>
+                    {monitorData.trading?.isTrading ? '🟢 활성' : '⚪ 비활성'}
+                  </div>
+                </div>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '10px' }}>
+                <div style={{ padding: '10px', backgroundColor: '#fff', borderRadius: '4px', textAlign: 'center' }}>
+                  <div style={{ fontSize: '12px', color: '#666' }}>전체 주문</div>
+                  <div style={{ fontSize: '18px', fontWeight: 'bold' }}>{monitorData.orders?.total || 0}</div>
+                </div>
+                <div style={{ padding: '10px', backgroundColor: '#fff', borderRadius: '4px', textAlign: 'center' }}>
+                  <div style={{ fontSize: '12px', color: '#666' }}>매수 대기</div>
+                  <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#2196F3' }}>{monitorData.orders?.buyWaiting || 0}</div>
+                </div>
+                <div style={{ padding: '10px', backgroundColor: '#fff', borderRadius: '4px', textAlign: 'center' }}>
+                  <div style={{ fontSize: '12px', color: '#666' }}>매도 대기</div>
+                  <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#FF9800' }}>{monitorData.orders?.sellWaiting || 0}</div>
+                </div>
+                <div style={{ padding: '10px', backgroundColor: '#fff', borderRadius: '4px', textAlign: 'center' }}>
+                  <div style={{ fontSize: '12px', color: '#666' }}>완료</div>
+                  <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#4CAF50' }}>{monitorData.orders?.completed || 0}</div>
+                </div>
+              </div>
+              {monitorData.timestamp && (
+                <div style={{ fontSize: '11px', color: '#999', marginTop: '10px', textAlign: 'right' }}>
+                  마지막 업데이트: {new Date(monitorData.timestamp).toLocaleTimeString('ko-KR')}
+                </div>
               )}
             </div>
           )}
-          <label style={{ display: 'block', marginBottom: '10px' }}>
-            <input
-              id="isTrading"
-              type="checkbox"
-              checked={config.isTrading}
-              onChange={(e) => {
-                const next = { ...config, isTrading: e.target.checked };
-                setConfig(next);
-                updateConfig(next);
-              }}
-            />
-            트레이딩 시작/중지
-            <span style={{ fontSize: '12px', color: '#666', marginLeft: '5px' }}>
-              (체크박스 변경 시 즉시 적용됩니다)
-            </span>
-            <button onClick={confirmReset} style={{
-              backgroundColor: '#f44336',
-              color: 'white',
-              border: 'none',
-              borderRadius: '4px',
-              padding: '8px 16px',
-              marginLeft: '10px',
-              cursor: 'pointer'
-            }}>매매 초기화</button>
-          </label>
 
-          <button onClick={() => {
-            // 현재 입력 필드의 값을 직접 읽어서 전달
-            const buyInput = document.getElementById('buy');
-            const sellInput = document.getElementById('sell');
-            const tradeAmountInput = document.getElementById('tradeAmount');
-            const isTradingInput = document.getElementById('isTrading');
-            const isTradeByMoneyRadio = document.querySelector('input[name="trade-type"]:checked');
-            
-            updateConfig({
-              buy: buyInput?.value || '',
-              sell: sellInput?.value || '',
-              tradeAmount: tradeAmountInput?.value || '',
-              isTrading: isTradingInput?.checked || false,
-              isTradeByMoney: isTradeByMoneyRadio?.value === 'money'
-            });
-          }} style={{
-            width: '100%',
-            padding: '12px',
-            fontSize: '16px',
-            marginBottom: '15px',
-            backgroundColor: '#4CAF50',
-            color: 'white',
-            border: 'none',
-            borderRadius: '4px'
-          }}>설정 적용</button>
-
-          <div>
-            <div style={{ display: 'flex', justifyContent: 'center', gap: '10px', marginBottom: '10px' }}>
-              <button onClick={() => setActiveTab('log')} style={{
-                flex: 1,
-                padding: '10px',
-                backgroundColor: activeTab === 'log' ? '#4CAF50' : '#ddd',
-                color: activeTab === 'log' ? 'white' : 'black',
-                border: 'none',
-                borderRadius: '4px',
-                cursor: 'pointer'
-              }}>최근 로그</button>
-              <button onClick={() => setActiveTab('trade')} style={{
-                flex: 1,
-                padding: '10px',
-                backgroundColor: activeTab === 'trade' ? '#4CAF50' : '#ddd',
-                color: activeTab === 'trade' ? 'white' : 'black',
-                border: 'none',
-                borderRadius: '4px',
-                cursor: 'pointer'
-              }}>거래 내역</button>
-              <button onClick={() => setActiveTab('orders')} style={{
-                flex: 1,
-                padding: '10px',
-                backgroundColor: activeTab === 'orders' ? '#4CAF50' : '#ddd',
-                color: activeTab === 'orders' ? 'white' : 'black',
-                border: 'none',
-                borderRadius: '4px',
-                cursor: 'pointer'
-              }}>주문 목록</button>
+          {/* 김치 프리미엄 설정 (항상 표시) */}
+          <div style={{ marginBottom: '20px', display: 'flex', gap: '10px' }}>
+            <div style={{ flex: 1, padding: '15px', backgroundColor: '#e3f2fd', borderRadius: '4px' }}>
+              <div style={{ fontSize: '14px', color: '#666', marginBottom: '5px' }}>매수 기준 김치 프리미엄</div>
+              <input id="buy" type="number" step="0.01" value={config.buy} onChange={(e) => setConfig((prev) => ({ ...prev, buy: e.target.value }))} style={{
+                width: '100%',
+                padding: '12px',
+                marginTop: '5px',
+                boxSizing: 'border-box',
+                fontSize: '16px',
+                border: '1px solid #ddd',
+                borderRadius: '4px'
+              }} placeholder="예: 0.5" />
             </div>
-            {activeTab === 'trade' && (
-              <div id="tradeTab">
-                <pre style={{
-                  background: '#f4f4f4',
-                  padding: '10px',
-                  whiteSpace: 'pre-wrap',
-                  wordWrap: 'break-word'
-                }}>
-                  {tradeData ? (
-                    <>
-                      <div style={{ fontWeight: 'bold', marginBottom: '10px' }}>
-                        평가 금액: {tradeData.total}
-                      </div>
-                      <div style={{ fontWeight: 'bold', marginBottom: '10px' }}>
-                        잔여 현금: {tradeData.restMoney}
-                      </div>
-                      <div style={{ fontWeight: 'bold', marginBottom: '10px' }}>
-                        잔여 테더: {tradeData.restUsdt}
-                      </div>
-                      {(tradeData.history || []).sort((a, b) => new Date(a.time) - new Date(b.time)).map((item, idx) => (
-                        <div key={idx}>
-                          [{item.date}] {item.type} {item.price} X {item.volume} 총: {item.price * item.volume}원
-                        </div>
-                      ))}
-                    </>
-                  ) : '불러오는 중...'}
-                </pre>
+            <div style={{ flex: 1, padding: '15px', backgroundColor: '#fff3e0', borderRadius: '4px' }}>
+              <div style={{ fontSize: '14px', color: '#666', marginBottom: '5px' }}>매도 기준 김치 프리미엄</div>
+              <input id="sell" type="number" step="0.01" value={config.sell} onChange={(e) => setConfig((prev) => ({ ...prev, sell: e.target.value }))} style={{
+                width: '100%',
+                padding: '12px',
+                marginTop: '5px',
+                boxSizing: 'border-box',
+                fontSize: '16px',
+                border: '1px solid #ddd',
+                borderRadius: '4px'
+              }} placeholder="예: 2.5" />
+            </div>
+          </div>
+
+          {/* 탭 내용 */}
+          <div>
+            {/* 테더 매수 탭 */}
+            {activeTab === 'buy' && (
+              <div id="buyTab">
+                <div style={{ marginBottom: '15px', padding: '15px', backgroundColor: '#f5f5f5', borderRadius: '4px' }}>
+                  <div style={{ fontSize: '14px', color: '#666', marginBottom: '10px' }}>매매 방식</div>
+                  <label style={{ display: 'block', marginBottom: '10px' }}>
+                    <input type="radio" name="trade-type" value="money" checked={config.isTradeByMoney} onChange={() => {
+                      const next = { ...config, isTradeByMoney: true };
+                      setConfig(next);
+                      updateConfig(next);
+                    }} /> 금액으로 매매
+                  </label>
+                  <label style={{ display: 'block', marginBottom: '10px' }}>
+                    <input type="radio" name="trade-type" value="volume" checked={!config.isTradeByMoney} onChange={() => {
+                      const next = { ...config, isTradeByMoney: false };
+                      setConfig(next);
+                      updateConfig(next);
+                    }} /> 수량으로 매매
+                  </label>
+                  <input id="tradeAmount" type="number" step="1" value={config.tradeAmount} onChange={(e) => setConfig((prev) => ({ ...prev, tradeAmount: e.target.value }))} style={{
+                    width: '100%',
+                    padding: '12px',
+                    marginTop: '10px',
+                    boxSizing: 'border-box',
+                    fontSize: '16px',
+                    border: '1px solid #ddd',
+                    borderRadius: '4px'
+                  }} placeholder={config.isTradeByMoney ? "매수 금액 (원)" : "매수 수량 (USDT)"} />
+                  <div style={{ fontSize: '12px', color: '#666', marginTop: '5px' }}>현재 보유 금액: {Number(balance.restMoney || 0).toLocaleString()}원</div>
+                  <button onClick={addBuyTask} style={{
+                    width: '100%',
+                    padding: '12px',
+                    marginTop: '15px',
+                    fontSize: '16px',
+                    backgroundColor: '#2196F3',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '4px',
+                    cursor: 'pointer',
+                    fontWeight: 'bold'
+                  }}>매수 작업 추가</button>
+                </div>
               </div>
             )}
-            {activeTab === 'log' && (
-              <div id="logTab">
-                <pre style={{
-                  background: '#f4f4f4',
-                  padding: '10px',
-                  whiteSpace: 'pre-wrap',
-                  wordWrap: 'break-word'
-                }}>{logs}</pre>
+
+            {/* 테더 매도 탭 */}
+            {activeTab === 'sell' && (
+              <div id="sellTab">
+                <div style={{ marginBottom: '15px', padding: '15px', backgroundColor: '#f5f5f5', borderRadius: '4px' }}>
+                  <div style={{ fontSize: '14px', color: '#666', marginBottom: '10px' }}>매도 수량</div>
+                  <input id="sellAmount" type="number" step="0.1" value={config.sellAmount || ''} onChange={(e) => setConfig((prev) => ({ ...prev, sellAmount: e.target.value }))} style={{
+                    width: '100%',
+                    padding: '12px',
+                    marginTop: '5px',
+                    boxSizing: 'border-box',
+                    fontSize: '16px',
+                    border: '1px solid #ddd',
+                    borderRadius: '4px'
+                  }} placeholder="매도할 테더 수량 (USDT)" />
+                  <div style={{ fontSize: '12px', color: '#666', marginTop: '5px' }}>현재 보유 테더: {Number(balance.restUsdt || 0).toFixed(1)} USDT</div>
+                  <button onClick={addSellTask} style={{
+                    width: '100%',
+                    padding: '12px',
+                    marginTop: '15px',
+                    fontSize: '16px',
+                    backgroundColor: '#FF9800',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '4px',
+                    cursor: 'pointer',
+                    fontWeight: 'bold'
+                  }}>매도 작업 추가</button>
+                </div>
               </div>
             )}
-            {activeTab === 'orders' && (
-              <div id="ordersTab">
-                <div style={{ marginBottom: '10px', padding: '10px', backgroundColor: '#e3f2fd', borderRadius: '4px' }}>
-                  <strong>총 투자 금액:</strong> {totalAllocatedAmount !== null ? `${Number(totalAllocatedAmount).toLocaleString()}원` : '로딩 중...'}
-                </div>
-                <div style={{ marginBottom: '10px', fontSize: '14px', color: '#666' }}>
-                  활성 주문: {orders.filter(o => o.status === 'buy_waiting' || o.status === 'sell_waiting').length}개
-                </div>
-                {orders.length === 0 ? (
+          </div>
+
+          {/* 탭: 테더 매수 / 테더 매도 */}
+          <div style={{ marginTop: '20px', marginBottom: '20px' }}>
+            <div style={{ display: 'flex', justifyContent: 'center', gap: '10px' }}>
+              <button onClick={() => setActiveTab('buy')} style={{
+                flex: 1,
+                padding: '12px',
+                backgroundColor: activeTab === 'buy' ? '#2196F3' : '#e0e0e0',
+                color: activeTab === 'buy' ? 'white' : 'black',
+                border: 'none',
+                borderRadius: '4px',
+                cursor: 'pointer',
+                fontSize: '16px',
+                fontWeight: 'bold'
+              }}>테더 매수</button>
+              <button onClick={() => setActiveTab('sell')} style={{
+                flex: 1,
+                padding: '12px',
+                backgroundColor: activeTab === 'sell' ? '#FF9800' : '#e0e0e0',
+                color: activeTab === 'sell' ? 'white' : 'black',
+                border: 'none',
+                borderRadius: '4px',
+                cursor: 'pointer',
+                fontSize: '16px',
+                fontWeight: 'bold'
+              }}>테더 매도</button>
+            </div>
+          </div>
+
+          {/* 트레이딩 설정 */}
+          <div style={{ marginTop: '20px', padding: '15px', backgroundColor: '#f5f5f5', borderRadius: '4px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <h3 style={{ margin: 0 }}>트레이딩 설정</h3>
+              <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                <button onClick={() => {
+                  const next = { ...config, isTrading: !config.isTrading };
+                  setConfig(next);
+                  updateConfig(next);
+                }} style={{
+                  padding: '8px 20px',
+                  fontSize: '14px',
+                  backgroundColor: config.isTrading ? '#4CAF50' : '#f44336',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '4px',
+                  cursor: 'pointer',
+                  fontWeight: 'bold'
+                }}>{config.isTrading ? 'ON' : 'OFF'}</button>
+                <button onClick={confirmReset} style={{
+                  padding: '8px 16px',
+                  fontSize: '14px',
+                  backgroundColor: '#f44336',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '4px',
+                  cursor: 'pointer',
+                  fontWeight: 'bold'
+                }}>매매 초기화</button>
+              </div>
+            </div>
+          </div>
+
+          {/* 진행 중인 작업 목록 */}
+          <div style={{ marginTop: '20px', padding: '15px', backgroundColor: '#f5f5f5', borderRadius: '4px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
+              <h3 style={{ margin: 0 }}>📋 진행 중인 작업</h3>
+              <div style={{ display: 'flex', gap: '5px' }}>
+                <button onClick={() => setTaskTab('tasks')} style={{
+                  padding: '6px 12px',
+                  fontSize: '14px',
+                  backgroundColor: taskTab === 'tasks' ? '#2196F3' : '#e0e0e0',
+                  color: taskTab === 'tasks' ? 'white' : 'black',
+                  border: 'none',
+                  borderRadius: '4px',
+                  cursor: 'pointer',
+                  fontWeight: taskTab === 'tasks' ? 'bold' : 'normal'
+                }}>작업 목록</button>
+                <button onClick={() => setTaskTab('logs')} style={{
+                  padding: '6px 12px',
+                  fontSize: '14px',
+                  backgroundColor: taskTab === 'logs' ? '#2196F3' : '#e0e0e0',
+                  color: taskTab === 'logs' ? 'white' : 'black',
+                  border: 'none',
+                  borderRadius: '4px',
+                  cursor: 'pointer',
+                  fontWeight: taskTab === 'logs' ? 'bold' : 'normal'
+                }}>로그</button>
+              </div>
+            </div>
+
+            {taskTab === 'tasks' && (
+              <>
+                {tasks.length === 0 ? (
                   <div style={{ padding: '20px', textAlign: 'center', color: '#666' }}>
-                    주문이 없습니다
+                    진행 중인 작업이 없습니다
                   </div>
                 ) : (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                    {orders.map((order) => (
-                      <div key={order.id} style={{
+                    {tasks.map((task) => (
+                      <div key={task.id} style={{
                         border: '1px solid #ddd',
                         borderRadius: '4px',
                         padding: '15px',
-                        backgroundColor: '#fff'
+                        backgroundColor: '#fff',
+                        position: 'relative'
                       }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
                           <div>
-                            <strong style={{ color: getStatusColor(order.status) }}>
-                              {getStatusText(order.status)}
+                            <strong style={{ color: getTaskStatusColor(task.status) }}>
+                              {getTaskStatusText(task.status)}
                             </strong>
                             <span style={{ marginLeft: '10px', fontSize: '12px', color: '#666' }}>
-                              ID: {order.id.substring(0, 8)}...
+                              ID: {task.id.substring(0, 8)}...
                             </span>
                           </div>
-                          {(order.status === 'buy_waiting' || order.status === 'sell_waiting') && (
-                            <button onClick={() => deleteOrder(order.id)} style={{
+                          {(task.status === 'buy_waiting' || task.status === 'sell_waiting') && (
+                            <button onClick={() => deleteTask(task.id)} style={{
                               backgroundColor: '#f44336',
                               color: 'white',
                               border: 'none',
@@ -592,33 +874,54 @@ export default function TradePage() {
                           )}
                         </div>
                         <div style={{ fontSize: '14px', lineHeight: '1.6' }}>
-                          {order.buyPrice && (
-                            <div>매수가: {Number(order.buyPrice).toLocaleString()}원</div>
+                          {task.type === 'buy' && (
+                            <>
+                              {task.allocatedAmount && (
+                                <div>투자 금액: {Number(task.allocatedAmount).toLocaleString()}원</div>
+                              )}
+                              {task.buyPrice && (
+                                <div>매수가: {Number(task.buyPrice).toLocaleString()}원</div>
+                              )}
+                              {task.volume && (
+                                <div>수량: {Number(task.volume).toFixed(1)} USDT</div>
+                              )}
+                            </>
                           )}
-                          {order.sellPrice && (
-                            <div>매도가: {Number(order.sellPrice).toLocaleString()}원</div>
+                          {task.type === 'sell' && (
+                            <>
+                              {task.volume && (
+                                <div>매도 수량: {Number(task.volume).toFixed(1)} USDT</div>
+                              )}
+                              {task.sellPrice && (
+                                <div>매도가: {Number(task.sellPrice).toLocaleString()}원</div>
+                              )}
+                            </>
                           )}
-                          {order.volume && (
-                            <div>수량: {Number(order.volume).toFixed(1)} USDT</div>
-                          )}
-                          {order.allocatedAmount !== undefined && order.allocatedAmount !== null && (
-                            <div style={{ marginTop: '5px', fontWeight: 'bold', color: '#2196F3' }}>
-                              투자 금액: {Number(order.allocatedAmount).toLocaleString()}원
+                          {/* 매수 대기 상태에서 매수 기준 프리미엄 표시 */}
+                          {task.status === 'buy_waiting' && task.buyThreshold != null && (
+                            <div style={{ fontSize: '12px', color: '#2196F3', marginTop: '5px' }}>
+                              매수 기준 프리미엄: {Number(task.buyThreshold).toFixed(2)}%
                             </div>
                           )}
-                          {order.buyUuid && (
-                            <div style={{ fontSize: '12px', color: '#666' }}>
-                              매수 UUID: {order.buyUuid.substring(0, 20)}...
+                          {/* 매도 대기 상태에서 매도 기준 프리미엄 표시 */}
+                          {task.status === 'sell_waiting' && task.sellThreshold != null && (
+                            <div style={{ fontSize: '12px', color: '#FF9800', marginTop: '5px' }}>
+                              매도 기준 프리미엄: {Number(task.sellThreshold).toFixed(2)}%
                             </div>
                           )}
-                          {order.sellUuid && (
-                            <div style={{ fontSize: '12px', color: '#666' }}>
-                              매도 UUID: {order.sellUuid.substring(0, 20)}...
-                            </div>
-                          )}
-                          {order.createdAt && (
+                          {task.buyUuid && (
                             <div style={{ fontSize: '12px', color: '#666', marginTop: '5px' }}>
-                              생성: {new Date(order.createdAt).toLocaleString('ko-KR')}
+                              매수 UUID: {task.buyUuid.substring(0, 20)}...
+                            </div>
+                          )}
+                          {task.sellUuid && (
+                            <div style={{ fontSize: '12px', color: '#666', marginTop: '5px' }}>
+                              매도 UUID: {task.sellUuid.substring(0, 20)}...
+                            </div>
+                          )}
+                          {task.createdAt && (
+                            <div style={{ fontSize: '12px', color: '#666', marginTop: '5px' }}>
+                              생성: {new Date(task.createdAt).toLocaleString('ko-KR')}
                             </div>
                           )}
                         </div>
@@ -626,6 +929,23 @@ export default function TradePage() {
                     ))}
                   </div>
                 )}
+              </>
+            )}
+
+            {taskTab === 'logs' && (
+              <div>
+                <pre style={{
+                  background: '#fff',
+                  padding: '15px',
+                  borderRadius: '4px',
+                  border: '1px solid #ddd',
+                  whiteSpace: 'pre-wrap',
+                  wordWrap: 'break-word',
+                  maxHeight: '400px',
+                  overflow: 'auto',
+                  fontSize: '12px',
+                  fontFamily: 'monospace'
+                }}>{logs}</pre>
               </div>
             )}
           </div>
