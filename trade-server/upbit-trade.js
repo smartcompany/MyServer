@@ -147,18 +147,18 @@ function saveOrderState(state) {
   fs.writeFileSync(ordersFilePath, JSON.stringify(state));
 }
 
-
-function saveCashBalance(balance) {
-  if (!balance.history) balance.history = [];
-  if (balance.total == null) balance.total = 0;
-  fs.writeFileSync(cashBalanceLogPath, JSON.stringify(balance));
-}
-
 function loadCashBalance () {
   let cashData;
   try {
     const data = fs.readFileSync(cashBalanceLogPath, 'utf8');
     cashData = JSON.parse(data);
+    // history가 없으면 초기화
+    if (!cashData.history) {
+      cashData.history = [];
+    }
+    if (cashData.total == null) {
+      cashData.total = 0;
+    }
   } catch (err) {
     console.error(err);
     cashData = { history: [], total: 0 };
@@ -169,7 +169,14 @@ function loadCashBalance () {
 }
 
 function saveCashBalance (balance) {
-  fs.writeFileSync(cashBalanceLogPath, JSON.stringify(balance));
+  // history가 없으면 초기화
+  if (!balance.history) {
+    balance.history = [];
+  }
+  if (balance.total == null) {
+    balance.total = 0;
+  }
+  fs.writeFileSync(cashBalanceLogPath, JSON.stringify(balance, null, 2));
 }
 
 function saveConfig(config) {
