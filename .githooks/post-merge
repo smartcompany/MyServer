@@ -2,6 +2,12 @@
 
 # Git pull 후 자동으로 빌드 및 재시작하는 hook
 
+# SKIP_GIT_HOOKS 환경 변수가 설정되어 있으면 훅 실행 스킵
+if [ "$SKIP_GIT_HOOKS" = "1" ]; then
+    echo "⏭️  SKIP_GIT_HOOKS=1, post-merge 훅 스킵"
+    exit 0
+fi
+
 echo "🔄 Git pull 완료, 자동 재시작 시작..."
 
 # 항상 프로젝트 루트에서 실행
@@ -10,13 +16,6 @@ if [ -n "$ROOT_DIR" ]; then
   cd "$ROOT_DIR" || exit 1
 fi
 
-# trade-server의 런타임 파일들을 Git 변경사항 무시 목록에 추가
-# 이렇게 하면 git pull 시 로컬 변경사항 때문에 충돌이 발생하지 않음
-echo "🔒 런타임 파일 Git 무시 설정 중..."
-git update-index --skip-worktree trade-server/config.json 2>/dev/null || true
-git update-index --skip-worktree trade-server/orderState.json 2>/dev/null || true
-git update-index --skip-worktree trade-server/trade-logs.txt 2>/dev/null || true
-git update-index --skip-worktree trade-server/cashBalance.json 2>/dev/null || true
 
 # PM2가 설치되어 있는지 확인
 if ! command -v pm2 &> /dev/null; then
