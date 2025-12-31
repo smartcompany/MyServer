@@ -1,18 +1,19 @@
 import { verifyToken } from '../middleware';
 import { getTradeServerPath } from '../utils';
+import { clearOrders } from '../utils';
 import fs from 'fs';
 
 const orderStateFilePath = getTradeServerPath('orderState.json');
 
 function readOrderState() {
   if (!fs.existsSync(orderStateFilePath)) {
-    return { orders: [], avaliableMoney: null, needInit: false };
+    return { orders: [], command: null };
   }
   try {
     return JSON.parse(fs.readFileSync(orderStateFilePath, 'utf8'));
   } catch (error) {
     console.error('주문 상태 파일 읽기 실패:', error);
-    return { orders: [], avaliableMoney: null, needInit: false };
+    return { orders: [], avaliableMoney: null, command: null };
   }
 }
 
@@ -94,15 +95,14 @@ export async function DELETE(request) {
       return Response.json({ error: '주문을 찾을 수 없습니다' }, { status: 404 });
     }
 
-    // 주문 취소는 upbit-trade.js에서 처리하므로, 여기서는 주문을 제거만 함
-    // 실제 취소는 다음 trade() 루프에서 처리됨
-    orderState.orders = orderState.orders.filter(o => o.id !== orderId);
-    saveOrderState(orderState);
+    // orderState.json에 clearOrders command 설정
+    // upbit-trade.js의 handleCommand가 이를 감지하고 처리함
+    clearOrders([orderId]);
 
-    return Response.json({ message: '주문이 삭제되었습니다' });
+    return Response.json({ message: '주문 취소 요청이 접수되었습니다. 처리 중입니다.' });
   } catch (error) {
     console.error('주문 삭제 실패:', error);
-    return Response.json({ error: '주문 삭제 실패' }, { status: 500 });
+    return Response.json({ error: `주문 삭제 실패: ${error.message}` }, { status: 500 });
   }
 }
 

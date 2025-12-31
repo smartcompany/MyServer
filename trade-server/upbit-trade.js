@@ -105,20 +105,20 @@ let cashBalance = loadCashBalance();
 function loadOrderState() {
   try {
     if (!fs.existsSync(ordersFilePath)) {
-      fs.writeFileSync(ordersFilePath, JSON.stringify({ orders: [], needInit: false }, null, 2));
+      fs.writeFileSync(ordersFilePath, JSON.stringify({ orders: [], command: null }, null, 2));
     }
     const data = fs.readFileSync(ordersFilePath, 'utf8');
     const parsed = JSON.parse(data);
     
     // orders 배열이 없으면 초기화
     if (!Array.isArray(parsed.orders)) {
-      return { orders: [], needInit: false };
+      return { orders: [], command: null };
     }
     
     return parsed;
   } catch (err) {
     console.error(err);
-    return { orders: [], needInit: false };
+    return { orders: [], command: null };
   }
 }
 
@@ -273,6 +273,59 @@ function makeEncryptToken(orderData) {
   };
   const token = jwt.sign(payload, SECRET_KEY);
   return token;
+}
+
+// command 처리 함수 (clearAllOrders 또는 clearOrders)
+async function handleCommand(orderState) {
+  switch (orderState.command) {
+    case 'clearAllOrders':
+      console.log('초기화 필요: 모든 주문 취소 시작');
+      for (const order of orderState.orders) {
+        if (order.status === 'buy_waiting' && order.buyUuid) {
+          await cancelOrder(order.buyUuid);
+        } else if (order.status === 'sell_waiting' && order.sellUuid) {
+          await cancelOrder(order.sellUuid);
+        }
+      }
+      orderState.orders = [];
+      orderState.command = null;
+      orderState.commandParams = null;
+      saveOrderState(orderState);
+      console.log('모든 주문 취소 완료');
+      break;
+      
+    case 'clearOrders':
+      console.log('선택 주문 취소 시작');
+      const orderIdsToClear = orderState.commandParams;
+      if (!Array.isArray(orderIdsToClear) || orderIdsToClear.length === 0) {
+        console.log('⚠️ clearOrders 명령에 유효한 주문 ID가 없습니다.');
+        orderState.command = null;
+        orderState.commandParams = null;
+        saveOrderState(orderState);
+        break;
+      }
+      
+      // commandParams에 지정된 주문 ID들만 취소 및 제거
+      const ordersToCancel = orderState.orders.filter(o => orderIdsToClear.includes(o.id));
+      for (const order of ordersToCancel) {
+        if (order.status === 'buy_waiting' && order.buyUuid) {
+          await cancelOrder(order.buyUuid);
+        } else if (order.status === 'sell_waiting' && order.sellUuid) {
+          await cancelOrder(order.sellUuid);
+        }
+      }
+      
+      // 취소한 주문들을 orderState에서 제거
+      orderState.orders = orderState.orders.filter(o => !orderIdsToClear.includes(o.id));
+      orderState.command = null;
+      orderState.commandParams = null;
+      saveOrderState(orderState);
+      console.log(`선택 주문 취소 완료: ${ordersToCancel.length}개 주문`);
+      break;
+      
+    default:
+      break;
+  }
 }
 
 async function cancelOrder(orderedUuid) {
@@ -495,21 +548,9 @@ async function trade() {
     return; 
   }
 
-  // 초기화 처리: 모든 주문 취소
-  if (orderState.needInit) {
-    console.log('초기화 필요: 모든 주문 취소 시작');
-    for (const order of orderState.orders) {
-      if (order.status === 'buy_waiting' && order.buyUuid) {
-        await cancelOrder(order.buyUuid);
-      } else if (order.status === 'sell_waiting' && order.sellUuid) {
-        await cancelOrder(order.sellUuid);
-      }
-    }
-    orderState.orders = [];
-    orderState.needInit = false;
-    saveOrderState(orderState);
-  }
-  
+  // command 처리 (clearAllOrders 또는 clearOrders)
+  await handleCommand(orderState);
+
   const buyThreshold = config.buyThreshold ?? 0.5;  
   const sellThreshold = config.sellThreshold ?? 2.5;
 

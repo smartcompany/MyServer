@@ -1,9 +1,8 @@
 import { verifyToken } from '../middleware';
-import { getTradeServerPath } from '../utils';
+import { getTradeServerPath, needInitForOrderState } from '../utils';
 import fs from 'fs';
 
 const configFilePath = getTradeServerPath('config.json');
-const orderStateFilePath = getTradeServerPath('orderState.json');
 
 function readConfigFresh() {
   if (!fs.existsSync(configFilePath)) {
@@ -17,15 +16,6 @@ function readConfigFresh() {
   } catch (error) {
     console.error('❌ [config API] 설정 파일 읽기 실패:', error);
     throw new Error(`설정 파일 읽기 실패: ${error.message}`);
-  }
-}
-
-function needInitForOrderState() {
-  if (fs.existsSync(orderStateFilePath)) {
-    const data = fs.readFileSync(orderStateFilePath, 'utf8');
-    let history = JSON.parse(data);
-    history.needInit = true;
-    fs.writeFileSync(orderStateFilePath, JSON.stringify(history));
   }
 }
 
