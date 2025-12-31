@@ -679,7 +679,6 @@ async function trade() {
     updateCashBalnce(orderState, tetherPrice);
     
     console.log(`현재 테더: ${tetherPrice}원, 환율: ${rate}원, 김프: ${kimchiPremium.toFixed(2)}%, 매수가 ${expactedBuyPrice} 원, 매도가 ${expactedSellPrice} 원`);
-    console.log(`활성 주문 수: ${activeOrders.length}`);
 
     // 매도 대기 중인 주문에 대해 매도 주문 생성
     for (const order of orderState.orders) {
