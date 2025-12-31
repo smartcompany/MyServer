@@ -91,9 +91,11 @@ else
     echo "ℹ️  의존성 파일 변경 없음, 설치 스킵"
 fi
 
-# node_modules가 없으면 설치 (next 명령어를 찾기 위해)
+# node_modules가 없거나 next가 없으면 설치 (안전장치)
+# next는 dependencies에 있으므로 --production으로도 설치되어야 하지만,
+# 혹시 모를 상황을 대비한 체크
 if [ ! -d "node_modules" ] || [ ! -f "node_modules/.bin/next" ]; then
-    echo "📦 node_modules가 없거나 next가 없음, 설치 중..."
+    echo "⚠️  node_modules가 없거나 next가 없음, 설치 중..."
     npm install
 fi
 
