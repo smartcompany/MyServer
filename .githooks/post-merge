@@ -94,7 +94,7 @@ if echo "$CHANGED_FILES" | grep -qE "(package\.json|package-lock\.json)"; then
     echo "📦 의존성 파일 변경됨, 설치 중..."
     npm install --production
 else
-    echo "ℹ️  의존성 파일 변경 없음, 설치 스킵"
+    echo "ℹ️  의존성 파일 변경 없음, 설치 스킵 "
 fi
 
 # 빌드가 필요한 파일이 변경되었는지 확인
