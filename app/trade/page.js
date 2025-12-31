@@ -107,16 +107,35 @@ export default function TradePage() {
         method: 'GET',
         headers: { 'Authorization': 'Bearer ' + token }
       });
+      
+      if (!res.ok) {
+        const errorData = await res.json();
+        const errorMsg = errorData.error || `HTTP ${res.status} 에러`;
+        const details = errorData.details || '';
+        alert(`❌ 설정 로드 실패: ${errorMsg}\n${details ? `상세: ${details}` : ''}`);
+        console.error('설정 로드 실패:', errorMsg, details);
+        return;
+      }
+      
       const data = await res.json();
+      
+      // 에러 응답인지 확인
+      if (data.error) {
+        alert(`❌ 설정 로드 실패: ${data.error}\n${data.details ? `상세: ${data.details}` : ''}`);
+        console.error('설정 API 에러:', data);
+        return;
+      }
+      
       setConfig({
-        buy: data.buyThreshold || '',
-        sell: data.sellThreshold || '',
+        buy: data.buyThreshold ?? '',
+        sell: data.sellThreshold ?? '',
         isTrading: Boolean(data.isTrading),
-        tradeAmount: data.tradeAmount || '',
+        tradeAmount: data.tradeAmount ?? '',
         isTradeByMoney: data.isTradeByMoney !== false
       });
       setConfigLoaded(true);
     } catch (error) {
+      alert(`❌ 설정 로드 실패: ${error.message || '알 수 없는 오류'}`);
       console.error('설정 로드 실패:', error);
     }
   }
