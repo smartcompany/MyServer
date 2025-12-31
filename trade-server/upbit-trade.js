@@ -578,42 +578,31 @@ async function trade() {
     // 김치 프리미엄 계산
     const kimchiPremium = ((tetherPrice - rate)/rate) * 100;
 
-    // 각 주문의 allocatedAmount는 주문 생성 시 설정되므로 여기서는 확인만
-
-    // 기존 주문들 처리
-    const activeOrders = orderState.orders.filter(o => 
-      o.status === 'buy_waiting' || o.status === 'sell_waiting'
-    );
-    
-    for (let i = activeOrders.length - 1; i >= 0; i--) {
-      const order = activeOrders[i];
-      const currentUuid = order.status === 'buy_waiting' ? order.buyUuid : order.sellUuid;
-      
-      if (!currentUuid) continue;
-      
-      const orderedData = await checkOrderedData(currentUuid);
+    // 기존 주문 처리
+    if (orderState.orderedUuid) {
+      const orderedData = await checkOrderedData(orderState.orderedUuid);
       if (orderedData == null) {
-        console.log(`주문 상태 확인 실패: ${currentUuid}`);
-        continue;
+        console.log(`주문 상태 확인 실패시 로직 멈춤`);
+        return null;
       } 
 
       switch (orderedData.state) {
         case 'done':
-          console.log(`주문 처리됨: ${currentUuid}`);
+          console.log(`주문 처리됨: ${orderState.orderedUuid}`);
           try {
             const orderedMoney = (orderedData.volume * orderedData.price);
             
             if (orderedData.side === 'bid') {
               // 매수 체결 → 매도 대기 상태로 전환
               console.log(`매수 주문 처리됨: ${orderedData.price}원, 수량: ${orderedData.volume}`);
-              order.status = 'sell_waiting';
-              order.buyPrice = orderedData.price;
-              order.volume = orderedData.volume;
-              order.buyUuid = currentUuid;
-              order.sellUuid = null;
-              // 각 주문의 투자 금액에서 사용한 금액 차감
-              if (order.allocatedAmount !== null && order.allocatedAmount !== undefined) {
-                order.allocatedAmount -= orderedMoney;
+              orderState.status = 'sell_waiting';
+              orderState.buyPrice = orderedData.price;
+              orderState.volume = orderedData.volume;
+              orderState.orderedUuid = null;
+              orderState.sellUuid = null;
+              // 사용 가능한 금액에서 사용한 금액 차감
+              if (orderState.avaliableMoney !== null && orderState.avaliableMoney !== undefined) {
+                orderState.avaliableMoney -= orderedMoney;
               }
 
               cashBalance.history.push({ 
@@ -625,12 +614,13 @@ async function trade() {
             } else if (orderedData.side === 'ask') {
               // 매도 체결 → 완료 처리
               console.log(`매도 주문 처리됨: ${orderedData.price}원, 수량: ${orderedData.volume}`);
-              order.status = 'completed';
-              order.sellPrice = orderedData.price;
-              order.sellUuid = currentUuid;
-              // 각 주문의 투자 금액에 회수한 금액 추가
-              if (order.allocatedAmount !== null && order.allocatedAmount !== undefined) {
-                order.allocatedAmount += orderedMoney;
+              orderState.status = 'completed';
+              orderState.sellPrice = orderedData.price;
+              orderState.sellUuid = orderState.orderedUuid;
+              orderState.orderedUuid = null;
+              // 사용 가능한 금액에 회수한 금액 추가
+              if (orderState.avaliableMoney !== null && orderState.avaliableMoney !== undefined) {
+                orderState.avaliableMoney += orderedMoney;
               }
 
               cashBalance.history.push({ 
@@ -639,9 +629,6 @@ async function trade() {
                 price: orderedData.price,
                 volume: orderedData.volume 
               });
-              
-              // 완료된 주문은 배열에서 제거 (또는 유지하고 표시만)
-              // 여기서는 유지하고 상태만 변경
             }
             
             saveCashBalance(cashBalance);
@@ -651,22 +638,22 @@ async function trade() {
           }
           break;
         case 'cancel':
-          console.log(`주문이 외부에서 취소됨: ${currentUuid}`);
-          // 주문 취소 시 해당 주문 제거
-          orderState.orders = orderState.orders.filter(o => o.id !== order.id);
+          console.log('주문이 외부에서 취소되면 중단');
+          orderState.orderedUuid = null;
           saveOrderState(orderState);
-          break;
+          config.isTrading = false;
+          saveConfig(config);
+          return null;
         case 'wait':
           // 가격 변동 체크 및 취소 필요 여부 확인
-          const targetPrice = order.status === 'buy_waiting' ? expactedBuyPrice : expactedSellPrice;
-          const orderAllocatedAmount = order.allocatedAmount || 0;
-          if (needToCancelOrder(orderedData, expactedBuyPrice, expactedSellPrice, config, orderAllocatedAmount)) {
-            const cancelResponse = await cancelOrder(currentUuid);
+          if (needToCancelOrder(orderedData, expactedBuyPrice, expactedSellPrice, config, orderState.avaliableMoney)) {
+            const cancelResponse = await cancelOrder(orderState.orderedUuid);
             if (cancelResponse) {
-              console.log(`주문 취소 성공: ${currentUuid}`);
-              // 취소된 주문 제거
-              orderState.orders = orderState.orders.filter(o => o.id !== order.id);
-              saveOrderState(orderState);
+              console.log(`주문 취소 성공 ${orderState.orderedUuid}`);
+              orderState.orderedUuid = null;
+            } else {
+              console.log(`주문 취소가 실패시 로직 멈춤`);
+              return null;
             }
           }
           break;
