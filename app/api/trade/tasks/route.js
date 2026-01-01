@@ -229,6 +229,8 @@ export async function DELETE(request) {
       }
     }
 
+    saveOrderState(orderState);
+
     console.log(`✅ [tasks API] 작업 삭제: ID=${taskId}`);
 
     return Response.json({
