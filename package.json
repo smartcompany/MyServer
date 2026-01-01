@@ -20,6 +20,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
+    "start:dev": "next dev",
+    "prestart": "next build",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "repository": {

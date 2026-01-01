@@ -1,5 +1,5 @@
 import { verifyToken } from '../middleware';
-import { getOrderState, updateOrderState, saveOrderStateImmediately } from './orderState';
+import { getOrderState, updateOrderState, saveOrderStateImmediately } from '../orderState';
 import { clearOrders } from '../utils';
 
 // 주문 목록 조회

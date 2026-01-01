@@ -1,5 +1,6 @@
 import path from 'path';
 import fs from 'fs';
+import { updateOrderState, saveOrderStateImmediately } from './orderState';
 
 // 프로젝트 루트 경로 찾기 (Next.js 빌드 환경에서도 올바른 경로 사용)
 export function getProjectRoot() {
@@ -38,7 +39,6 @@ export function getTradeServerPath(filename) {
 
 // orderState에 초기화 플래그 설정 (모든 주문 취소)
 export function needInitForOrderState() {
-  const { updateOrderState, saveOrderStateImmediately } = require('../api/trade/orderState');
   updateOrderState((state) => {
     state.command = 'clearAllOrders';
     state.commandParams = null;
@@ -53,7 +53,6 @@ export function clearOrders(orderIds) {
     throw new Error('주문 ID 배열이 필요합니다');
   }
   
-  const { updateOrderState, saveOrderStateImmediately } = require('../api/trade/orderState');
   updateOrderState((state) => {
     state.command = 'clearOrders';
     state.commandParams = orderIds;

@@ -1,6 +1,6 @@
 import { verifyToken } from '../middleware';
 import { getTradeServerPath } from '../utils';
-import { getOrderState, updateOrderState, saveOrderStateImmediately } from './orderState';
+import { getOrderState, updateOrderState, saveOrderStateImmediately } from '../orderState';
 import fs from 'fs';
 
 // uuid는 Node.js 환경에서 require로 사용

@@ -1,6 +1,6 @@
 import { verifyToken } from '../middleware';
 import { getTradeServerPath } from '../utils';
-import { getOrderState } from './orderState';
+import { getOrderState } from '../orderState';
 import fs from 'fs';
 import path from 'path';
 
