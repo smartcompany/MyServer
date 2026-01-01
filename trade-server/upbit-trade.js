@@ -311,6 +311,9 @@ async function handleCommand(orderState) {
       const successfullyCanceled = [];
       
       for (const order of ordersToCancel) {
+        console.log(`주문 ${order.id} 취소 시작`);
+        console.log(`주문 상태: ${order.status}`);
+        console.log(`주문 UUID: ${order.buyUuid}, ${order.sellUuid}`);
         let cancelResult = null;
         if (order.status === 'buy_ordered') {
           cancelResult = await cancelOrder(order.buyUuid);
