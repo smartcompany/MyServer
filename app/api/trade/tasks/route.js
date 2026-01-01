@@ -150,8 +150,8 @@ export async function POST(request) {
       sellPrice: null,
       volume: type === 'sell' ? Number(amount) : null, // 매도는 수량, 매수는 나중에 계산
       allocatedAmount: type === 'buy' ? Number(amount) : null, // 매수는 투자 금액
-      buyThreshold: type === 'buy' ? (config.buyThreshold ?? config.buy ?? null) : null, // 매수 기준 프리미엄
-      sellThreshold: type === 'sell' ? (config.sellThreshold ?? config.sell ?? null) : null, // 매도 기준 프리미엄
+      buyThreshold: config.buyThreshold, // 매수 기준 프리미엄 (매도 작업도 나중에 매수로 전환되므로 저장)
+      sellThreshold: config.sellThreshold, // 매도 기준 프리미엄 (매수 작업도 나중에 매도로 전환되므로 저장)
       isTradeByMoney: type === 'buy' ? (config.isTradeByMoney) : null, // 매수 작업일 때만 저장 (매도는 수량만 사용)
       createdAt: new Date().toISOString(),
       type: type // 작업 타입 저장
