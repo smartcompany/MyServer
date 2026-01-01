@@ -1,25 +1,6 @@
 import { verifyToken } from '../middleware';
-import { getTradeServerPath } from '../utils';
+import { getOrderState, updateOrderState, saveOrderStateImmediately } from './orderState';
 import { clearOrders } from '../utils';
-import fs from 'fs';
-
-const orderStateFilePath = getTradeServerPath('orderState.json');
-
-function readOrderState() {
-  if (!fs.existsSync(orderStateFilePath)) {
-    return { orders: [], command: null };
-  }
-  try {
-    return JSON.parse(fs.readFileSync(orderStateFilePath, 'utf8'));
-  } catch (error) {
-    console.error('주문 상태 파일 읽기 실패:', error);
-    return { orders: [], avaliableMoney: null, command: null };
-  }
-}
-
-function saveOrderState(orderState) {
-  fs.writeFileSync(orderStateFilePath, JSON.stringify(orderState, null, 2));
-}
 
 // 주문 목록 조회
 export async function GET(request) {
@@ -29,7 +10,7 @@ export async function GET(request) {
   }
 
   try {
-    const orderState = readOrderState();
+    const orderState = getOrderState();
     // 모든 주문의 allocatedAmount 합계 계산 (총 사용 가능한 투자 금액)
     const totalAllocatedAmount = (orderState.orders || []).reduce((sum, order) => {
       return sum + (order.allocatedAmount || 0);
@@ -54,7 +35,7 @@ export async function POST(request) {
 
   try {
     const { amount } = await request.json();
-    const orderState = readOrderState();
+    const orderState = getOrderState();
     
     if (amount && typeof amount === 'number' && amount > 0) {
       // 수동으로 주문 금액 설정 (선택적)
@@ -88,16 +69,21 @@ export async function DELETE(request) {
       return Response.json({ error: '주문 ID가 필요합니다' }, { status: 400 });
     }
 
-    const orderState = readOrderState();
+    const orderState = getOrderState();
     const order = orderState.orders.find(o => o.id === orderId);
     
     if (!order) {
       return Response.json({ error: '주문을 찾을 수 없습니다' }, { status: 404 });
     }
 
-    // orderState.json에 clearOrders command 설정
+    // orderState에 clearOrders command 설정
     // upbit-trade.js의 handleCommand가 이를 감지하고 처리함
-    clearOrders([orderId]);
+    updateOrderState((state) => {
+      state.command = 'clearOrders';
+      state.commandParams = [orderId];
+      return state;
+    });
+    saveOrderStateImmediately();
 
     return Response.json({ message: '주문 취소 요청이 접수되었습니다. 처리 중입니다.' });
   } catch (error) {

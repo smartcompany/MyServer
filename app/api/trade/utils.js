@@ -36,33 +36,29 @@ export function getTradeServerPath(filename) {
   return filePath;
 }
 
-// orderState.json에 초기화 플래그 설정 (모든 주문 취소)
+// orderState에 초기화 플래그 설정 (모든 주문 취소)
 export function needInitForOrderState() {
-  const orderStateFilePath = getTradeServerPath('orderState.json');
-  if (fs.existsSync(orderStateFilePath)) {
-    const data = fs.readFileSync(orderStateFilePath, 'utf8');
-    let orderState = JSON.parse(data);
-    orderState.command = 'clearAllOrders';
-    orderState.commandParams = null;
-    fs.writeFileSync(orderStateFilePath, JSON.stringify(orderState, null, 2));
-  }
+  const { updateOrderState, saveOrderStateImmediately } = require('../api/trade/orderState');
+  updateOrderState((state) => {
+    state.command = 'clearAllOrders';
+    state.commandParams = null;
+    return state;
+  });
+  saveOrderStateImmediately();
 }
 
-// orderState.json에 선택 주문 취소 명령 설정
+// orderState에 선택 주문 취소 명령 설정
 export function clearOrders(orderIds) {
   if (!Array.isArray(orderIds) || orderIds.length === 0) {
     throw new Error('주문 ID 배열이 필요합니다');
   }
   
-  const orderStateFilePath = getTradeServerPath('orderState.json');
-  if (!fs.existsSync(orderStateFilePath)) {
-    throw new Error('orderState.json 파일을 찾을 수 없습니다');
-  }
-  
-  const data = fs.readFileSync(orderStateFilePath, 'utf8');
-  let orderState = JSON.parse(data);
-  orderState.command = 'clearOrders';
-  orderState.commandParams = orderIds;
-  fs.writeFileSync(orderStateFilePath, JSON.stringify(orderState, null, 2));
+  const { updateOrderState, saveOrderStateImmediately } = require('../api/trade/orderState');
+  updateOrderState((state) => {
+    state.command = 'clearOrders';
+    state.commandParams = orderIds;
+    return state;
+  });
+  saveOrderStateImmediately();
 }
 

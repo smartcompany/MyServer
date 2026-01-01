@@ -1,5 +1,6 @@
 import { verifyToken } from '../middleware';
 import { getTradeServerPath } from '../utils';
+import { getOrderState, updateOrderState, saveOrderStateImmediately } from './orderState';
 import fs from 'fs';
 
 // uuid는 Node.js 환경에서 require로 사용
@@ -18,31 +19,7 @@ function generateUUID() {
   }
 }
 
-const orderStatePath = getTradeServerPath('orderState.json');
 const configPath = getTradeServerPath('config.json');
-
-function loadOrderState() {
-  try {
-    if (!fs.existsSync(orderStatePath)) {
-      fs.writeFileSync(orderStatePath, JSON.stringify({ orders: [], command: null }, null, 2));
-    }
-    const data = fs.readFileSync(orderStatePath, 'utf8');
-    const parsed = JSON.parse(data);
-    
-    if (!Array.isArray(parsed.orders)) {
-      return { orders: [], command: null };
-    }
-    
-    return parsed;
-  } catch (err) {
-    console.error('orderState 읽기 실패:', err);
-    return { orders: [], command: null };
-  }
-}
-
-function saveOrderState(state) {
-  fs.writeFileSync(orderStatePath, JSON.stringify(state, null, 2));
-}
 
 function loadConfig() {
   try {
@@ -65,7 +42,7 @@ export async function GET(request) {
   }
 
   try {
-    const orderState = loadOrderState();
+    const orderState = getOrderState();
     const config = loadConfig();
     
     // 기존 주문에 threshold가 없으면 현재 config에서 가져와서 추가
@@ -100,7 +77,8 @@ export async function GET(request) {
       }
       
       if (hasUpdate) {
-        saveOrderState(orderState);
+        updateOrderState(orderState);
+        saveOrderStateImmediately(); // 즉시 저장
       }
     }
     
@@ -138,8 +116,6 @@ export async function POST(request) {
       return Response.json({ error: '설정 파일을 읽을 수 없습니다' }, { status: 500 });
     }
 
-    const orderState = loadOrderState();
-    
     // 새 작업 생성
     const newTask = {
       id: generateUUID(),
@@ -157,13 +133,14 @@ export async function POST(request) {
       type: type // 작업 타입 저장
     };
 
-    // orders 배열 초기화 확인
-    if (!Array.isArray(orderState.orders)) {
-      orderState.orders = [];
-    }
-
-    orderState.orders.push(newTask);
-    saveOrderState(orderState);
+    // 메모리 업데이트
+    updateOrderState((state) => {
+      if (!Array.isArray(state.orders)) {
+        state.orders = [];
+      }
+      state.orders.push(newTask);
+      return state;
+    });
 
     console.log(`✅ [tasks API] ${type === 'buy' ? '매수' : '매도'} 작업 추가: ID=${newTask.id}, Amount=${amount}`);
 
@@ -196,7 +173,7 @@ export async function DELETE(request) {
       return Response.json({ error: '작업 ID가 필요합니다' }, { status: 400 });
     }
 
-    const orderState = loadOrderState();
+    const orderState = getOrderState();
     
     if (!Array.isArray(orderState.orders)) {
       return Response.json({ error: '작업 목록이 없습니다' }, { status: 404 });
@@ -211,25 +188,22 @@ export async function DELETE(request) {
     const task = orderState.orders[taskIndex];
     
     // 진행 중인 주문이 있으면 취소 명령 추가 (ordered 상태일 때만)
-    if (task.status === 'buy_ordered') {
-      // command로 취소 처리 (upbit-trade.js에서 처리)
-      if (!orderState.command) {
-        orderState.command = 'clearOrders';
-        orderState.commandParams = [taskId];
-      } else if (orderState.command === 'clearOrders' && Array.isArray(orderState.commandParams)) {
-        orderState.commandParams.push(taskId);
+    // 메모리 업데이트
+    updateOrderState((state) => {
+      if (task.status === 'buy_ordered' || task.status === 'sell_ordered') {
+        // command로 취소 처리 (upbit-trade.js에서 처리)
+        if (!state.command) {
+          state.command = 'clearOrders';
+          state.commandParams = [taskId];
+        } else if (state.command === 'clearOrders' && Array.isArray(state.commandParams)) {
+          state.commandParams.push(taskId);
+        }
       }
-    } else if (task.status === 'sell_ordered') {
-      // command로 취소 처리
-      if (!orderState.command) {
-        orderState.command = 'clearOrders';
-        orderState.commandParams = [taskId];
-      } else if (orderState.command === 'clearOrders' && Array.isArray(orderState.commandParams)) {
-        orderState.commandParams.push(taskId);
-      }
-    }
-
-    saveOrderState(orderState);
+      // 작업 제거는 upbit-trade.js의 handleCommand에서 처리
+      return state;
+    });
+    
+    saveOrderStateImmediately(); // command 설정은 즉시 저장
 
     console.log(`✅ [tasks API] 작업 삭제: ID=${taskId}`);
 

@@ -1,5 +1,6 @@
 import { verifyToken } from '../middleware';
 import { getTradeServerPath } from '../utils';
+import { getOrderState } from './orderState';
 import fs from 'fs';
 import path from 'path';
 
@@ -51,13 +52,8 @@ export async function GET(request) {
       isTrading = config.isTrading || false;
     }
 
-    // orderState.json에서 주문 상태 확인
-    const orderStatePath = getTradeServerPath('orderState.json');
-    let orderState = { orders: [] };
-    
-    if (fs.existsSync(orderStatePath)) {
-      orderState = JSON.parse(fs.readFileSync(orderStatePath, 'utf8'));
-    }
+    // orderState에서 주문 상태 확인 (메모리 기반)
+    const orderState = getOrderState();
 
     // cashBalance.json에서 잔액 확인
     const cashBalancePath = getTradeServerPath('cashBalance.json');

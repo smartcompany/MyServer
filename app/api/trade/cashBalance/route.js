@@ -1,11 +1,11 @@
 import { verifyToken } from '../middleware';
 import { getTradeServerPath } from '../utils';
+import { getOrderState } from './orderState';
 import fs from 'fs';
 import path from 'path';
 
 const cashBalanceLogPath = getTradeServerPath('cashBalance.json');
 const configPath = getTradeServerPath('config.json');
-const orderStatePath = getTradeServerPath('orderState.json');
 
 function loadConfig() {
   try {
@@ -16,19 +16,6 @@ function loadConfig() {
     return JSON.parse(data);
   } catch (err) {
     return null;
-  }
-}
-
-function loadOrderState() {
-  try {
-    if (!fs.existsSync(orderStatePath)) {
-      return { orders: [] };
-    }
-    const data = fs.readFileSync(orderStatePath, 'utf8');
-    const parsed = JSON.parse(data);
-    return parsed.orders ? parsed : { orders: [] };
-  } catch (err) {
-    return { orders: [] };
   }
 }
 

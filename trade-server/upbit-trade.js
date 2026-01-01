@@ -102,28 +102,15 @@ const OrderType = {
 
 let cashBalance = loadCashBalance();
 
+// 메모리 기반 orderState 모듈 로드 (CommonJS)
+const orderStateMemory = require('./orderState-memory');
+
 function loadOrderState() {
-  try {
-    if (!fs.existsSync(ordersFilePath)) {
-      fs.writeFileSync(ordersFilePath, JSON.stringify({ orders: [], command: null }, null, 2));
-    }
-    const data = fs.readFileSync(ordersFilePath, 'utf8');
-    const parsed = JSON.parse(data);
-    
-    // orders 배열이 없으면 초기화
-    if (!Array.isArray(parsed.orders)) {
-      return { orders: [], command: null };
-    }
-    
-    return parsed;
-  } catch (err) {
-    console.error(err);
-    return { orders: [], command: null };
-  }
+  return orderStateMemory.getOrderState();
 }
 
 function saveOrderState(state) {
-  fs.writeFileSync(ordersFilePath, JSON.stringify(state));
+  orderStateMemory.updateOrderState(() => state);
 }
 
 function loadCashBalance () {
