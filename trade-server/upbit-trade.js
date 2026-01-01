@@ -539,7 +539,6 @@ function loadConfig() {
     console.error('설정 파일 읽기 실패:', err);
     return {
       isTrading: false,
-      tradeAmount: 100000,
       buyThreshold: 0.5,
       sellThreshold: 2.5,
       isTradeByMoney: true
@@ -689,7 +688,8 @@ async function processPendingOrders(orderState, rate) {
     const expactedSellPrice = Math.round(rate * (1 + sellThreshold / 100));
     
     if (order.status === 'sell_pending') {
-      const volumeToSell = parseFloat(order.volume);
+      // 매도 작업도 금액/수량 선택 가능
+      let volumeToSell = calcuratedVolume(order.isTradeByMoney, expactedSellPrice, order.value);
       
       console.log(`[주문 ${order.id}] 김치 ${sellThreshold.toFixed(1)}% 에, ${expactedSellPrice} 원에 ${volumeToSell} 매도 주문 걸기`);
       const sellOrder = await sellTether(expactedSellPrice, volumeToSell);
@@ -704,31 +704,25 @@ async function processPendingOrders(orderState, rate) {
     
     // 웹에서 추가한 매수 작업 처리 (buy_pending → buy_ordered)
     if (order.status === 'buy_pending') {
-      // 웹에서 추가한 작업의 allocatedAmount 사용
-      const allocatedAmount = order.allocatedAmount;
-
-      if (allocatedAmount == null) {
-        console.log(`[주문 ${order.id}] 매수 작업 중 투자금액 설정 없음`);
-        return false; // 처리 실패
-      }
-      
       // 수량 계산
-      let volumeToBuy;
-      if (order.isTradeByMoney == true) {
-        volumeToBuy = calcuratedVolume(true, expactedBuyPrice, allocatedAmount);
-      } else {
-        volumeToBuy = Math.floor(allocatedAmount); // 수량으로 매매하는 경우
-      }
+      let volumeToBuy = calcuratedVolume(order.isTradeByMoney, expactedBuyPrice, order.value);
+    
       
       if (volumeToBuy > 0) {
-        console.log(`[주문 ${order.id}] 매수 주문 생성: 김치 ${buyThreshold.toFixed(1)}% 에, ${expactedBuyPrice} 원에 ${volumeToBuy} 매수 주문 걸기 (투자금액: ${allocatedAmount}원)`);
+        const amountInfo = order.isTradeByMoney 
+          ? `(투자금액: ${order.value}원)`
+          : `(수량: ${order.value} USDT)`;
+        console.log(`[주문 ${order.id}] 매수 주문 생성: 김치 ${buyThreshold.toFixed(1)}% 에, ${expactedBuyPrice} 원에 ${volumeToBuy} 매수 주문 걸기 ${amountInfo}`);
         const buyOrder = await buyTether(expactedBuyPrice, volumeToBuy);
         if (buyOrder) {
           order.buyUuid = buyOrder.uuid;
           order.buyPrice = buyOrder.price;
-          order.volume = buyOrder.volume;
+          order.volume = buyOrder.volume; // 체결된 수량 저장
           order.status = 'buy_ordered'; // buy_pending → buy_ordered
-          console.log(`[주문 ${order.id}] 매수 주문 성공, UUID: ${buyOrder.uuid}, 투자금액: ${allocatedAmount}원`);
+          const successAmountInfo = order.isTradeByMoney 
+            ? `투자금액: ${order.value}원`
+            : `수량: ${order.value} USDT`;
+          console.log(`[주문 ${order.id}] 매수 주문 성공, UUID: ${buyOrder.uuid}, ${successAmountInfo}`);
           saveOrderState(orderState);
         }
       }
@@ -812,10 +806,18 @@ function updateCashBalnce(orderState, tetherPrice, accountInfo = null) {
   if (accountInfo && Array.isArray(accountInfo)) {
     const krwAccount = accountInfo.find(asset => asset.currency === 'KRW');
     if (krwAccount) {
-      // 매수 대기 중인 주문들의 allocatedAmount 합계 (사용 중인 금액) - pending과 ordered 모두 포함
+      // 매수 대기 중인 주문들의 value 합계 (사용 중인 금액) - pending과 ordered 모두 포함
+      // isTradeByMoney가 true면 value는 금액, false면 수량이므로 금액으로 변환 필요
       const buyWaitingAmount = orderState.orders
         .filter(o => o.status === 'buy_pending' || o.status === 'buy_ordered')
-        .reduce((sum, order) => sum + (order.allocatedAmount || 0), 0);
+        .reduce((sum, order) => {
+          if (order.isTradeByMoney === true) {
+            return sum + (order.value || 0); // 금액
+          } else {
+            // 수량인 경우 현재 가격으로 변환
+            return sum + ((order.value || 0) * tetherPrice);
+          }
+        }, 0);
       
       // 매수 체결 후 매도 대기 중인 주문들의 매수 금액 (사용 중인 금액) - pending과 ordered 모두 포함
       const sellWaitingBuyAmount = orderState.orders
@@ -824,7 +826,16 @@ function updateCashBalnce(orderState, tetherPrice, accountInfo = null) {
           if (order.buyPrice && order.volume) {
             return sum + (parseFloat(order.buyPrice) * parseFloat(order.volume));
           }
-          return sum + (order.allocatedAmount || 0);
+          // value가 금액인지 수량인지 확인
+          if (order.isTradeByMoney === true) {
+            return sum + (order.value || 0); // 금액
+          } else {
+            // 수량인 경우 매수 가격이 있으면 매수 가격 * 수량, 없으면 현재 가격으로 변환
+            if (order.buyPrice) {
+              return sum + (order.buyPrice * (order.value || 0));
+            }
+            return sum + ((order.value || 0) * tetherPrice);
+          }
         }, 0);
       
       // 실제 계정 잔액에서 사용 중인 금액을 뺀 나머지
@@ -832,13 +843,23 @@ function updateCashBalnce(orderState, tetherPrice, accountInfo = null) {
     } else {
       // KRW 계정을 찾을 수 없으면 기존 로직 사용
       availableMoney = orderState.orders.reduce((sum, order) => {
-        return sum + (order.allocatedAmount || 0);
+        if (order.isTradeByMoney === true) {
+          return sum + (order.value || 0); // 금액
+        } else {
+          // 수량인 경우 현재 가격으로 변환
+          return sum + ((order.value || 0) * tetherPrice);
+        }
       }, 0);
     }
   } else {
     // accountInfo가 없으면 기존 로직 사용
     availableMoney = orderState.orders.reduce((sum, order) => {
-      return sum + (order.allocatedAmount || 0);
+      if (order.isTradeByMoney === true) {
+        return sum + (order.value || 0); // 금액
+      } else {
+        // 수량인 경우 현재 가격으로 변환
+        return sum + ((order.value || 0) * tetherPrice);
+      }
     }, 0);
   }
   
@@ -884,7 +905,16 @@ function updateCashBalnce(orderState, tetherPrice, accountInfo = null) {
   } else {
     // accountInfo가 없으면 기존 로직 사용
     const totalAllocatedAmount = orderState.orders.reduce((sum, order) => {
-      return sum + (order.allocatedAmount || 0);
+          // value가 금액인지 수량인지 확인
+          if (order.isTradeByMoney === true) {
+            return sum + (order.value || 0); // 금액
+          } else {
+            // 수량인 경우 매수 가격이 있으면 매수 가격 * 수량, 없으면 현재 가격으로 변환
+            if (order.buyPrice) {
+              return sum + (order.buyPrice * (order.value || 0));
+            }
+            return sum + ((order.value || 0) * tetherPrice);
+          }
     }, 0);
     total = totalAllocatedAmount + availableUsdt * tetherPrice;
   }

@@ -1,0 +1,6 @@
+{
+  "isTrading": true,
+  "buyThreshold": 0.5,
+  "sellThreshold": 2.5,
+  "isTradeByMoney": true, 
+}

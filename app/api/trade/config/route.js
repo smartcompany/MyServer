@@ -54,7 +54,6 @@ export async function POST(request) {
     // 다른 코드(upbit-trade 등)가 파일을 수정할 수 있으므로 최신 파일을 기준으로 업데이트
     const config = readConfigFresh();
     let changed = false;
-    const prevTradeAmount = config.tradeAmount;
 
     updates.forEach(({ key, value }) => {
       console.log(`📥 [config API] 업데이트 요청: ${key} = ${value} (타입: ${typeof value})`);

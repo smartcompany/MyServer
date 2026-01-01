@@ -101,7 +101,7 @@ export async function POST(request) {
 
   try {
     const body = await request.json();
-    const { type, amount } = body; // type: 'buy' or 'sell', amount: 투자 금액 또는 수량
+    const { type, amount, isTradeByMoney, buyThreshold, sellThreshold } = body; // type: 'buy' or 'sell', amount: 투자 금액 또는 수량, isTradeByMoney: 매매 방식, buyThreshold/sellThreshold: 프리미엄
 
     if (!type || !['buy', 'sell'].includes(type)) {
       return Response.json({ error: 'type은 "buy" 또는 "sell"이어야 합니다' }, { status: 400 });
@@ -111,9 +111,9 @@ export async function POST(request) {
       return Response.json({ error: 'amount는 0보다 큰 숫자여야 합니다' }, { status: 400 });
     }
 
-    const config = loadConfig();
-    if (!config) {
-      return Response.json({ error: '설정 파일을 읽을 수 없습니다' }, { status: 500 });
+    // 매도 작업의 경우 isTradeByMoney는 무조건 웹페이지에서 전달받은 값 사용
+    if (type === 'sell' && isTradeByMoney === undefined) {
+      return Response.json({ error: '매도 작업은 isTradeByMoney 값이 필요합니다' }, { status: 400 });
     }
 
     // 새 작업 생성
@@ -124,11 +124,11 @@ export async function POST(request) {
       sellUuid: null,
       buyPrice: null,
       sellPrice: null,
-      volume: type === 'sell' ? Number(amount) : null, // 매도는 수량, 매수는 나중에 계산
-      allocatedAmount: type === 'buy' ? Number(amount) : null, // 매수는 투자 금액
-      buyThreshold: config.buyThreshold, // 매수 기준 프리미엄 (매도 작업도 나중에 매수로 전환되므로 저장)
-      sellThreshold: config.sellThreshold, // 매도 기준 프리미엄 (매수 작업도 나중에 매도로 전환되므로 저장)
-      isTradeByMoney: config.isTradeByMoney, // 매수 작업일 때만 저장 (매도는 수량만 사용)
+      // value: isTradeByMoney가 true면 금액(원), false면 수량(USDT)
+      value: Number(amount),
+      buyThreshold: buyThreshold, // 웹에서 전달받은 값 사용
+      sellThreshold: sellThreshold, // 웹에서 전달받은 값 사용
+      isTradeByMoney: isTradeByMoney,
       createdAt: new Date().toISOString(),
       type: type // 작업 타입 저장
     };

@@ -38,10 +38,6 @@ trade-logs.txt
 **/orderState.json
 **/trade-logs.txt
 
-# Server-specific config (서버별로 다를 수 있는 설정 파일)
-# config.json은 서버에서 생성되므로 제외
-trade-server/config.json
-**/config.json
 
 # Vercel
 .vercel

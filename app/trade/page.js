@@ -11,9 +11,9 @@ export default function TradePage() {
     buy: '',
     sell: '',
     isTrading: false,
-    tradeAmount: '',
-    isTradeByMoney: true
+    tradeAmount: ''
   });
+  const [isTradeByMoney, setIsTradeByMoney] = useState(true); // 매매 방식: true=금액, false=수량
   const [logs, setLogs] = useState('불러오는 중...');
   const [tradeData, setTradeData] = useState(null);
   const [processStatus, setProcessStatus] = useState(null);
@@ -136,9 +136,9 @@ export default function TradePage() {
         buy: data.buyThreshold ?? '',
         sell: data.sellThreshold ?? '',
         isTrading: Boolean(data.isTrading),
-        tradeAmount: data.tradeAmount ?? '',
-        isTradeByMoney: data.isTradeByMoney
+        tradeAmount: '' // config.json에 없으므로 빈 값으로 초기화
       });
+      setIsTradeByMoney(data.isTradeByMoney ?? true);
       setConfigLoaded(true);
     } catch (error) {
       alert(`❌ 설정 로드 실패: ${error.message || '알 수 없는 오류'}`);
@@ -154,11 +154,7 @@ export default function TradePage() {
       return;
     }
 
-    const buy = c.buy === '' ? null : Number(c.buy);
-    const sell = c.sell === '' ? null : Number(c.sell);
-    const tradeAmount = c.tradeAmount === '' ? null : Number(c.tradeAmount);
     const isTrading = Boolean(c.isTrading);
-    const isTradeByMoney = c.isTradeByMoney;
 
     try {
       const res = await fetch('/api/trade/config', {
@@ -169,24 +165,22 @@ export default function TradePage() {
         },
         body: JSON.stringify({
           updates: [
-            ...(Number.isFinite(buy) ? [{ key: 'buyThreshold', value: buy }] : []),
-            ...(Number.isFinite(sell) ? [{ key: 'sellThreshold', value: sell }] : []),
-            { key: 'isTrading', value: isTrading },
-            ...(Number.isFinite(tradeAmount) ? [{ key: 'tradeAmount', value: tradeAmount }] : []),
-            { key: 'isTradeByMoney', value: isTradeByMoney }
+            { key: 'isTrading', value: isTrading }
           ]
         })
       });
 
-      if (res.ok) {
-        alert('설정이 반영되었습니다');
-        loadConfig();
-      } else {
-        alert('설정 실패!');
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        console.error('설정 업데이트 실패:', errorData.error || 'Unknown error');
+        // 실패 시 이전 값으로 되돌리기
+        setConfig(prev => ({ ...prev, isTrading: !isTrading }));
       }
+      // 성공 시 이미 로컬 state가 업데이트되어 있으므로 추가 작업 불필요
     } catch (error) {
       console.error('설정 업데이트 실패:', error);
-      alert('설정 실패!');
+      // 실패 시 이전 값으로 되돌리기
+      setConfig(prev => ({ ...prev, isTrading: !isTrading }));
     }
   }
 
@@ -298,6 +292,7 @@ export default function TradePage() {
     }
   }
 
+
   async function loadTasks() {
     const token = localStorage.getItem('token');
     try {
@@ -317,6 +312,7 @@ export default function TradePage() {
   async function addBuyTask() {
     const token = localStorage.getItem('token');
     const buyInput = document.getElementById('buy');
+    const sellInput = document.getElementById('sell');
     const tradeAmountInput = document.getElementById('tradeAmount');
     const isTradeByMoneyRadio = document.querySelector('input[name="trade-type"]:checked');
     const amount = tradeAmountInput?.value;
@@ -326,44 +322,17 @@ export default function TradePage() {
       return;
     }
 
-    // 설정 먼저 적용
-    try {
-      const buy = buyInput?.value === '' ? null : Number(buyInput?.value);
-      const tradeAmount = amount === '' ? null : Number(amount);
-      const isTradeByMoney = isTradeByMoneyRadio?.value === 'money';
-
-      const configRes = await fetch('/api/trade/config', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer ' + token
-        },
-        body: JSON.stringify({
-          updates: [
-            ...(Number.isFinite(buy) ? [{ key: 'buyThreshold', value: buy }] : []),
-            ...(Number.isFinite(tradeAmount) ? [{ key: 'tradeAmount', value: tradeAmount }] : []),
-            { key: 'isTradeByMoney', value: isTradeByMoney }
-          ]
-        })
-      });
-
-      if (!configRes.ok) {
-        console.error('설정 적용 실패');
-      } else {
-        // 설정이 적용되었으면 config 상태도 업데이트
-        setConfig(prev => ({
-          ...prev,
-          buy: buyInput?.value || '',
-          tradeAmount: amount,
-          isTradeByMoney: isTradeByMoney
-        }));
-      }
-    } catch (error) {
-      console.error('설정 적용 실패:', error);
+    if (buyInput?.value === '' || sellInput?.value === '') {
+      alert('매수 기준 김치 프리미엄 또는 매도 기준 김치 프리미엄을 입력해주세요');
+      return;
     }
 
     // 작업 추가
     try {
+      const isTradeByMoney = isTradeByMoneyRadio?.value === 'money';
+      const buyThreshold = Number(buyInput?.value);
+      const sellThreshold = Number(sellInput?.value);
+
       const res = await fetch('/api/trade/tasks', {
         method: 'POST',
         headers: {
@@ -372,7 +341,10 @@ export default function TradePage() {
         },
         body: JSON.stringify({
           type: 'buy',
-          amount: Number(amount)
+          amount: Number(amount),
+          buyThreshold: buyThreshold,
+          sellThreshold: sellThreshold,
+          isTradeByMoney: isTradeByMoney
         })
       });
 
@@ -393,47 +365,25 @@ export default function TradePage() {
 
   async function addSellTask() {
     const token = localStorage.getItem('token');
+    const buyInput = document.getElementById('buy');
     const sellInput = document.getElementById('sell');
     const sellAmountInput = document.getElementById('sellAmount');
     const amount = sellAmountInput?.value;
     
     if (!amount || Number(amount) <= 0) {
-      alert('매도 수량을 입력해주세요');
+      alert('매도 금액/수량을 입력해주세요');
       return;
     }
-
-    // 설정 먼저 적용 (매도 기준만)
-    try {
-      const sell = sellInput?.value === '' ? null : Number(sellInput?.value);
-
-      const configRes = await fetch('/api/trade/config', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer ' + token
-        },
-        body: JSON.stringify({
-          updates: [
-            ...(Number.isFinite(sell) ? [{ key: 'sellThreshold', value: sell }] : [])
-          ]
-        })
-      });
-
-      if (!configRes.ok) {
-        console.error('설정 적용 실패');
-      } else {
-        // 설정이 적용되었으면 config 상태도 업데이트
-        setConfig(prev => ({
-          ...prev,
-          sell: sellInput?.value || ''
-        }));
-      }
-    } catch (error) {
-      console.error('설정 적용 실패:', error);
+    
+    if (buyInput?.value === '' || sellInput?.value === '') {
+      alert('매수 기준 김치 프리미엄 또는 매도 기준 김치 프리미엄을 입력해주세요');
+      return;
     }
-
-    // 작업 추가
+        // 작업 추가
     try {
+      const sellThreshold = Number(sellInput?.value);
+      const buyThreshold = Number(buyInput?.value);
+
       const res = await fetch('/api/trade/tasks', {
         method: 'POST',
         headers: {
@@ -442,7 +392,10 @@ export default function TradePage() {
         },
         body: JSON.stringify({
           type: 'sell',
-          amount: Number(amount)
+          amount: Number(amount),
+          buyThreshold: buyThreshold,
+          sellThreshold: sellThreshold,
+          isTradeByMoney: isTradeByMoney // 매도 방식 전달
         })
       });
 
@@ -671,17 +624,13 @@ export default function TradePage() {
                 <div style={{ marginBottom: '15px', padding: '15px', backgroundColor: '#f5f5f5', borderRadius: '4px' }}>
                   <div style={{ fontSize: '14px', color: '#666', marginBottom: '10px' }}>매매 방식</div>
                   <label style={{ display: 'block', marginBottom: '10px' }}>
-                    <input type="radio" name="trade-type" value="money" checked={config.isTradeByMoney} onChange={() => {
-                      const next = { ...config, isTradeByMoney: true };
-                      setConfig(next);
-                      updateConfig(next);
+                    <input type="radio" name="trade-type" value="money" checked={isTradeByMoney} onChange={() => {
+                      setIsTradeByMoney(true);
                     }} /> 금액으로 매매
                   </label>
                   <label style={{ display: 'block', marginBottom: '10px' }}>
-                    <input type="radio" name="trade-type" value="volume" checked={!config.isTradeByMoney} onChange={() => {
-                      const next = { ...config, isTradeByMoney: false };
-                      setConfig(next);
-                      updateConfig(next);
+                    <input type="radio" name="trade-type" value="volume" checked={!isTradeByMoney} onChange={() => {
+                      setIsTradeByMoney(false);
                     }} /> 수량으로 매매
                   </label>
                   <input id="tradeAmount" type="number" step="1" value={config.tradeAmount} onChange={(e) => setConfig((prev) => ({ ...prev, tradeAmount: e.target.value }))} style={{
@@ -692,7 +641,7 @@ export default function TradePage() {
                     fontSize: '16px',
                     border: '1px solid #ddd',
                     borderRadius: '4px'
-                  }} placeholder={config.isTradeByMoney ? "매수 금액 (원)" : "매수 수량 (USDT)"} />
+                  }} placeholder={isTradeByMoney ? "매수 금액 (원)" : "매수 수량 (USDT)"} />
                   <div style={{ fontSize: '12px', color: '#666', marginTop: '5px' }}>현재 보유 금액: {Number(balance.availableMoney || 0).toLocaleString()}원</div>
                   <button onClick={addBuyTask} style={{
                     width: '100%',
@@ -714,17 +663,33 @@ export default function TradePage() {
             {activeTab === 'sell' && (
               <div id="sellTab">
                 <div style={{ marginBottom: '15px', padding: '15px', backgroundColor: '#f5f5f5', borderRadius: '4px' }}>
-                  <div style={{ fontSize: '14px', color: '#666', marginBottom: '10px' }}>매도 수량</div>
-                  <input id="sellAmount" type="number" step="0.1" value={config.sellAmount || ''} onChange={(e) => setConfig((prev) => ({ ...prev, sellAmount: e.target.value }))} style={{
+                  <div style={{ fontSize: '14px', color: '#666', marginBottom: '10px' }}>매매 방식</div>
+                  <label style={{ display: 'block', marginBottom: '10px' }}>
+                    <input type="radio" name="sell-trade-type" value="money" checked={isTradeByMoney} onChange={() => {
+                      setIsTradeByMoney(true);
+                    }} /> 금액으로 매매
+                  </label>
+                  <label style={{ display: 'block', marginBottom: '10px' }}>
+                    <input type="radio" name="sell-trade-type" value="volume" checked={!isTradeByMoney} onChange={() => {
+                      setIsTradeByMoney(false);
+                    }} /> 수량으로 매매
+                  </label>
+                  <input id="sellAmount" type="number" step={isTradeByMoney ? "1" : "0.1"} value={config.sellAmount || ''} onChange={(e) => setConfig((prev) => ({ ...prev, sellAmount: e.target.value }))} style={{
                     width: '100%',
                     padding: '12px',
-                    marginTop: '5px',
+                    marginTop: '10px',
                     boxSizing: 'border-box',
                     fontSize: '16px',
                     border: '1px solid #ddd',
                     borderRadius: '4px'
-                  }} placeholder="매도할 테더 수량 (USDT)" />
-                  <div style={{ fontSize: '12px', color: '#666', marginTop: '5px' }}>현재 보유 테더: {Number(balance.availableUsdt || 0).toFixed(1)} USDT</div>
+                  }} placeholder={isTradeByMoney ? "매도 금액 (원)" : "매도 수량 (USDT)"} />
+                  <div style={{ fontSize: '12px', color: '#666', marginTop: '5px' }}>
+                    {isTradeByMoney ? (
+                      <>현재 보유 금액: {Number(balance.availableMoney || 0).toLocaleString()}원</>
+                    ) : (
+                      <>현재 보유 테더: {Number(balance.availableUsdt || 0).toFixed(1)} USDT</>
+                    )}
+                  </div>
                   <button onClick={addSellTask} style={{
                     width: '100%',
                     padding: '12px',
