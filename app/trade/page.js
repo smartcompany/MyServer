@@ -869,7 +869,19 @@ export default function TradePage() {
                           )}
                         </div>
                         <div style={{ fontSize: '14px', lineHeight: '1.6' }}>
-                          {task.type === 'buy' && (
+                          {/* 매도 주문 대기 상태일 때는 매도가와 수량만 표시 */}
+                          {task.status === 'sell_ordered' && (
+                            <>
+                              {task.sellPrice && (
+                                <div>매도가: {Number(task.sellPrice).toLocaleString()}원</div>
+                              )}
+                              {task.volume && (
+                                <div>수량: {Number(task.volume).toFixed(1)} USDT</div>
+                              )}
+                            </>
+                          )}
+                          {/* 매도 주문 대기가 아닌 경우에만 기존 로직 사용 */}
+                          {task.status !== 'sell_ordered' && task.type === 'buy' && (
                             <>
                               {task.allocatedAmount && (
                                 <div>투자 금액: {Number(task.allocatedAmount).toLocaleString()}원</div>
@@ -882,7 +894,7 @@ export default function TradePage() {
                               )}
                             </>
                           )}
-                          {task.type === 'sell' && (
+                          {task.status !== 'sell_ordered' && task.type === 'sell' && (
                             <>
                               {task.volume && (
                                 <div>매도 수량: {Number(task.volume).toFixed(1)} USDT</div>
