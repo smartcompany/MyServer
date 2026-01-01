@@ -136,13 +136,6 @@ function loadCashBalance () {
 }
 
 function saveCashBalance (balance) {
-  // history가 없으면 초기화
-  if (!balance.history) {
-    balance.history = [];
-  }
-  if (balance.total == null) {
-    balance.total = 0;
-  }
   fs.writeFileSync(cashBalanceLogPath, JSON.stringify(balance, null, 2));
 }
 
@@ -790,7 +783,7 @@ async function trade() {
       }
     }
 
-    updateCashBalnce(orderState, tetherPrice, accountInfo);
+    updateCashBalnce(orderState, accountInfo);
     
     console.log(`현재 테더: ${tetherPrice}원, 환율: ${rate}원, 김프: ${kimchiPremium.toFixed(2)}%`);
 
@@ -799,132 +792,57 @@ async function trade() {
   }
 }
 
-function updateCashBalnce(orderState, tetherPrice, accountInfo = null) {
+function updateCashBalnce(orderState, accountInfo) {
   let isUpdated = false;
 
-  // getAccountInfo()에서 가져온 실제 계정 잔액 사용
-  let availableMoney;
-  if (accountInfo && Array.isArray(accountInfo)) {
-    const krwAccount = accountInfo.find(asset => asset.currency === 'KRW');
-    if (krwAccount) {
-      // 매수 대기 중인 주문들의 value 합계 (사용 중인 금액) - pending과 ordered 모두 포함
-      // isTradeByMoney가 true면 value는 금액, false면 수량이므로 금액으로 변환 필요
-      const buyWaitingAmount = orderState.orders
+  const krwAccount = accountInfo.find(asset => asset.currency === 'KRW');
+  const usdtAccount = accountInfo.find(asset => asset.currency === 'USDT');
+
+  if (krwAccount == null || usdtAccount == null) {
+    console.error('KRW 또는 USDT 계정을 찾을 수 없습니다.');
+    return false;
+  }
+
+  const availableMoney = parseFloat(krwAccount.balance);
+  const availableUsdt = parseFloat(usdtAccount.balance);
+
+  const buyWaitingAmount = orderState.orders
         .filter(o => o.status === 'buy_pending' || o.status === 'buy_ordered')
         .reduce((sum, order) => {
-          if (order.isTradeByMoney === true) {
-            return sum + (order.value || 0); // 금액
-          } else {
-            // 수량인 경우 현재 가격으로 변환
-            return sum + ((order.value || 0) * tetherPrice);
-          }
+          return sum + order.value * order.buyPrice;
         }, 0);
-      
-      // 매수 체결 후 매도 대기 중인 주문들의 매수 금액 (사용 중인 금액) - pending과 ordered 모두 포함
-      const sellWaitingBuyAmount = orderState.orders
-        .filter(o => o.status === 'sell_pending' || o.status === 'sell_ordered')
-        .reduce((sum, order) => {
-          if (order.buyPrice && order.volume) {
-            return sum + (parseFloat(order.buyPrice) * parseFloat(order.volume));
-          }
-          // value가 금액인지 수량인지 확인
-          if (order.isTradeByMoney === true) {
-            return sum + (order.value || 0); // 금액
-          } else {
-            // 수량인 경우 매수 가격이 있으면 매수 가격 * 수량, 없으면 현재 가격으로 변환
-            if (order.buyPrice) {
-              return sum + (order.buyPrice * (order.value || 0));
-            }
-            return sum + ((order.value || 0) * tetherPrice);
-          }
-        }, 0);
-      
-      // 실제 계정 잔액에서 사용 중인 금액을 뺀 나머지
-      availableMoney = parseFloat(krwAccount.balance) - buyWaitingAmount - sellWaitingBuyAmount;
-    } else {
-      // KRW 계정을 찾을 수 없으면 기존 로직 사용
-      availableMoney = orderState.orders.reduce((sum, order) => {
-        if (order.isTradeByMoney === true) {
-          return sum + (order.value || 0); // 금액
-        } else {
-          // 수량인 경우 현재 가격으로 변환
-          return sum + ((order.value || 0) * tetherPrice);
-        }
-      }, 0);
-    }
-  } else {
-    // accountInfo가 없으면 기존 로직 사용
-    availableMoney = orderState.orders.reduce((sum, order) => {
-      if (order.isTradeByMoney === true) {
-        return sum + (order.value || 0); // 금액
-      } else {
-        // 수량인 경우 현재 가격으로 변환
-        return sum + ((order.value || 0) * tetherPrice);
-      }
-    }, 0);
+  
+  const krwBalance = availableMoney + buyWaitingAmount;
+
+  // 매도 대기 중인 주문들의 테더 합계 계산 - pending과 ordered 모두 포함
+  const sellWaitingOrders = orderState.orders.filter(o => o.status === 'sell_pending' || o.status === 'sell_ordered');
+  const sellWaitingUsdt = sellWaitingOrders.reduce((sum, order) => sum + (parseFloat(order.volume) || 0), 0);
+  const usdtBalance = availableUsdt + sellWaitingUsdt;
+
+  // 전체 원화 평가 금액
+  if (cashBalance.krwBalance != krwBalance) {
+    cashBalance.krwBalance = krwBalance;
+    isUpdated = true;
+  }
+
+  // 전체 테더 평가 금액
+  if (cashBalance.usdtBalance != usdtBalance) {
+    cashBalance.usdtBalance = usdtBalance;
+    isUpdated = true;
   }
   
+  // 매수 가능 현금 잔액
   if (cashBalance.availableMoney != availableMoney) {
     cashBalance.availableMoney = availableMoney;
     isUpdated = true;
   }
-  
-  // 매도 대기 중인 주문들의 테더 합계 계산 - pending과 ordered 모두 포함
-  const sellWaitingOrders = orderState.orders.filter(o => o.status === 'sell_pending' || o.status === 'sell_ordered');
-  const sellWaitingUsdt = sellWaitingOrders.reduce((sum, order) => sum + (parseFloat(order.volume) || 0), 0);
-  
-  let availableUsdt;
-  // getAccountInfo()에서 가져온 실제 계정 잔액 사용
-  if (accountInfo && Array.isArray(accountInfo)) {
-    const usdtAccount = accountInfo.find(asset => asset.currency === 'USDT');
-    if (usdtAccount) {
-      // 실제 계정 잔액에서 매도 대기 중인 테더를 뺀 나머지
-      availableUsdt = parseFloat(usdtAccount.balance) - sellWaitingUsdt;
-    } else {
-      // USDT 계정을 찾을 수 없으면 기존 로직 사용
-      availableUsdt = sellWaitingUsdt;
-    }
-  } else {
-    // accountInfo가 없으면 기존 로직 사용
-    availableUsdt = sellWaitingUsdt;
-  }
-  
+   
+  // 매도 가능 테더 잔액
   if (cashBalance.availableUsdt != availableUsdt) {
     cashBalance.availableUsdt = availableUsdt;
     isUpdated = true;
   }
   
-  // 총 평가 금액 계산
-  let total;
-  // 실제 계정 잔액 + 보유 테더 평가액
-  if (accountInfo && Array.isArray(accountInfo)) {
-    const krwAccount = accountInfo.find(asset => asset.currency === 'KRW');
-    const usdtAccount = accountInfo.find(asset => asset.currency === 'USDT');
-    const krwBalance = krwAccount ? parseFloat(krwAccount.balance) : 0;
-    const usdtBalance = usdtAccount ? parseFloat(usdtAccount.balance) : 0;
-    total = krwBalance + usdtBalance * tetherPrice;
-  } else {
-    // accountInfo가 없으면 기존 로직 사용
-    const totalAllocatedAmount = orderState.orders.reduce((sum, order) => {
-          // value가 금액인지 수량인지 확인
-          if (order.isTradeByMoney === true) {
-            return sum + (order.value || 0); // 금액
-          } else {
-            // 수량인 경우 매수 가격이 있으면 매수 가격 * 수량, 없으면 현재 가격으로 변환
-            if (order.buyPrice) {
-              return sum + (order.buyPrice * (order.value || 0));
-            }
-            return sum + ((order.value || 0) * tetherPrice);
-          }
-    }, 0);
-    total = totalAllocatedAmount + availableUsdt * tetherPrice;
-  }
-  
-  if (cashBalance.total != total) {
-    cashBalance.total = total;
-    isUpdated = true;
-  }
-
   if (isUpdated) {
     saveCashBalance(cashBalance);
   }

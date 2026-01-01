@@ -19,7 +19,12 @@ export default function TradePage() {
   const [tradeData, setTradeData] = useState(null);
   const [processStatus, setProcessStatus] = useState(null);
   const [configLoaded, setConfigLoaded] = useState(false);
-  const [balance, setBalance] = useState({ availableMoney: 0, availableUsdt: 0 });
+  const [balance, setBalance] = useState({ 
+    krwBalance: 0, 
+    usdtBalance: 0, 
+    availableMoney: 0, 
+    availableUsdt: 0 
+  });
   const [monitorData, setMonitorData] = useState(null);
   const [tasks, setTasks] = useState([]);
   const [taskTab, setTaskTab] = useState('tasks'); // 'tasks' or 'logs'
@@ -282,6 +287,8 @@ export default function TradePage() {
         // 모니터링 데이터에서 잔액 정보도 업데이트
         if (data.balance) {
           setBalance({
+            krwBalance: data.balance.krwBalance || 0,
+            usdtBalance: data.balance.usdtBalance || 0,
             availableMoney: data.balance.availableMoney || 0,
             availableUsdt: data.balance.availableUsdt || 0
           });
@@ -520,20 +527,35 @@ export default function TradePage() {
             padding: '15px',
             borderRadius: '8px',
             marginBottom: '20px',
-            display: 'flex',
-            justifyContent: 'space-around',
+            display: 'grid',
+            gridTemplateColumns: '1fr 1px 1fr 1px 1fr 1px 1fr',
+            gap: '10px',
             alignItems: 'center'
           }}>
             <div style={{ textAlign: 'center' }}>
               <div style={{ fontSize: '12px', color: '#666', marginBottom: '5px' }}>보유 금액</div>
-              <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#1976d2' }}>
-                {Number(balance.availableMoney || 0).toLocaleString()}원
+              <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#1976d2' }}>
+                {Number(balance.krwBalance || 0).toLocaleString()}원
               </div>
             </div>
             <div style={{ width: '1px', height: '40px', backgroundColor: '#bbb' }}></div>
             <div style={{ textAlign: 'center' }}>
               <div style={{ fontSize: '12px', color: '#666', marginBottom: '5px' }}>보유 테더</div>
-              <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#1976d2' }}>
+              <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#1976d2' }}>
+                {Number(balance.usdtBalance || 0).toFixed(1)} USDT
+              </div>
+            </div>
+            <div style={{ width: '1px', height: '40px', backgroundColor: '#bbb' }}></div>
+            <div style={{ textAlign: 'center' }}>
+              <div style={{ fontSize: '12px', color: '#666', marginBottom: '5px' }}>주문 가능 현금</div>
+              <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#1976d2' }}>
+                {Number(balance.availableMoney || 0).toLocaleString()}원
+              </div>
+            </div>
+            <div style={{ width: '1px', height: '40px', backgroundColor: '#bbb' }}></div>
+            <div style={{ textAlign: 'center' }}>
+              <div style={{ fontSize: '12px', color: '#666', marginBottom: '5px' }}>주문 가능 테더</div>
+              <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#1976d2' }}>
                 {Number(balance.availableUsdt || 0).toFixed(1)} USDT
               </div>
             </div>

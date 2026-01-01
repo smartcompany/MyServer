@@ -85,9 +85,10 @@ export async function GET(request) {
         sellWaiting: (orderState.orders?.filter(o => o.status === 'sell_pending' || o.status === 'sell_ordered').length || 0),
       },
       balance: {
+        krwBalance: cashBalance.krwBalance || 0,
+        usdtBalance: cashBalance.usdtBalance || 0,
         availableMoney: cashBalance.availableMoney || 0,
         availableUsdt: cashBalance.availableUsdt || 0,
-        total: cashBalance.total || 0,
       },
       timestamp: new Date().toISOString(),
     });
