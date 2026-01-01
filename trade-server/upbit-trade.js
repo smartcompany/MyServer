@@ -730,7 +730,6 @@ async function trade() {
 
   let orderState = loadOrderState();
   
- 
   if (prevConfig.isTrading == true) {
     if (config.isTrading == false) {
       console.log('트레이딩 중지');
