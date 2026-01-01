@@ -307,7 +307,15 @@ async function handleCommand(orderState) {
       }
       
       // commandParams에 지정된 주문 ID들만 취소 및 제거
-      const ordersToCancel = orderState.orders.filter(o => orderIdsToClear.includes(o.id));
+      console.log(`commandParams: ${JSON.stringify(orderIdsToClear)}`);
+      const ordersToCancel = [];
+      for (const order of orderState.orders) {
+        const isMatch = orderIdsToClear.includes(order.id);
+        console.log(`ID 비교: order.id="${order.id}", orderIdsToClear.includes=${isMatch}, orderIdsToClear=${JSON.stringify(orderIdsToClear)}`);
+        if (isMatch) {
+          ordersToCancel.push(order);
+        }
+      }
       const successfullyCanceled = [];
       
       for (const order of ordersToCancel) {
