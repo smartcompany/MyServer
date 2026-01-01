@@ -229,10 +229,6 @@ export async function DELETE(request) {
       }
     }
 
-    // 작업 제거
-    orderState.orders.splice(taskIndex, 1);
-    saveOrderState(orderState);
-
     console.log(`✅ [tasks API] 작업 삭제: ID=${taskId}`);
 
     return Response.json({

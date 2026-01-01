@@ -298,14 +298,7 @@ async function handleCommand(orderState) {
     case 'clearOrders':
       console.log('선택 주문 취소 시작');
       const orderIdsToClear = orderState.commandParams;
-      if (!Array.isArray(orderIdsToClear) || orderIdsToClear.length === 0) {
-        console.log('⚠️ clearOrders 명령에 유효한 주문 ID가 없습니다.');
-        orderState.command = null;
-        orderState.commandParams = null;
-        saveOrderState(orderState);
-        break;
-      }
-      
+            
       // commandParams에 지정된 주문 ID들만 취소 및 제거
       console.log(`commandParams: ${JSON.stringify(orderIdsToClear)}`);
       const ordersToCancel = [];
@@ -775,24 +768,6 @@ async function trade() {
 
   if (config.isTrading == false) { 
     return; 
-  }
-
-  // 기존 상태 네이밍 마이그레이션 (buy_waiting/sell_waiting → buy_pending/buy_ordered/sell_pending/sell_ordered)
-  let needsMigration = false;
-  if (Array.isArray(orderState.orders)) {
-    for (const order of orderState.orders) {
-      if (order.status === 'buy_waiting') {
-        order.status = order.buyUuid ? 'buy_ordered' : 'buy_pending';
-        needsMigration = true;
-      } else if (order.status === 'sell_waiting') {
-        order.status = order.sellUuid ? 'sell_ordered' : 'sell_pending';
-        needsMigration = true;
-      }
-    }
-    if (needsMigration) {
-      saveOrderState(orderState);
-      console.log('✅ 상태 네이밍 마이그레이션 완료');
-    }
   }
 
   // command 처리 (clearAllOrders 또는 clearOrders)
