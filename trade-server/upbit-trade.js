@@ -484,17 +484,15 @@ function floorToHalf(num) {
   return Math.floor(num * 2) / 2;
 }
 
-function needToCancelOrder(orderedData, expactedBuyPrice, expactedSellPrice, config, allocatedAmount) {
+function needToCancelOrder(orderedData, expactedBuyPrice, expactedSellPrice, isTradeByMoney, allocatedAmount) {
 
   if (orderedData.side === 'bid') { 
-    const volume = calcuratedVolume(config.isTradeByMoney, expactedBuyPrice, allocatedAmount);
+    const volume = calcuratedVolume(isTradeByMoney, expactedBuyPrice, allocatedAmount);
     if (parseFloat(orderedData.volume) != parseFloat(volume)) {
       console.log(`매수 일 경우 주문할 수량이 다르면 취소: 주문 물량 ${volume}, 대기 물량 ${orderedData.volume}`);
       return true;
     }
-  }
 
-  if (orderedData.side === 'bid') {
     if (orderedData.price == expactedBuyPrice) {
       console.log(`매수 대기 중 주문할 가격과 동일: ${orderedData.price}`);
       return false;
@@ -517,12 +515,12 @@ function needToCancelOrder(orderedData, expactedBuyPrice, expactedSellPrice, con
   return false;
 }
 
-function calcuratedVolume(isTradeByMoney, targetUSDTPrice, avaliableMoney) {
+function calcuratedVolume(isTradeByMoney, targetUSDTPrice, allocatedAmount) {
   if (isTradeByMoney == false) {
-    return tradeAmount;
+    return allocatedAmount;
   }
 
-  let volume = avaliableMoney / targetUSDTPrice;
+  let volume = allocatedAmount / targetUSDTPrice;
   // 소숫점 이하 절삭 (정수 수량으로 주문)
   volume = Math.floor(volume);
   return volume;
@@ -546,6 +544,195 @@ function loadConfig() {
   }
 }
 
+
+async function processBuyOrder(order, orderState, rate) {
+  const cashBalance = loadCashBalance();
+  const buyThreshold = order.buyThreshold;
+  const sellThreshold = order.sellThreshold;
+  const isTradeByMoney = order.isTradeByMoney;
+
+  if (buyThreshold == null || sellThreshold == null || isTradeByMoney == null) {
+    console.log(`[주문 ${order.id}] buyThreshold, sellThreshold, isTradeByMoney 설정 없음`);
+    return false; // 처리 실패
+  }
+
+  const expactedBuyPrice = Math.round(rate * (1 + buyThreshold / 100));
+  const expactedSellPrice = Math.round(rate * (1 + sellThreshold / 100));
+  
+
+  const orderedData = await checkOrderedData(order.buyUuid);
+  if (orderedData == null) {
+    console.log(`[주문 ${order.id}] 주문 상태 확인 실패`);
+    return false; // 처리 실패
+  }
+
+  switch (orderedData.state) {
+    case 'done':
+      // 매수 체결 → 매도 대기 상태로 전환
+      console.log(`[주문 ${order.id}] 매수 주문 처리됨: ${orderedData.price}원, 수량: ${orderedData.volume}`);
+      order.status = 'sell_pending';
+      order.buyPrice = orderedData.price;
+      order.volume = parseFloat(orderedData.volume);
+      // sellThreshold가 없으면 현재 config에서 가져와서 저장
+      if (order.sellThreshold == null) {
+        order.sellThreshold = sellThreshold;
+      }
+
+      cashBalance.history.push({ 
+        type: 'buy',
+        date: new Date(), 
+        price: orderedData.price,
+        volume: orderedData.volume 
+      });
+      saveCashBalance(cashBalance);
+      saveOrderState(orderState);
+      break;
+    case 'cancel':
+      // 외부에서 취소된 경우 주문 제거
+      console.log(`[주문 ${order.id}] 주문이 외부에서 취소됨`);
+      orderState.orders = orderState.orders.filter(o => o.id !== order.id);
+      saveOrderState(orderState);
+      break;
+    case 'wait':
+      // 가격 변동 체크 및 취소 필요 여부 확인
+      if (needToCancelOrder(orderedData, expactedBuyPrice, expactedSellPrice, isTradeByMoney, order.allocatedAmount || 0)) {
+        const cancelResponse = await cancelOrder(order.buyUuid);
+        if (cancelResponse) {
+          console.log(`[주문 ${order.id}] 주문 취소 성공 ${order.buyUuid}`);
+          orderState.orders = orderState.orders.filter(o => o.id !== order.id);
+          saveOrderState(orderState);
+        } else {
+          console.log(`[주문 ${order.id}] 주문 취소 실패`);
+        }
+      }
+      break;
+  }
+  
+  return true; // 처리 완료
+}
+
+async function processSellOrder(order, orderState, rate) {
+  const cashBalance = loadCashBalance();
+  const buyThreshold = order.buyThreshold;
+  const sellThreshold = order.sellThreshold;
+  const isTradeByMoney = order.isTradeByMoney;
+  
+  if (buyThreshold == null || sellThreshold == null || isTradeByMoney == null) {
+    console.log(`[주문 ${order.id}] buyThreshold, sellThreshold, isTradeByMoney 설정 없음`);
+    return false; // 처리 실패
+  }
+
+  // 주문 가격은 정수(원 단위)로 맞춤
+  const expactedBuyPrice = Math.round(rate * (1 + buyThreshold / 100));
+  const expactedSellPrice = Math.round(rate * (1 + sellThreshold / 100));
+
+  const orderedData = await checkOrderedData(order.sellUuid);
+  if (orderedData == null) {
+    console.log(`[주문 ${order.id}] 주문 상태 확인 실패`);
+    return false; // 처리 실패
+  }
+
+  switch (orderedData.state) {
+    case 'done':
+      // 매도 체결 → 완료 처리
+      console.log(`[주문 ${order.id}] 매도 주문 처리됨: ${orderedData.price}원, 수량: ${orderedData.volume}`);
+      order.status = 'completed';
+      order.sellPrice = orderedData.price;
+
+      cashBalance.history.push({ 
+        type: 'sell',
+        date: new Date(), 
+        price: orderedData.price,
+        volume: orderedData.volume 
+      });
+      saveCashBalance(cashBalance);
+      saveOrderState(orderState);
+      break;
+    case 'cancel':
+      // 외부에서 취소된 경우 주문 제거
+      console.log(`[주문 ${order.id}] 주문이 외부에서 취소됨`);
+      orderState.orders = orderState.orders.filter(o => o.id !== order.id);
+      saveOrderState(orderState);
+      break;
+    case 'wait':
+      // 가격 변동 체크 및 취소 필요 여부 확인
+      if (needToCancelOrder(orderedData, expactedBuyPrice, expactedSellPrice, isTradeByMoney, order.allocatedAmount || 0)) {
+        const cancelResponse = await cancelOrder(order.sellUuid);
+        if (cancelResponse) {
+          console.log(`[주문 ${order.id}] 주문 취소 성공 ${order.sellUuid}`);
+          orderState.orders = orderState.orders.filter(o => o.id !== order.id);
+          saveOrderState(orderState);
+        } else {
+          console.log(`[주문 ${order.id}] 주문 취소 실패`);
+        }
+      }
+      break;
+  }
+  
+  return true; // 처리 완료
+}
+
+async function processPendingOrders(orderState, rate) {
+  for (const order of orderState.orders) {
+    // 매도 대기 중인 주문에 대해 매도 주문 생성 (sell_pending → sell_ordered)
+    const buyThreshold = order.buyThreshold;
+    const sellThreshold = order.sellThreshold;
+
+    if (buyThreshold == null || sellThreshold == null) {
+      console.log(`[주문 ${order.id}] 매수 또는 매도 기준 프리미엄 설정 없음`);
+      return false; // 처리 실패
+    }
+
+    const expactedBuyPrice = Math.round(rate * (1 + buyThreshold / 100));
+    const expactedSellPrice = Math.round(rate * (1 + sellThreshold / 100));
+    
+    if (order.status === 'sell_pending') {
+      const volumeToSell = parseFloat(order.volume);
+      
+      console.log(`[주문 ${order.id}] 김치 ${sellThreshold.toFixed(1)}% 에, ${expactedSellPrice} 원에 ${volumeToSell} 매도 주문 걸기`);
+      const sellOrder = await sellTether(expactedSellPrice, volumeToSell);
+      if (sellOrder) {
+        console.log(`[주문 ${order.id}] 매도 주문 성공, UUID: ${sellOrder.uuid}`);
+        order.sellUuid = sellOrder.uuid;
+        order.sellPrice = sellOrder.price;
+        order.status = 'sell_ordered'; // sell_pending → sell_ordered
+        saveOrderState(orderState);
+      }
+    }
+    
+    // 웹에서 추가한 매수 작업 처리 (buy_pending → buy_ordered)
+    if (order.status === 'buy_pending') {
+      // 웹에서 추가한 작업의 allocatedAmount 사용
+      const allocatedAmount = order.allocatedAmount;
+
+      if (allocatedAmount == null) {
+        console.log(`[주문 ${order.id}] 매수 작업 중 투자금액 설정 없음`);
+        return false; // 처리 실패
+      }
+      
+      // 수량 계산
+      let volumeToBuy;
+      if (order.isTradeByMoney == true) {
+        volumeToBuy = calcuratedVolume(true, expactedBuyPrice, allocatedAmount);
+      } else {
+        volumeToBuy = Math.floor(allocatedAmount); // 수량으로 매매하는 경우
+      }
+      
+      if (volumeToBuy > 0) {
+        console.log(`[주문 ${order.id}] 매수 주문 생성: 김치 ${buyThreshold.toFixed(1)}% 에, ${expactedBuyPrice} 원에 ${volumeToBuy} 매수 주문 걸기 (투자금액: ${allocatedAmount}원)`);
+        const buyOrder = await buyTether(expactedBuyPrice, volumeToBuy);
+        if (buyOrder) {
+          order.buyUuid = buyOrder.uuid;
+          order.buyPrice = buyOrder.price;
+          order.volume = buyOrder.volume;
+          order.status = 'buy_ordered'; // buy_pending → buy_ordered
+          console.log(`[주문 ${order.id}] 매수 주문 성공, UUID: ${buyOrder.uuid}, 투자금액: ${allocatedAmount}원`);
+          saveOrderState(orderState);
+        }
+      }
+    }
+  }
+}
 
 async function trade() {
   const prevConfig = loadConfig();
@@ -589,9 +776,6 @@ async function trade() {
   // command 처리 (clearAllOrders 또는 clearOrders)
   await handleCommand(orderState);
 
-  const buyThreshold = config.buyThreshold ?? 0.5;  
-  const sellThreshold = config.sellThreshold ?? 2.5;
-
   const accountInfo = await getAccountInfo();
   if (accountInfo) {
     console.log('========= 코인 및 현금 정보 ===========');
@@ -609,10 +793,6 @@ async function trade() {
     const rate = await getExchangeRate();
     const tetherPrice = await getTetherPrice();
 
-    // 주문 가격은 정수(원 단위)로 맞춤
-    const expactedBuyPrice = Math.round(rate * (1 + buyThreshold / 100));
-    const expactedSellPrice = Math.round(rate * (1 + sellThreshold / 100));
-
     // 김치 프리미엄 계산
     const kimchiPremium = ((tetherPrice - rate)/rate) * 100;
 
@@ -620,164 +800,23 @@ async function trade() {
     for (const order of orderState.orders) {
       // 매수 주문 대기 중인 주문 체크 (업비트에 주문 넣은 상태)
       if (order.status === 'buy_ordered') {
-        const orderedData = await checkOrderedData(order.buyUuid);
-        if (orderedData == null) {
-          console.log(`[주문 ${order.id}] 주문 상태 확인 실패`);
-          continue;
-        }
-
-        switch (orderedData.state) {
-          case 'done':
-            // 매수 체결 → 매도 대기 상태로 전환
-            console.log(`[주문 ${order.id}] 매수 주문 처리됨: ${orderedData.price}원, 수량: ${orderedData.volume}`);
-            order.status = 'sell_pending';
-            order.buyPrice = orderedData.price;
-            order.volume = parseFloat(orderedData.volume);
-            // sellThreshold가 없으면 현재 config에서 가져와서 저장
-            if (order.sellThreshold == null) {
-              order.sellThreshold = sellThreshold;
-            }
-
-            cashBalance.history.push({ 
-              type: 'buy',
-              date: new Date(), 
-              price: orderedData.price,
-              volume: orderedData.volume 
-            });
-            saveCashBalance(cashBalance);
-            saveOrderState(orderState);
-            break;
-          case 'cancel':
-            // 외부에서 취소된 경우 주문 제거
-            console.log(`[주문 ${order.id}] 주문이 외부에서 취소됨`);
-            orderState.orders = orderState.orders.filter(o => o.id !== order.id);
-            saveOrderState(orderState);
-            break;
-          case 'wait':
-            // 가격 변동 체크 및 취소 필요 여부 확인
-            if (needToCancelOrder(orderedData, expactedBuyPrice, expactedSellPrice, config, order.allocatedAmount || 0)) {
-              const cancelResponse = await cancelOrder(order.buyUuid);
-              if (cancelResponse) {
-                console.log(`[주문 ${order.id}] 주문 취소 성공 ${order.buyUuid}`);
-                orderState.orders = orderState.orders.filter(o => o.id !== order.id);
-                saveOrderState(orderState);
-              } else {
-                console.log(`[주문 ${order.id}] 주문 취소 실패`);
-              }
-            }
-            break;
-        }
+        await processBuyOrder(order, orderState, rate);
+        continue; // 다음 주문으로
       }
 
       // 매도 주문 대기 중인 주문 체크 (업비트에 주문 넣은 상태)
       if (order.status === 'sell_ordered') {
-        const orderedData = await checkOrderedData(order.sellUuid);
-        if (orderedData == null) {
-          console.log(`[주문 ${order.id}] 주문 상태 확인 실패`);
-          continue;
-        }
-
-        switch (orderedData.state) {
-          case 'done':
-            // 매도 체결 → 완료 처리
-            console.log(`[주문 ${order.id}] 매도 주문 처리됨: ${orderedData.price}원, 수량: ${orderedData.volume}`);
-            order.status = 'completed';
-            order.sellPrice = orderedData.price;
-
-            cashBalance.history.push({ 
-              type: 'sell',
-              date: new Date(), 
-              price: orderedData.price,
-              volume: orderedData.volume 
-            });
-            saveCashBalance(cashBalance);
-            saveOrderState(orderState);
-            break;
-          case 'cancel':
-            // 외부에서 취소된 경우 주문 제거
-            console.log(`[주문 ${order.id}] 주문이 외부에서 취소됨`);
-            orderState.orders = orderState.orders.filter(o => o.id !== order.id);
-            saveOrderState(orderState);
-            break;
-          case 'wait':
-            // 가격 변동 체크 및 취소 필요 여부 확인
-            if (needToCancelOrder(orderedData, expactedBuyPrice, expactedSellPrice, config, order.allocatedAmount || 0)) {
-              const cancelResponse = await cancelOrder(order.sellUuid);
-              if (cancelResponse) {
-                console.log(`[주문 ${order.id}] 주문 취소 성공 ${order.sellUuid}`);
-                orderState.orders = orderState.orders.filter(o => o.id !== order.id);
-                saveOrderState(orderState);
-              } else {
-                console.log(`[주문 ${order.id}] 주문 취소 실패`);
-              }
-            }
-            break;
-        }
+        await processSellOrder(order, orderState, rate);
+        continue; // 다음 주문으로
       }
     }
 
     updateCashBalnce(orderState, tetherPrice, accountInfo);
     
-    console.log(`현재 테더: ${tetherPrice}원, 환율: ${rate}원, 김프: ${kimchiPremium.toFixed(2)}%, 매수가 ${expactedBuyPrice} 원, 매도가 ${expactedSellPrice} 원`);
+    console.log(`현재 테더: ${tetherPrice}원, 환율: ${rate}원, 김프: ${kimchiPremium.toFixed(2)}%`);
 
-    // 매도 대기 중인 주문에 대해 매도 주문 생성 (sell_pending → sell_ordered)
-    for (const order of orderState.orders) {
-      if (order.status === 'sell_pending') {
-        const volumeToSell = parseFloat(order.volume);
-        // sellThreshold가 없으면 현재 config에서 가져와서 저장
-        if (order.sellThreshold == null) {
-          order.sellThreshold = sellThreshold;
-        }
-        console.log(`[주문 ${order.id}] 김치 ${sellThreshold.toFixed(1)}% 에, ${expactedSellPrice} 원에 ${volumeToSell} 매도 주문 걸기`);
-        const sellOrder = await sellTether(expactedSellPrice, volumeToSell);
-        if (sellOrder) {
-          console.log(`[주문 ${order.id}] 매도 주문 성공, UUID: ${sellOrder.uuid}`);
-          order.sellUuid = sellOrder.uuid;
-          order.sellPrice = sellOrder.price;
-          order.status = 'sell_ordered'; // sell_pending → sell_ordered
-          saveOrderState(orderState);
-        }
-        break; // 한 번에 하나씩만 처리
-      }
-    }
-
-    // 웹에서 추가한 매수 작업 처리 (buy_pending → buy_ordered)
-    for (const order of orderState.orders) {
-      if (order.status === 'buy_pending') {
-        // 웹에서 추가한 작업의 allocatedAmount 사용
-        const allocatedAmount = order.allocatedAmount || config.tradeAmount;
-        
-        // 수량 계산
-        let volumeToBuy;
-        if (config.isTradeByMoney == true) {
-          volumeToBuy = calcuratedVolume(true, expactedBuyPrice, allocatedAmount);
-        } else {
-          volumeToBuy = Math.floor(allocatedAmount); // 수량으로 매매하는 경우
-        }
-        
-        if (volumeToBuy > 0) {
-          console.log(`[주문 ${order.id}] 매수 주문 생성: 김치 ${buyThreshold.toFixed(1)}% 에, ${expactedBuyPrice} 원에 ${volumeToBuy} 매수 주문 걸기 (투자금액: ${allocatedAmount}원)`);
-          const buyOrder = await buyTether(expactedBuyPrice, volumeToBuy);
-          if (buyOrder) {
-            order.buyUuid = buyOrder.uuid;
-            order.buyPrice = buyOrder.price;
-            order.volume = buyOrder.volume;
-            order.status = 'buy_ordered'; // buy_pending → buy_ordered
-            // buyThreshold가 없으면 현재 config에서 가져와서 저장
-            if (order.buyThreshold == null) {
-              order.buyThreshold = buyThreshold;
-            }
-            // sellThreshold가 없으면 현재 config에서 가져와서 저장
-            if (order.sellThreshold == null) {
-              order.sellThreshold = sellThreshold;
-            }
-            console.log(`[주문 ${order.id}] 매수 주문 성공, UUID: ${buyOrder.uuid}, 투자금액: ${allocatedAmount}원`);
-            saveOrderState(orderState);
-          }
-        }
-        break; // 한 번에 하나씩만 처리
-      }
-    }
+    // 매도 대기 또는 매수 대기 주문 처리 (sell_pending → sell_ordered, buy_pending → buy_ordered)
+    await processPendingOrders(orderState, rate);
   }
 }
 

@@ -152,6 +152,7 @@ export async function POST(request) {
       allocatedAmount: type === 'buy' ? Number(amount) : null, // 매수는 투자 금액
       buyThreshold: type === 'buy' ? (config.buyThreshold ?? config.buy ?? null) : null, // 매수 기준 프리미엄
       sellThreshold: type === 'sell' ? (config.sellThreshold ?? config.sell ?? null) : null, // 매도 기준 프리미엄
+      isTradeByMoney: type === 'buy' ? (config.isTradeByMoney) : null, // 매수 작업일 때만 저장 (매도는 수량만 사용)
       createdAt: new Date().toISOString(),
       type: type // 작업 타입 저장
     };
