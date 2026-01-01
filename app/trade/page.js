@@ -19,7 +19,6 @@ export default function TradePage() {
   const [processStatus, setProcessStatus] = useState(null);
   const [configLoaded, setConfigLoaded] = useState(false);
   const [balance, setBalance] = useState({ availableMoney: 0, availableUsdt: 0 });
-  const [initialTabSet, setInitialTabSet] = useState(false);
   const [monitorData, setMonitorData] = useState(null);
   const [tasks, setTasks] = useState([]);
   const [taskTab, setTaskTab] = useState('tasks'); // 'tasks' or 'logs'
@@ -228,14 +227,6 @@ export default function TradePage() {
         availableUsdt: data.availableUsdt || 0
       };
       setBalance(newBalance);
-      
-      // 테더가 있으면 매도 탭으로 전환 (처음 로드 시에만)
-      if (!initialTabSet && newBalance.availableUsdt > 0) {
-        setActiveTab('sell');
-        setInitialTabSet(true);
-      } else if (!initialTabSet) {
-        setInitialTabSet(true);
-      }
     } catch (error) {
       console.error('거래 내역 로드 실패:', error);
     }
