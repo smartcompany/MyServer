@@ -488,8 +488,10 @@ export default function TradePage() {
 
   function getTaskStatusText(status) {
     switch (status) {
-      case 'buy_waiting': return '매수 대기';
-      case 'sell_waiting': return '매도 대기';
+      case 'buy_pending': return '매수 대기 (Limit Order 전)';
+      case 'buy_ordered': return '매수 주문 대기 (Limit Order 대기 중)';
+      case 'sell_pending': return '매도 대기 (Limit Order 전)';
+      case 'sell_ordered': return '매도 주문 대기 (Limit Order 대기 중)';
       case 'completed': return '완료';
       default: return status;
     }
@@ -497,8 +499,10 @@ export default function TradePage() {
 
   function getTaskStatusColor(status) {
     switch (status) {
-      case 'buy_waiting': return '#2196F3';
-      case 'sell_waiting': return '#FF9800';
+      case 'buy_pending': return '#2196F3';
+      case 'buy_ordered': return '#1976D2';
+      case 'sell_pending': return '#FF9800';
+      case 'sell_ordered': return '#F57C00';
       case 'completed': return '#4CAF50';
       default: return '#666';
     }
@@ -852,7 +856,7 @@ export default function TradePage() {
                               ID: {task.id.substring(0, 8)}...
                             </span>
                           </div>
-                          {(task.status === 'buy_waiting' || task.status === 'sell_waiting') && (
+                          {(task.status === 'buy_pending' || task.status === 'sell_pending') && (
                             <button onClick={() => deleteTask(task.id)} style={{
                               backgroundColor: '#f44336',
                               color: 'white',
@@ -889,13 +893,13 @@ export default function TradePage() {
                             </>
                           )}
                           {/* 매수 대기 상태에서 매수 기준 프리미엄 표시 */}
-                          {task.status === 'buy_waiting' && task.buyThreshold != null && (
+                          {(task.status === 'buy_pending' || task.status === 'buy_ordered') && task.buyThreshold != null && (
                             <div style={{ fontSize: '12px', color: '#2196F3', marginTop: '5px' }}>
                               매수 기준 프리미엄: {Number(task.buyThreshold).toFixed(2)}%
                             </div>
                           )}
                           {/* 매도 대기 상태에서 매도 기준 프리미엄 표시 */}
-                          {task.status === 'sell_waiting' && task.sellThreshold != null && (
+                          {(task.status === 'sell_pending' || task.status === 'sell_ordered') && task.sellThreshold != null && (
                             <div style={{ fontSize: '12px', color: '#FF9800', marginTop: '5px' }}>
                               매도 기준 프리미엄: {Number(task.sellThreshold).toFixed(2)}%
                             </div>

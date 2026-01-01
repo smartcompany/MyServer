@@ -69,20 +69,31 @@ export async function GET(request) {
     const config = loadConfig();
     
     // 기존 주문에 threshold가 없으면 현재 config에서 가져와서 추가
+    // 또한 기존 상태 네이밍 마이그레이션 (buy_waiting/sell_waiting → buy_pending/buy_ordered/sell_pending/sell_ordered)
     let hasUpdate = false;
     if (config && Array.isArray(orderState.orders)) {
       for (const order of orderState.orders) {
+        // 기존 상태 네이밍 마이그레이션
+        if (order.status === 'buy_waiting') {
+          order.status = order.buyUuid ? 'buy_ordered' : 'buy_pending';
+          hasUpdate = true;
+        } else if (order.status === 'sell_waiting') {
+          order.status = order.sellUuid ? 'sell_ordered' : 'sell_pending';
+          hasUpdate = true;
+        }
+        
         // 매수 대기 또는 매도 대기 상태일 때 threshold 추가
-        if (order.status === 'buy_waiting' && order.buyThreshold == null) {
+        if ((order.status === 'buy_pending' || order.status === 'buy_ordered') && order.buyThreshold == null) {
           order.buyThreshold = config.buyThreshold ?? config.buy ?? null;
           hasUpdate = true;
         }
-        if (order.status === 'sell_waiting' && order.sellThreshold == null) {
+        // 매도 대기 상태일 때 threshold 추가 (pending과 ordered 모두)
+        if ((order.status === 'sell_pending' || order.status === 'sell_ordered') && order.sellThreshold == null) {
           order.sellThreshold = config.sellThreshold ?? config.sell ?? null;
           hasUpdate = true;
         }
-        // 매수 대기 상태에서 매도 기준 프리미엄도 미리 저장
-        if (order.status === 'buy_waiting' && order.sellThreshold == null) {
+        // 매수 대기 상태에서 매도 기준 프리미엄도 미리 저장 (pending과 ordered 모두)
+        if ((order.status === 'buy_pending' || order.status === 'buy_ordered') && order.sellThreshold == null) {
           order.sellThreshold = config.sellThreshold ?? config.sell ?? null;
           hasUpdate = true;
         }
@@ -132,7 +143,7 @@ export async function POST(request) {
     // 새 작업 생성
     const newTask = {
       id: generateUUID(),
-      status: type === 'buy' ? 'buy_waiting' : 'sell_waiting',
+      status: type === 'buy' ? 'buy_pending' : 'sell_pending', // 주문 아직 안 넣은 상태
       buyUuid: null,
       sellUuid: null,
       buyPrice: null,
@@ -198,8 +209,8 @@ export async function DELETE(request) {
 
     const task = orderState.orders[taskIndex];
     
-    // 진행 중인 주문이 있으면 취소 명령 추가
-    if (task.status === 'buy_waiting' && task.buyUuid) {
+    // 진행 중인 주문이 있으면 취소 명령 추가 (ordered 상태일 때만)
+    if (task.status === 'buy_ordered') {
       // command로 취소 처리 (upbit-trade.js에서 처리)
       if (!orderState.command) {
         orderState.command = 'clearOrders';
@@ -207,7 +218,7 @@ export async function DELETE(request) {
       } else if (orderState.command === 'clearOrders' && Array.isArray(orderState.commandParams)) {
         orderState.commandParams.push(taskId);
       }
-    } else if (task.status === 'sell_waiting' && task.sellUuid) {
+    } else if (task.status === 'sell_ordered') {
       // command로 취소 처리
       if (!orderState.command) {
         orderState.command = 'clearOrders';

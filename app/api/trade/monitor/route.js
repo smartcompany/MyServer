@@ -79,9 +79,14 @@ export async function GET(request) {
       },
       orders: {
         total: orderState.orders?.length || 0,
-        buyWaiting: orderState.orders?.filter(o => o.status === 'buy_waiting').length || 0,
-        sellWaiting: orderState.orders?.filter(o => o.status === 'sell_waiting').length || 0,
+        buyPending: orderState.orders?.filter(o => o.status === 'buy_pending').length || 0,
+        buyOrdered: orderState.orders?.filter(o => o.status === 'buy_ordered').length || 0,
+        sellPending: orderState.orders?.filter(o => o.status === 'sell_pending').length || 0,
+        sellOrdered: orderState.orders?.filter(o => o.status === 'sell_ordered').length || 0,
         completed: orderState.orders?.filter(o => o.status === 'completed').length || 0,
+        // 호환성을 위해 기존 필드도 유지
+        buyWaiting: (orderState.orders?.filter(o => o.status === 'buy_pending' || o.status === 'buy_ordered').length || 0),
+        sellWaiting: (orderState.orders?.filter(o => o.status === 'sell_pending' || o.status === 'sell_ordered').length || 0),
       },
       balance: {
         availableMoney: cashBalance.availableMoney || 0,

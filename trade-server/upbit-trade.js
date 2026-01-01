@@ -282,9 +282,9 @@ async function handleCommand(orderState) {
     case 'clearAllOrders':
       console.log('초기화 필요: 모든 주문 취소 시작');
       for (const order of orderState.orders) {
-        if (order.status === 'buy_waiting' && order.buyUuid) {
+        if (order.status === 'buy_ordered') {
           await cancelOrder(order.buyUuid);
-        } else if (order.status === 'sell_waiting' && order.sellUuid) {
+        } else if (order.status === 'sell_ordered') {
           await cancelOrder(order.sellUuid);
         }
       }
@@ -309,9 +309,9 @@ async function handleCommand(orderState) {
       // commandParams에 지정된 주문 ID들만 취소 및 제거
       const ordersToCancel = orderState.orders.filter(o => orderIdsToClear.includes(o.id));
       for (const order of ordersToCancel) {
-        if (order.status === 'buy_waiting' && order.buyUuid) {
+        if (order.status === 'buy_ordered') {
           await cancelOrder(order.buyUuid);
-        } else if (order.status === 'sell_waiting' && order.sellUuid) {
+        } else if (order.status === 'sell_ordered') {
           await cancelOrder(order.sellUuid);
         }
       }
@@ -568,6 +568,24 @@ async function trade() {
     return; 
   }
 
+  // 기존 상태 네이밍 마이그레이션 (buy_waiting/sell_waiting → buy_pending/buy_ordered/sell_pending/sell_ordered)
+  let needsMigration = false;
+  if (Array.isArray(orderState.orders)) {
+    for (const order of orderState.orders) {
+      if (order.status === 'buy_waiting') {
+        order.status = order.buyUuid ? 'buy_ordered' : 'buy_pending';
+        needsMigration = true;
+      } else if (order.status === 'sell_waiting') {
+        order.status = order.sellUuid ? 'sell_ordered' : 'sell_pending';
+        needsMigration = true;
+      }
+    }
+    if (needsMigration) {
+      saveOrderState(orderState);
+      console.log('✅ 상태 네이밍 마이그레이션 완료');
+    }
+  }
+
   // command 처리 (clearAllOrders 또는 clearOrders)
   await handleCommand(orderState);
 
@@ -600,8 +618,8 @@ async function trade() {
 
     // 다중 주문 처리: 각 주문의 상태 확인 및 업데이트
     for (const order of orderState.orders) {
-      // 매수 대기 중인 주문 체크
-      if (order.status === 'buy_waiting' && order.buyUuid) {
+      // 매수 주문 대기 중인 주문 체크 (업비트에 주문 넣은 상태)
+      if (order.status === 'buy_ordered') {
         const orderedData = await checkOrderedData(order.buyUuid);
         if (orderedData == null) {
           console.log(`[주문 ${order.id}] 주문 상태 확인 실패`);
@@ -612,7 +630,7 @@ async function trade() {
           case 'done':
             // 매수 체결 → 매도 대기 상태로 전환
             console.log(`[주문 ${order.id}] 매수 주문 처리됨: ${orderedData.price}원, 수량: ${orderedData.volume}`);
-            order.status = 'sell_waiting';
+            order.status = 'sell_pending';
             order.buyPrice = orderedData.price;
             order.volume = parseFloat(orderedData.volume);
             // sellThreshold가 없으면 현재 config에서 가져와서 저장
@@ -651,8 +669,8 @@ async function trade() {
         }
       }
 
-      // 매도 대기 중인 주문 체크
-      if (order.status === 'sell_waiting' && order.sellUuid) {
+      // 매도 주문 대기 중인 주문 체크 (업비트에 주문 넣은 상태)
+      if (order.status === 'sell_ordered') {
         const orderedData = await checkOrderedData(order.sellUuid);
         if (orderedData == null) {
           console.log(`[주문 ${order.id}] 주문 상태 확인 실패`);
@@ -702,9 +720,9 @@ async function trade() {
     
     console.log(`현재 테더: ${tetherPrice}원, 환율: ${rate}원, 김프: ${kimchiPremium.toFixed(2)}%, 매수가 ${expactedBuyPrice} 원, 매도가 ${expactedSellPrice} 원`);
 
-    // 매도 대기 중인 주문에 대해 매도 주문 생성
+    // 매도 대기 중인 주문에 대해 매도 주문 생성 (sell_pending → sell_ordered)
     for (const order of orderState.orders) {
-      if (order.status === 'sell_waiting' && !order.sellUuid) {
+      if (order.status === 'sell_pending') {
         const volumeToSell = parseFloat(order.volume);
         // sellThreshold가 없으면 현재 config에서 가져와서 저장
         if (order.sellThreshold == null) {
@@ -716,49 +734,48 @@ async function trade() {
           console.log(`[주문 ${order.id}] 매도 주문 성공, UUID: ${sellOrder.uuid}`);
           order.sellUuid = sellOrder.uuid;
           order.sellPrice = sellOrder.price;
+          order.status = 'sell_ordered'; // sell_pending → sell_ordered
           saveOrderState(orderState);
         }
         break; // 한 번에 하나씩만 처리
       }
     }
 
-    // 새로운 매수 주문 생성 (매수 대기 중인 주문이 없을 때)
-    // 각 주문은 독립적으로 config.tradeAmount를 할당받음
-    const buyWaitingCount = orderState.orders.filter(o => o.status === 'buy_waiting').length;
-    const sellWaitingCount = orderState.orders.filter(o => o.status === 'sell_waiting').length;
-    
-    // 매수 주문이 없으면 새 주문 생성 (각 주문은 독립적인 투자 금액을 가짐)
-    if (buyWaitingCount === 0) {
-      // 새 주문에 할당할 투자 금액 계산
-      let allocatedAmount;
-      if (config.isTradeByMoney == true) {
-        allocatedAmount = config.tradeAmount;
-      } else {
-        allocatedAmount = config.tradeAmount * expactedBuyPrice;
-      }
-      
-      const volumeToBuy = calcuratedVolume(config.isTradeByMoney, expactedBuyPrice, allocatedAmount);
-      if (volumeToBuy > 0) {
-        console.log(`새 매수 주문 생성: 김치 ${buyThreshold.toFixed(1)}% 에, ${expactedBuyPrice} 원에 ${volumeToBuy} 매수 주문 걸기 (투자금액: ${allocatedAmount}원)`);
-        const buyOrder = await buyTether(expactedBuyPrice, volumeToBuy);
-        if (buyOrder) {
-          const newOrder = {
-            id: uuid.v4(),
-            status: 'buy_waiting',
-            buyUuid: buyOrder.uuid,
-            sellUuid: null,
-            buyPrice: buyOrder.price,
-            sellPrice: null,
-            volume: buyOrder.volume,
-            allocatedAmount: allocatedAmount, // 각 주문별 투자 금액
-            buyThreshold: buyThreshold, // 매수 기준 프리미엄 저장
-            sellThreshold: sellThreshold, // 매도 기준 프리미엄 저장 (나중에 매도 시 사용)
-            createdAt: new Date().toISOString()
-          };
-          orderState.orders.push(newOrder);
-          console.log(`[주문 ${newOrder.id}] 매수 주문 성공, UUID: ${buyOrder.uuid}, 투자금액: ${allocatedAmount}원`);
-          saveOrderState(orderState);
+    // 웹에서 추가한 매수 작업 처리 (buy_pending → buy_ordered)
+    for (const order of orderState.orders) {
+      if (order.status === 'buy_pending') {
+        // 웹에서 추가한 작업의 allocatedAmount 사용
+        const allocatedAmount = order.allocatedAmount || config.tradeAmount;
+        
+        // 수량 계산
+        let volumeToBuy;
+        if (config.isTradeByMoney == true) {
+          volumeToBuy = calcuratedVolume(true, expactedBuyPrice, allocatedAmount);
+        } else {
+          volumeToBuy = Math.floor(allocatedAmount); // 수량으로 매매하는 경우
         }
+        
+        if (volumeToBuy > 0) {
+          console.log(`[주문 ${order.id}] 매수 주문 생성: 김치 ${buyThreshold.toFixed(1)}% 에, ${expactedBuyPrice} 원에 ${volumeToBuy} 매수 주문 걸기 (투자금액: ${allocatedAmount}원)`);
+          const buyOrder = await buyTether(expactedBuyPrice, volumeToBuy);
+          if (buyOrder) {
+            order.buyUuid = buyOrder.uuid;
+            order.buyPrice = buyOrder.price;
+            order.volume = buyOrder.volume;
+            order.status = 'buy_ordered'; // buy_pending → buy_ordered
+            // buyThreshold가 없으면 현재 config에서 가져와서 저장
+            if (order.buyThreshold == null) {
+              order.buyThreshold = buyThreshold;
+            }
+            // sellThreshold가 없으면 현재 config에서 가져와서 저장
+            if (order.sellThreshold == null) {
+              order.sellThreshold = sellThreshold;
+            }
+            console.log(`[주문 ${order.id}] 매수 주문 성공, UUID: ${buyOrder.uuid}, 투자금액: ${allocatedAmount}원`);
+            saveOrderState(orderState);
+          }
+        }
+        break; // 한 번에 하나씩만 처리
       }
     }
   }
@@ -772,14 +789,14 @@ function updateCashBalnce(orderState, tetherPrice, accountInfo = null) {
   if (accountInfo && Array.isArray(accountInfo)) {
     const krwAccount = accountInfo.find(asset => asset.currency === 'KRW');
     if (krwAccount) {
-      // 매수 대기 중인 주문들의 allocatedAmount 합계 (사용 중인 금액)
+      // 매수 대기 중인 주문들의 allocatedAmount 합계 (사용 중인 금액) - pending과 ordered 모두 포함
       const buyWaitingAmount = orderState.orders
-        .filter(o => o.status === 'buy_waiting')
+        .filter(o => o.status === 'buy_pending' || o.status === 'buy_ordered')
         .reduce((sum, order) => sum + (order.allocatedAmount || 0), 0);
       
-      // 매수 체결 후 매도 대기 중인 주문들의 매수 금액 (사용 중인 금액)
+      // 매수 체결 후 매도 대기 중인 주문들의 매수 금액 (사용 중인 금액) - pending과 ordered 모두 포함
       const sellWaitingBuyAmount = orderState.orders
-        .filter(o => o.status === 'sell_waiting')
+        .filter(o => o.status === 'sell_pending' || o.status === 'sell_ordered')
         .reduce((sum, order) => {
           if (order.buyPrice && order.volume) {
             return sum + (parseFloat(order.buyPrice) * parseFloat(order.volume));
@@ -807,8 +824,8 @@ function updateCashBalnce(orderState, tetherPrice, accountInfo = null) {
     isUpdated = true;
   }
   
-  // 매도 대기 중인 주문들의 테더 합계 계산
-  const sellWaitingOrders = orderState.orders.filter(o => o.status === 'sell_waiting');
+  // 매도 대기 중인 주문들의 테더 합계 계산 - pending과 ordered 모두 포함
+  const sellWaitingOrders = orderState.orders.filter(o => o.status === 'sell_pending' || o.status === 'sell_ordered');
   const sellWaitingUsdt = sellWaitingOrders.reduce((sum, order) => sum + (parseFloat(order.volume) || 0), 0);
   
   let availableUsdt;
