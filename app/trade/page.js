@@ -150,7 +150,7 @@ export default function TradePage() {
     const token = localStorage.getItem('token');
     const c = nextConfig || config;
     if (!configLoaded) {
-      console.warn('설정이 아직 로드되지 않았습니다. 잠시 후 다시 시도하세요.');
+      console.warn('설정이 아직 로드되지 않았습니다. 잠시 후 다시 시도하세요. ');
       return;
     }
 
