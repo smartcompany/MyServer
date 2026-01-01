@@ -315,7 +315,7 @@ export default function TradePage() {
     const sellInput = document.getElementById('sell');
     const tradeAmountInput = document.getElementById('tradeAmount');
     const isTradeByMoneyRadio = document.querySelector('input[name="trade-type"]:checked');
-    const amount = tradeAmountInput?.value;
+    const amount = tradeAmountInput?.value.replace(/,/g, '');
     
     if (!amount || Number(amount) <= 0) {
       alert('매수 금액/수량을 입력해주세요');
@@ -368,7 +368,7 @@ export default function TradePage() {
     const buyInput = document.getElementById('buy');
     const sellInput = document.getElementById('sell');
     const sellAmountInput = document.getElementById('sellAmount');
-    const amount = sellAmountInput?.value;
+    const amount = sellAmountInput?.value.replace(/,/g, '');
     
     if (!amount || Number(amount) <= 0) {
       alert('매도 금액/수량을 입력해주세요');
@@ -633,7 +633,17 @@ export default function TradePage() {
                       setIsTradeByMoney(false);
                     }} /> 수량으로 매매
                   </label>
-                  <input id="tradeAmount" type="number" step="1" value={config.tradeAmount} onChange={(e) => setConfig((prev) => ({ ...prev, tradeAmount: e.target.value }))} style={{
+                  <input id="tradeAmount" type="text" value={config.tradeAmount ? Number(config.tradeAmount).toLocaleString() : ''} onChange={(e) => {
+                    const value = e.target.value.replace(/,/g, '');
+                    if (value === '' || (!isNaN(value) && Number(value) >= 0)) {
+                      setConfig((prev) => ({ ...prev, tradeAmount: value }));
+                    }
+                  }} onBlur={(e) => {
+                    const value = e.target.value.replace(/,/g, '');
+                    if (value && !isNaN(value)) {
+                      setConfig((prev) => ({ ...prev, tradeAmount: value }));
+                    }
+                  }} style={{
                     width: '100%',
                     padding: '12px',
                     marginTop: '10px',
@@ -674,7 +684,17 @@ export default function TradePage() {
                       setIsTradeByMoney(false);
                     }} /> 수량으로 매매
                   </label>
-                  <input id="sellAmount" type="number" step={isTradeByMoney ? "1" : "0.1"} value={config.sellAmount || ''} onChange={(e) => setConfig((prev) => ({ ...prev, sellAmount: e.target.value }))} style={{
+                  <input id="sellAmount" type="text" value={config.sellAmount ? (isTradeByMoney ? Number(config.sellAmount).toLocaleString() : Number(config.sellAmount).toLocaleString('ko-KR', { maximumFractionDigits: 1 })) : ''} onChange={(e) => {
+                    const value = e.target.value.replace(/,/g, '');
+                    if (value === '' || (!isNaN(value) && Number(value) >= 0)) {
+                      setConfig((prev) => ({ ...prev, sellAmount: value }));
+                    }
+                  }} onBlur={(e) => {
+                    const value = e.target.value.replace(/,/g, '');
+                    if (value && !isNaN(value)) {
+                      setConfig((prev) => ({ ...prev, sellAmount: value }));
+                    }
+                  }} style={{
                     width: '100%',
                     padding: '12px',
                     marginTop: '10px',
