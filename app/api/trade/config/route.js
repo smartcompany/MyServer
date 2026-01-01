@@ -70,11 +70,6 @@ export async function POST(request) {
     
     console.log(`📋 [config API] 최종 config:`, JSON.stringify(config, null, 2));
 
-    if (prevTradeAmount !== config.tradeAmount) {
-      console.log(`물량이 변경되면 초기화`);
-      needInitForOrderState();
-    }
-
     if (changed) {
       fs.writeFileSync(configFilePath, JSON.stringify(config, null, 2));
       return new Response(null, { status: 200 });
