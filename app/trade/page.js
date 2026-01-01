@@ -137,7 +137,7 @@ export default function TradePage() {
         sell: data.sellThreshold ?? '',
         isTrading: Boolean(data.isTrading),
         tradeAmount: data.tradeAmount ?? '',
-        isTradeByMoney: data.isTradeByMoney !== false
+        isTradeByMoney: data.isTradeByMoney
       });
       setConfigLoaded(true);
     } catch (error) {
@@ -158,7 +158,7 @@ export default function TradePage() {
     const sell = c.sell === '' ? null : Number(c.sell);
     const tradeAmount = c.tradeAmount === '' ? null : Number(c.tradeAmount);
     const isTrading = Boolean(c.isTrading);
-    const isTradeByMoney = c.isTradeByMoney !== false;
+    const isTradeByMoney = c.isTradeByMoney;
 
     try {
       const res = await fetch('/api/trade/config', {

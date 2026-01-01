@@ -484,15 +484,8 @@ function floorToHalf(num) {
   return Math.floor(num * 2) / 2;
 }
 
-function needToCancelOrder(orderedData, expactedBuyPrice, expactedSellPrice, isTradeByMoney, allocatedAmount) {
-
+function needToCancelOrder(orderedData, expactedBuyPrice, expactedSellPrice) {
   if (orderedData.side === 'bid') { 
-    const volume = calcuratedVolume(isTradeByMoney, expactedBuyPrice, allocatedAmount);
-    if (parseFloat(orderedData.volume) != parseFloat(volume)) {
-      console.log(`매수 일 경우 주문할 수량이 다르면 취소: 주문 물량 ${volume}, 대기 물량 ${orderedData.volume}`);
-      return true;
-    }
-
     if (orderedData.price == expactedBuyPrice) {
       console.log(`매수 대기 중 주문할 가격과 동일: ${orderedData.price}`);
       return false;
@@ -595,7 +588,7 @@ async function processBuyOrder(order, orderState, rate) {
       break;
     case 'wait':
       // 가격 변동 체크 및 취소 필요 여부 확인
-      if (needToCancelOrder(orderedData, expactedBuyPrice, expactedSellPrice, isTradeByMoney, order.allocatedAmount || 0)) {
+      if (needToCancelOrder(orderedData, expactedBuyPrice, expactedSellPrice)) {
         const cancelResponse = await cancelOrder(order.buyUuid);
         if (cancelResponse) {
           console.log(`[주문 ${order.id}] 주문 취소 성공 ${order.buyUuid}`);
@@ -615,10 +608,9 @@ async function processSellOrder(order, orderState, rate) {
   const cashBalance = loadCashBalance();
   const buyThreshold = order.buyThreshold;
   const sellThreshold = order.sellThreshold;
-  const isTradeByMoney = order.isTradeByMoney;
   
-  if (buyThreshold == null || sellThreshold == null || isTradeByMoney == null) {
-    console.log(`[주문 ${order.id}] buyThreshold, sellThreshold, isTradeByMoney 설정 없음`);
+  if (buyThreshold == null || sellThreshold == null) {
+    console.log(`[주문 ${order.id}] buyThreshold, sellThreshold 설정 없음`);
     return false; // 처리 실패
   }
 
@@ -656,7 +648,7 @@ async function processSellOrder(order, orderState, rate) {
       break;
     case 'wait':
       // 가격 변동 체크 및 취소 필요 여부 확인
-      if (needToCancelOrder(orderedData, expactedBuyPrice, expactedSellPrice, isTradeByMoney, order.allocatedAmount || 0)) {
+      if (needToCancelOrder(orderedData, expactedBuyPrice, expactedSellPrice)) {
         const cancelResponse = await cancelOrder(order.sellUuid);
         if (cancelResponse) {
           console.log(`[주문 ${order.id}] 주문 취소 성공 ${order.sellUuid}`);
