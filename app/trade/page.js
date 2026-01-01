@@ -10,9 +10,10 @@ export default function TradePage() {
   const [config, setConfig] = useState({
     buy: '',
     sell: '',
-    isTrading: false,
-    tradeAmount: ''
+    isTrading: false
   });
+  const [tradeAmount, setTradeAmount] = useState(''); // 매수 금액/수량 입력값
+  const [sellAmount, setSellAmount] = useState(''); // 매도 금액/수량 입력값
   const [isTradeByMoney, setIsTradeByMoney] = useState(true); // 매매 방식: true=금액, false=수량
   const [logs, setLogs] = useState('불러오는 중...');
   const [tradeData, setTradeData] = useState(null);
@@ -135,8 +136,7 @@ export default function TradePage() {
       setConfig({
         buy: data.buyThreshold ?? '',
         sell: data.sellThreshold ?? '',
-        isTrading: Boolean(data.isTrading),
-        tradeAmount: '' // config.json에 없으므로 빈 값으로 초기화
+        isTrading: Boolean(data.isTrading)
       });
       setIsTradeByMoney(data.isTradeByMoney ?? true);
       setConfigLoaded(true);
@@ -633,15 +633,37 @@ export default function TradePage() {
                       setIsTradeByMoney(false);
                     }} /> 수량으로 매매
                   </label>
-                  <input id="tradeAmount" type="text" value={config.tradeAmount ? Number(config.tradeAmount).toLocaleString() : ''} onChange={(e) => {
-                    const value = e.target.value.replace(/,/g, '');
-                    if (value === '' || (!isNaN(value) && Number(value) >= 0)) {
-                      setConfig((prev) => ({ ...prev, tradeAmount: value }));
+                  <input id="tradeAmount" type="text" inputMode="decimal" value={tradeAmount ? (() => {
+                    const str = String(tradeAmount);
+                    if (!str) return '';
+                    // 소숫점이 있으면 그대로 유지
+                    if (str.includes('.')) {
+                      const parts = str.split('.');
+                      const intPart = parts[0] ? Number(parts[0]).toLocaleString() : '';
+                      return intPart + '.' + (parts[1] || '');
+                    }
+                    return Number(str).toLocaleString();
+                  })() : ''} onChange={(e) => {
+                    let value = e.target.value.replace(/,/g, '');
+                    // 소숫점은 하나만 허용
+                    const dotCount = (value.match(/\./g) || []).length;
+                    if (dotCount > 1) {
+                      const firstDot = value.indexOf('.');
+                      value = value.substring(0, firstDot + 1) + value.substring(firstDot + 1).replace(/\./g, '');
+                    }
+                    // 숫자, 소숫점, 빈 문자열만 허용 (정규식으로 검증)
+                    // 허용 패턴: 빈 문자열, 숫자만, 숫자+소숫점, 숫자+소숫점+숫자, 소숫점만, 소숫점+숫자
+                    if (value === '' || /^(\d+\.?\d*|\.\d*)$/.test(value)) {
+                      setTradeAmount(value);
                     }
                   }} onBlur={(e) => {
-                    const value = e.target.value.replace(/,/g, '');
-                    if (value && !isNaN(value)) {
-                      setConfig((prev) => ({ ...prev, tradeAmount: value }));
+                    let value = e.target.value.replace(/,/g, '');
+                    // 마지막이 .으로 끝나면 제거
+                    if (value.endsWith('.')) {
+                      value = value.slice(0, -1);
+                    }
+                    if (value && !isNaN(value) && Number(value) >= 0) {
+                      setTradeAmount(value);
                     }
                   }} style={{
                     width: '100%',
@@ -684,15 +706,37 @@ export default function TradePage() {
                       setIsTradeByMoney(false);
                     }} /> 수량으로 매매
                   </label>
-                  <input id="sellAmount" type="text" value={config.sellAmount ? (isTradeByMoney ? Number(config.sellAmount).toLocaleString() : Number(config.sellAmount).toLocaleString('ko-KR', { maximumFractionDigits: 1 })) : ''} onChange={(e) => {
-                    const value = e.target.value.replace(/,/g, '');
-                    if (value === '' || (!isNaN(value) && Number(value) >= 0)) {
-                      setConfig((prev) => ({ ...prev, sellAmount: value }));
+                  <input id="sellAmount" type="text" inputMode="decimal" value={sellAmount ? (() => {
+                    const str = String(sellAmount);
+                    if (!str) return '';
+                    // 소숫점이 있으면 그대로 유지
+                    if (str.includes('.')) {
+                      const parts = str.split('.');
+                      const intPart = parts[0] ? Number(parts[0]).toLocaleString() : '';
+                      return intPart + '.' + (parts[1] || '');
+                    }
+                    return isTradeByMoney ? Number(str).toLocaleString() : Number(str).toLocaleString('ko-KR', { maximumFractionDigits: 8 });
+                  })() : ''} onChange={(e) => {
+                    let value = e.target.value.replace(/,/g, '');
+                    // 소숫점은 하나만 허용
+                    const dotCount = (value.match(/\./g) || []).length;
+                    if (dotCount > 1) {
+                      const firstDot = value.indexOf('.');
+                      value = value.substring(0, firstDot + 1) + value.substring(firstDot + 1).replace(/\./g, '');
+                    }
+                    // 숫자, 소숫점, 빈 문자열만 허용 (정규식으로 검증)
+                    // 허용 패턴: 빈 문자열, 숫자만, 숫자+소숫점, 숫자+소숫점+숫자, 소숫점만, 소숫점+숫자
+                    if (value === '' || /^(\d+\.?\d*|\.\d*)$/.test(value)) {
+                      setSellAmount(value);
                     }
                   }} onBlur={(e) => {
-                    const value = e.target.value.replace(/,/g, '');
-                    if (value && !isNaN(value)) {
-                      setConfig((prev) => ({ ...prev, sellAmount: value }));
+                    let value = e.target.value.replace(/,/g, '');
+                    // 마지막이 .으로 끝나면 제거
+                    if (value.endsWith('.')) {
+                      value = value.slice(0, -1);
+                    }
+                    if (value && !isNaN(value) && Number(value) >= 0) {
+                      setSellAmount(value);
                     }
                   }} style={{
                     width: '100%',
