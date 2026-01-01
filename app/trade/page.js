@@ -18,7 +18,7 @@ export default function TradePage() {
   const [tradeData, setTradeData] = useState(null);
   const [processStatus, setProcessStatus] = useState(null);
   const [configLoaded, setConfigLoaded] = useState(false);
-  const [balance, setBalance] = useState({ restMoney: 0, restUsdt: 0 });
+  const [balance, setBalance] = useState({ availableMoney: 0, availableUsdt: 0 });
   const [initialTabSet, setInitialTabSet] = useState(false);
   const [monitorData, setMonitorData] = useState(null);
   const [tasks, setTasks] = useState([]);
@@ -224,13 +224,13 @@ export default function TradePage() {
       setTradeData(data);
       // 보유 금액과 테더 정보 업데이트
       const newBalance = {
-        restMoney: data.restMoney || 0,
-        restUsdt: data.restUsdt || 0
+        availableMoney: data.availableMoney || 0,
+        availableUsdt: data.availableUsdt || 0
       };
       setBalance(newBalance);
       
       // 테더가 있으면 매도 탭으로 전환 (처음 로드 시에만)
-      if (!initialTabSet && newBalance.restUsdt > 0) {
+      if (!initialTabSet && newBalance.availableUsdt > 0) {
         setActiveTab('sell');
         setInitialTabSet(true);
       } else if (!initialTabSet) {
@@ -297,8 +297,8 @@ export default function TradePage() {
         // 모니터링 데이터에서 잔액 정보도 업데이트
         if (data.balance) {
           setBalance({
-            restMoney: data.balance.restMoney || 0,
-            restUsdt: data.balance.restUsdt || 0
+            availableMoney: data.balance.availableMoney || 0,
+            availableUsdt: data.balance.availableUsdt || 0
           });
         }
       }
@@ -579,14 +579,14 @@ export default function TradePage() {
             <div style={{ textAlign: 'center' }}>
               <div style={{ fontSize: '12px', color: '#666', marginBottom: '5px' }}>보유 금액</div>
               <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#1976d2' }}>
-                {Number(balance.restMoney || 0).toLocaleString()}원
+                {Number(balance.availableMoney || 0).toLocaleString()}원
               </div>
             </div>
             <div style={{ width: '1px', height: '40px', backgroundColor: '#bbb' }}></div>
             <div style={{ textAlign: 'center' }}>
               <div style={{ fontSize: '12px', color: '#666', marginBottom: '5px' }}>보유 테더</div>
               <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#1976d2' }}>
-                {Number(balance.restUsdt || 0).toFixed(1)} USDT
+                {Number(balance.availableUsdt || 0).toFixed(1)} USDT
               </div>
             </div>
           </div>
@@ -698,7 +698,7 @@ export default function TradePage() {
                     border: '1px solid #ddd',
                     borderRadius: '4px'
                   }} placeholder={config.isTradeByMoney ? "매수 금액 (원)" : "매수 수량 (USDT)"} />
-                  <div style={{ fontSize: '12px', color: '#666', marginTop: '5px' }}>현재 보유 금액: {Number(balance.restMoney || 0).toLocaleString()}원</div>
+                  <div style={{ fontSize: '12px', color: '#666', marginTop: '5px' }}>현재 보유 금액: {Number(balance.availableMoney || 0).toLocaleString()}원</div>
                   <button onClick={addBuyTask} style={{
                     width: '100%',
                     padding: '12px',
@@ -729,7 +729,7 @@ export default function TradePage() {
                     border: '1px solid #ddd',
                     borderRadius: '4px'
                   }} placeholder="매도할 테더 수량 (USDT)" />
-                  <div style={{ fontSize: '12px', color: '#666', marginTop: '5px' }}>현재 보유 테더: {Number(balance.restUsdt || 0).toFixed(1)} USDT</div>
+                  <div style={{ fontSize: '12px', color: '#666', marginTop: '5px' }}>현재 보유 테더: {Number(balance.availableUsdt || 0).toFixed(1)} USDT</div>
                   <button onClick={addSellTask} style={{
                     width: '100%',
                     padding: '12px',

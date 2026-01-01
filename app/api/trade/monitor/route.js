@@ -61,7 +61,7 @@ export async function GET(request) {
 
     // cashBalance.json에서 잔액 확인
     const cashBalancePath = getTradeServerPath('cashBalance.json');
-    let cashBalance = { restMoney: 0, restUsdt: 0, total: 0 };
+    let cashBalance = { availableMoney: 0, availableUsdt: 0, total: 0 };
     
     if (fs.existsSync(cashBalancePath)) {
       cashBalance = JSON.parse(fs.readFileSync(cashBalancePath, 'utf8'));
@@ -84,8 +84,8 @@ export async function GET(request) {
         completed: orderState.orders?.filter(o => o.status === 'completed').length || 0,
       },
       balance: {
-        restMoney: cashBalance.restMoney || 0,
-        restUsdt: cashBalance.restUsdt || 0,
+        availableMoney: cashBalance.availableMoney || 0,
+        availableUsdt: cashBalance.availableUsdt || 0,
         total: cashBalance.total || 0,
       },
       timestamp: new Date().toISOString(),
