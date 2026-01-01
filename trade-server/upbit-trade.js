@@ -308,20 +308,31 @@ async function handleCommand(orderState) {
       
       // commandParams에 지정된 주문 ID들만 취소 및 제거
       const ordersToCancel = orderState.orders.filter(o => orderIdsToClear.includes(o.id));
+      const successfullyCanceled = [];
+      
       for (const order of ordersToCancel) {
+        let cancelResult = null;
         if (order.status === 'buy_ordered') {
-          await cancelOrder(order.buyUuid);
+          cancelResult = await cancelOrder(order.buyUuid);
         } else if (order.status === 'sell_ordered') {
-          await cancelOrder(order.sellUuid);
+          cancelResult = await cancelOrder(order.sellUuid);
+        }
+        
+        // 취소 성공한 경우만 제거 대상에 추가
+        // cancelOrder는 성공 시 response.data 반환, 이미 취소된 경우 { uuid, state: 'done' } 반환, 실패 시 null 반환
+        if (cancelResult != null) {
+          successfullyCanceled.push(order.id);
+        } else {
+          console.log(`⚠️ [주문 ${order.id}] 주문 취소 실패 - orderState에서 제거하지 않음`);
         }
       }
       
-      // 취소한 주문들을 orderState에서 제거
-      orderState.orders = orderState.orders.filter(o => !orderIdsToClear.includes(o.id));
+      // 취소 성공한 주문들만 orderState에서 제거
+      orderState.orders = orderState.orders.filter(o => !successfullyCanceled.includes(o.id));
       orderState.command = null;
       orderState.commandParams = null;
       saveOrderState(orderState);
-      console.log(`선택 주문 취소 완료: ${ordersToCancel.length}개 주문`);
+      console.log(`선택 주문 취소 완료: ${successfullyCanceled.length}/${ordersToCancel.length}개 주문 취소 성공`);
       break;
       
     default:
@@ -398,6 +409,14 @@ async function checkOrderedData(orderedUuid) {
       return null;
     }
   } catch (error) {
+    const errorData = error.response?.data;
+    
+    // 취소된 주문이거나 존재하지 않는 주문이면 cancel 상태로 반환
+    if (errorData?.error?.name === 'canceled_order' || errorData?.error?.name === 'order_not_found') {
+      console.log(`ℹ️ [checkOrderedData] 주문이 취소되었거나 존재하지 않습니다. (ID: ${orderedUuid})`);
+      return { uuid: orderedUuid, state: 'cancel' };
+    }
+    
     console.error('Error checking ordered data:', error.message);
     return null;
   }
