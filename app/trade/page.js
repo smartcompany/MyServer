@@ -856,7 +856,7 @@ export default function TradePage() {
                               ID: {task.id.substring(0, 8)}...
                             </span>
                           </div>
-                          {(task.status === 'buy_pending' || task.status === 'sell_pending') && (
+                          {(task.status === 'buy_pending' || task.status === 'sell_pending' || task.status === 'buy_ordered' || task.status === 'sell_ordered') && (
                             <button onClick={() => deleteTask(task.id)} style={{
                               backgroundColor: '#f44336',
                               color: 'white',
