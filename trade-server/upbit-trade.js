@@ -808,7 +808,7 @@ function updateCashBalnce(orderState, accountInfo) {
   const buyWaitingAmount = orderState.orders
         .filter(o => o.status === 'buy_pending' || o.status === 'buy_ordered')
         .reduce((sum, order) => {
-          return sum + order.value * order.buyPrice;
+          return sum + order.volume * order.buyPrice;
         }, 0);
   
   const krwBalance = availableMoney + buyWaitingAmount;
