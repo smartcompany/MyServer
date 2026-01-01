@@ -697,6 +697,7 @@ async function processPendingOrders(orderState, rate) {
         console.log(`[주문 ${order.id}] 매도 주문 성공, UUID: ${sellOrder.uuid}`);
         order.sellUuid = sellOrder.uuid;
         order.sellPrice = sellOrder.price;
+        order.volume = sellOrder.volume;
         order.status = 'sell_ordered'; // sell_pending → sell_ordered
         saveOrderState(orderState);
       }
