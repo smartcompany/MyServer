@@ -594,7 +594,11 @@ async function processBuyOrder(order, orderState, rate) {
         const cancelResponse = await cancelOrder(order.buyUuid);
         if (cancelResponse) {
           console.log(`[주문 ${order.id}] 주문 취소 성공 ${order.buyUuid}`);
-          orderState.orders = orderState.orders.filter(o => o.id !== order.id);
+          // 주문 취소 후 buy_pending 상태로 돌아가서 재주문 가능하도록 함
+          order.status = 'buy_pending';
+          order.buyUuid = null;
+          order.buyPrice = null;
+          order.volume = null;
           saveOrderState(orderState);
         } else {
           console.log(`[주문 ${order.id}] 주문 취소 실패`);
@@ -654,7 +658,10 @@ async function processSellOrder(order, orderState, rate) {
         const cancelResponse = await cancelOrder(order.sellUuid);
         if (cancelResponse) {
           console.log(`[주문 ${order.id}] 주문 취소 성공 ${order.sellUuid}`);
-          orderState.orders = orderState.orders.filter(o => o.id !== order.id);
+          // 주문 취소 후 sell_pending 상태로 돌아가서 재주문 가능하도록 함
+          order.status = 'sell_pending';
+          order.sellUuid = null;
+          order.sellPrice = null;
           saveOrderState(orderState);
         } else {
           console.log(`[주문 ${order.id}] 주문 취소 실패`);
