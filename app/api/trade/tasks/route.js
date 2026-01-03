@@ -81,12 +81,12 @@ async function calculateVolume(type, amount, isTradeByMoney, buyThreshold, sellT
     let expactedPrice;
     
     if (type === 'buy') {
-      if (!buyThreshold) {
+      if (buyThreshold == null) {
         throw new Error('매수 작업은 buyThreshold 값이 필요합니다');
       }
       expactedPrice = Math.round(tetherPrice * (1 + buyThreshold / 100));
     } else {
-      if (!sellThreshold) {
+      if (sellThreshold == null) {
         throw new Error('매도 작업은 sellThreshold 값이 필요합니다');
       }
       expactedPrice = Math.round(tetherPrice * (1 + sellThreshold / 100));
