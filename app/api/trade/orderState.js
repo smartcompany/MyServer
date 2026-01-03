@@ -17,6 +17,11 @@ const SAVE_DELAY = 500; // 500ms debounce
 
 // 초기화: 파일에서 로드
 function initOrderState() {
+  // 이미 초기화되었으면 다시 초기화하지 않음
+  if (global.orderStateMemory.orderState !== null) {
+    return;
+  }
+
   try {
     if (!fs.existsSync(orderStateFilePath)) {
       global.orderStateMemory.orderState = { orders: [], command: null, commandParams: null };
@@ -123,11 +128,12 @@ export function saveOrderStateImmediately() {
 
 // 초기화 함수 (서버 시작 시 호출)
 export function initializeOrderState() {
+  // 이미 초기화되었으면 다시 초기화하지 않음
+  if (global.orderStateMemory.orderState !== null) {
+    return;
+  }
   initOrderState();
 }
-
-// 초기화 실행
-initializeOrderState();
 
 // CommonJS 지원 (upbit-trade.js에서 사용)
 if (typeof module !== 'undefined' && module.exports) {
