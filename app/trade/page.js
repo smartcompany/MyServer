@@ -893,8 +893,8 @@ export default function TradePage() {
                           {/* 매도 주문 대기 상태일 때는 매도가와 수량만 표시 */}
                           {task.status === 'sell_ordered' && (
                             <>
-                              {task.sellPrice && (
-                                <div>매도가: {Number(task.sellPrice).toLocaleString()}원</div>
+                              {task.price && (
+                                <div>매도가: {Number(task.price).toLocaleString()}원</div>
                               )}
                               {task.volume && (
                                 <div>수량: {Number(task.volume).toFixed(1)} USDT</div>
@@ -907,8 +907,8 @@ export default function TradePage() {
                               {task.allocatedAmount && (
                                 <div>투자 금액: {Number(task.allocatedAmount).toLocaleString()}원</div>
                               )}
-                              {task.buyPrice && (
-                                <div>매수가: {Number(task.buyPrice).toLocaleString()}원</div>
+                              {task.price && (
+                                <div>매수가: {Number(task.price).toLocaleString()}원</div>
                               )}
                               {task.volume && (
                                 <div>수량: {Number(task.volume).toFixed(1)} USDT</div>
@@ -920,8 +920,8 @@ export default function TradePage() {
                               {task.volume && (
                                 <div>매도 수량: {Number(task.volume).toFixed(1)} USDT</div>
                               )}
-                              {task.sellPrice && (
-                                <div>매도가: {Number(task.sellPrice).toLocaleString()}원</div>
+                              {task.price && (
+                                <div>매도가: {Number(task.price).toLocaleString()}원</div>
                               )}
                             </>
                           )}
@@ -937,14 +937,9 @@ export default function TradePage() {
                               매도 기준 프리미엄: {Number(task.sellThreshold).toFixed(2)}%
                             </div>
                           )}
-                          {task.buyUuid && (
+                          {task.uuid && (
                             <div style={{ fontSize: '12px', color: '#666', marginTop: '5px' }}>
-                              매수 UUID: {task.buyUuid.substring(0, 20)}...
-                            </div>
-                          )}
-                          {task.sellUuid && (
-                            <div style={{ fontSize: '12px', color: '#666', marginTop: '5px' }}>
-                              매도 UUID: {task.sellUuid.substring(0, 20)}...
+                              {task.status === 'buy_ordered' ? '매수' : '매도'} UUID: {task.uuid.substring(0, 20)}...
                             </div>
                           )}
                           {task.createdAt && (

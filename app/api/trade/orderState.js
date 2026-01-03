@@ -42,12 +42,40 @@ function initOrderState() {
   }
 }
 
+// null 값을 제거하는 함수 (재귀적으로 객체와 배열 처리)
+function removeNullValues(obj) {
+  if (obj === null || obj === undefined) {
+    return undefined;
+  }
+  
+  if (Array.isArray(obj)) {
+    return obj.map(item => removeNullValues(item)).filter(item => item !== undefined);
+  }
+  
+  if (typeof obj === 'object') {
+    const cleaned = {};
+    for (const key in obj) {
+      if (obj.hasOwnProperty(key)) {
+        const value = removeNullValues(obj[key]);
+        if (value !== undefined && value !== null) {
+          cleaned[key] = value;
+        }
+      }
+    }
+    return cleaned;
+  }
+  
+  return obj;
+}
+
 // 파일에 저장 (debounce)
 function saveOrderStateToFile() {
   if (!global.orderStateMemory.orderState) return;
   
   try {
-    fs.writeFileSync(orderStateFilePath, JSON.stringify(global.orderStateMemory.orderState, null, 2));
+    // null 값을 제거한 후 저장
+    const cleanedState = removeNullValues(global.orderStateMemory.orderState);
+    fs.writeFileSync(orderStateFilePath, JSON.stringify(cleanedState, null, 2));
   } catch (err) {
     console.error('❌ [orderState] 파일 저장 실패:', err);
   }
