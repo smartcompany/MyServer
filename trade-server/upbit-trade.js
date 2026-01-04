@@ -507,31 +507,29 @@ function needToCancelOrder(orderedData, expactedBuyPrice, expactedSellPrice) {
   return false;
 }
 
-function setSellPending(order, volume) {
+function setSellPending(order, volume, price) {
   order.status = 'sell_pending';
-  order.volume = volume;
-  order.price = null;
-  order.uuid = null;
+  order.volume = Number(volume);
+  order.price = price != null ? Number(price) : null;
 }
 
-function setBuyPending(order, volume) {
+function setBuyPending(order, volume, price) {
   order.status = 'buy_pending';
-  order.volume = volume;
-  order.price = null;
-  order.uuid = null;
+  order.volume = Number(volume);
+  order.price = price != null ? Number(price) : null;
 }
 
 function setSellOrdered(order, uuid, price, volume) {
   order.uuid = uuid;
-  order.price = price;
-  order.volume = volume;
+  order.price = Number(price);
+  order.volume = Number(volume);
   order.status = 'sell_ordered';
 }
 
 function setBuyOrdered(order, uuid, price, volume) {
   order.uuid = uuid;
-  order.price = price;
-  order.volume = volume;
+  order.price = Number(price);
+  order.volume = Number(volume);
   order.status = 'buy_ordered';
 }
 
@@ -577,8 +575,8 @@ async function processBuyOrder(order, orderState, rate) {
       // 매수 체결 → 매도 대기 상태로 전환
       console.log(`[주문 ${order.id}] 매수 주문 처리됨: ${orderedData.price}원, 수량: ${orderedData.volume}`);
       
-      // 테더 매도로 전환 (수량만 전달)
-      setSellPending(order, orderedData.volume);
+      // 테더 매도로 전환 (수량과 예상 매도 가격 전달)
+      setSellPending(order, orderedData.volume, expactedSellPrice);
 
       cashBalance.history.push({ 
         type: 'buy',
@@ -601,7 +599,7 @@ async function processBuyOrder(order, orderState, rate) {
         const cancelResponse = await cancelOrder(order.uuid);
         if (cancelResponse) {
           console.log(`[주문 ${order.id}] 주문 취소 성공 ${order.uuid}`);
-          setBuyPending(order, order.volume);
+          setBuyPending(order, order.volume, expactedBuyPrice);
           saveOrderState(orderState);
         } else {
           console.log(`[주문 ${order.id}] 주문 취소 실패`);
@@ -642,7 +640,7 @@ async function processSellOrder(order, orderState, rate) {
       // 이 금액으로 매수할 수량 = 매도 금액 / expactedBuyPrice (김프 계산 가격)
       const sellAmount = orderedData.volume * orderedData.price;  // 매도 금액
       const buyVolume = Math.floor(sellAmount / expactedBuyPrice);
-      setBuyPending(order, buyVolume);
+      setBuyPending(order, buyVolume, expactedBuyPrice);
 
       cashBalance.history.push({ 
         type: 'sell',
@@ -666,8 +664,8 @@ async function processSellOrder(order, orderState, rate) {
         if (cancelResponse) {
           console.log(`[주문 ${order.id}] 주문 취소 성공 ${order.uuid}`);
           
-          // 매도 주문 취소 후 매수 주문으로 전환 (수량만 전달)
-          setSellPending(order, order.volume);
+          // 매도 주문 취소 후 매수 주문으로 전환 (수량과 예상 매도 가격 전달)
+          setSellPending(order, order.volume, expactedSellPrice);
           saveOrderState(orderState);
         } else {
           console.log(`[주문 ${order.id}] 주문 취소 실패`);

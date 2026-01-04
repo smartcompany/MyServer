@@ -164,7 +164,7 @@ export async function POST(request) {
       sellThreshold: sellThreshold,
       createdAt: new Date().toISOString(),
       type: type,
-      volume: volume
+      volume: Number(volume)
     };
 
     // 메모리 업데이트
