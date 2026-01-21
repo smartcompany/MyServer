@@ -233,6 +233,35 @@ export default function TradePage() {
     }
   }
 
+  async function downloadLogs() {
+    const token = localStorage.getItem('token');
+    try {
+      const res = await fetch('/api/trade/logs/download', {
+        method: 'GET',
+        headers: { 'Authorization': 'Bearer ' + token }
+      });
+
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        alert(errorData.error || '로그 파일 다운로드 실패');
+        return;
+      }
+
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'trade-logs.txt';
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+    } catch (error) {
+      console.error('로그 다운로드 실패:', error);
+      alert('로그 다운로드 실패');
+    }
+  }
+
 
   async function loadMonitorData() {
     const token = localStorage.getItem('token');
@@ -957,6 +986,23 @@ export default function TradePage() {
 
             {taskTab === 'logs' && (
               <div>
+                <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '10px' }}>
+                  <button onClick={downloadLogs} style={{
+                    padding: '6px 12px',
+                    fontSize: '14px',
+                    backgroundColor: '#4CAF50',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '4px',
+                    cursor: 'pointer',
+                    fontWeight: 'bold',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '5px'
+                  }}>
+                    📥 다운로드
+                  </button>
+                </div>
                 <pre style={{
                   background: '#fff',
                   padding: '15px',
