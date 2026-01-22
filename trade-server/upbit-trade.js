@@ -128,7 +128,7 @@ function loadCashBalance () {
     }
   } catch (err) {
     console.error(err);
-    cashData = { history: [], total: 0, availableMoney: 0, availableUsdt: 0 };
+    cashData = { history: [], total: 0, availableMoney: 0, availableUsdt: 0, availableUsdc: 0, usdcBalance: 0 };
     fs.writeFileSync(cashBalanceLogPath, JSON.stringify(cashData, null, 2));
   }
 
@@ -170,15 +170,16 @@ async function getAccountInfo() {
   }
 }
 
-async function sellTether(price, volume) {
+async function sellCoin(price, volume, coinType = 'USDT') {
   try {
     // 지정가 매도 주문 데이터
+    const market = coinType === 'USDC' ? 'KRW-USDC' : 'KRW-USDT';
     const orderData = {
-      market: 'KRW-USDT', // 테더 시장
+      market: market,
       side: 'ask',        // 매도
       // 주문 가격은 정수(원 단위)로 보냄
       price: Math.round(Number(price)),
-      volume: Number(volume.toFixed(1)),     // 매도 수량 (USDT)
+      volume: Number(volume.toFixed(1)),     // 매도 수량
       ord_type: 'limit',  // 지정가 주문
     };
 
@@ -190,7 +191,7 @@ async function sellTether(price, volume) {
     const response = await axios.post(`${SERVER_URL}/v1/orders`, orderData, { headers });
 
     if (response.status === 201) {
-      console.log('지정가 매도 주문 성공:', response.data);
+      console.log(`지정가 매도 주문 성공 (${coinType}):`, response.data);
       return response.data;
     } else {
       console.error(`Error: ${response.status}, ${response.data}`);
@@ -202,16 +203,17 @@ async function sellTether(price, volume) {
   }
 }
 
-async function buyTether(price, volume) {
+async function buyCoin(price, volume, coinType = 'USDT') {
   try {
     
     // 지정가 매수 주문 데이터
+    const market = coinType === 'USDC' ? 'KRW-USDC' : 'KRW-USDT';
     const orderData = {
-      market: 'KRW-USDT', // 테더 시장
+      market: market,
       side: 'bid',        // 매수
       // 주문 가격은 정수(원 단위)로 보냄
       price: Math.round(Number(price)),
-      volume: Number(volume.toFixed(1)),     // 매수 수량 (USDT)
+      volume: Number(volume.toFixed(1)),     // 매수 수량
       ord_type: 'limit',  // 지정가 주문
     };
 
@@ -223,7 +225,7 @@ async function buyTether(price, volume) {
     const response = await axios.post(`${SERVER_URL}/v1/orders`, orderData, { headers });
 
     if (response.status === 201) {
-      //console.log('지정가 매수 주문 성공:', response.data);
+      //console.log(`지정가 매수 주문 성공 (${coinType}):`, response.data);
       return response.data;
     } else {
       console.error(`❌ 매수 주문 API 응답 에러: HTTP ${response.status}`, response.data);
@@ -448,30 +450,36 @@ async function getExchangeRate() {
   }
 }
 
-async function getTetherPrice() {
+async function getCoinPrice(coinType = 'USDT') {
   try {
     // API 호출 URL
     const url = `${SERVER_URL}/v1/ticker`;
 
-    // 요청 파라미터: 테더 시장 (KRW-USDT)
+    // 요청 파라미터: 코인 시장
+    const market = coinType === 'USDC' ? 'KRW-USDC' : 'KRW-USDT';
     const params = {
-      markets: 'KRW-USDT',
+      markets: market,
     };
 
     // API 호출
     const response = await axios.get(url, { params });
 
     if (response.status === 200) {
-      const tickerData = response.data[0]; // 첫 번째 데이터 (KRW-USDT)
+      const tickerData = response.data[0]; // 첫 번째 데이터
       return tickerData.trade_price;
     } else {
       console.error(`Error: ${response.status}, ${response.data}`);
       return null;
     }
   } catch (error) {
-    console.error('Error fetching Tether price:', error.message);
+    console.error(`Error fetching ${coinType} price:`, error.message);
     return null;
   }
+}
+
+// 하위 호환성을 위한 별칭
+async function getTetherPrice() {
+  return getCoinPrice('USDT');
 }
 
 function formatNumber(num) {
@@ -560,8 +568,16 @@ async function processBuyOrder(order, orderState, rate) {
     return false; // 처리 실패
   }
 
-  const expactedBuyPrice = Math.round(rate * (1 + buyThreshold / 100));
-  const expactedSellPrice = Math.round(rate * (1 + sellThreshold / 100));
+  // 코인 타입에 따라 가격 가져오기
+  const coinType = order.coinType || 'USDT';
+  const coinPrice = await getCoinPrice(coinType);
+  if (!coinPrice) {
+    console.log(`[주문 ${order.id}] ${coinType} 가격 조회 실패`);
+    return false;
+  }
+
+  const expactedBuyPrice = Math.round(coinPrice * (1 + buyThreshold / 100));
+  const expactedSellPrice = Math.round(coinPrice * (1 + sellThreshold / 100));
   
 
   const orderedData = await checkOrderedData(order.uuid);
@@ -621,9 +637,17 @@ async function processSellOrder(order, orderState, rate) {
     return false; // 처리 실패
   }
 
+  // 코인 타입에 따라 가격 가져오기
+  const coinType = order.coinType || 'USDT';
+  const coinPrice = await getCoinPrice(coinType);
+  if (!coinPrice) {
+    console.log(`[주문 ${order.id}] ${coinType} 가격 조회 실패`);
+    return false;
+  }
+
   // 주문 가격은 정수(원 단위)로 맞춤
-  const expactedBuyPrice = Math.round(rate * (1 + buyThreshold / 100));
-  const expactedSellPrice = Math.round(rate * (1 + sellThreshold / 100));
+  const expactedBuyPrice = Math.round(coinPrice * (1 + buyThreshold / 100));
+  const expactedSellPrice = Math.round(coinPrice * (1 + sellThreshold / 100));
 
   const orderedData = await checkOrderedData(order.uuid);
   if (orderedData == null) {
@@ -685,19 +709,27 @@ async function processPendingOrders(orderState, rate) {
 
     if (buyThreshold == null || sellThreshold == null) {
       console.log(`[주문 ${order.id}] 매수 또는 매도 기준 프리미엄 설정 없음`);
-      return false; // 처리 실패
+      continue; // 다음 주문으로
     }
 
-    const expactedBuyPrice = Math.round(rate * (1 + buyThreshold / 100));
-    const expactedSellPrice = Math.round(rate * (1 + sellThreshold / 100));
+    // 코인 타입에 따라 가격 가져오기
+    const coinType = order.coinType || 'USDT';
+    const coinPrice = await getCoinPrice(coinType);
+    if (!coinPrice) {
+      console.log(`[주문 ${order.id}] ${coinType} 가격 조회 실패`);
+      continue; // 다음 주문으로
+    }
+
+    const expactedBuyPrice = Math.round(coinPrice * (1 + buyThreshold / 100));
+    const expactedSellPrice = Math.round(coinPrice * (1 + sellThreshold / 100));
     
     if (order.status === 'sell_pending') {
       // volume은 이미 수량으로 계산되어 있음
       const volumeToSell = order.volume;
       
       if (volumeToSell > 0) {
-        console.log(`[주문 ${order.id}] 김치 ${sellThreshold.toFixed(1)}% 에, ${expactedSellPrice} 원에 ${volumeToSell} 매도 주문 걸기`);
-        const sellOrder = await sellTether(expactedSellPrice, volumeToSell);
+        console.log(`[주문 ${order.id}] 김치 ${sellThreshold.toFixed(1)}% 에, ${expactedSellPrice} 원에 ${volumeToSell} ${coinType} 매도 주문 걸기`);
+        const sellOrder = await sellCoin(expactedSellPrice, volumeToSell, coinType);
         if (sellOrder) {
           console.log(`[주문 ${order.id}] 매도 주문 성공, UUID: ${sellOrder.uuid}`);
           setSellOrdered(order, sellOrder.uuid, sellOrder.price, sellOrder.volume); 
@@ -712,8 +744,8 @@ async function processPendingOrders(orderState, rate) {
       const volumeToBuy = order.volume;
       
       if (volumeToBuy > 0) {
-        console.log(`[주문 ${order.id}] 매수 주문 생성: 김치 ${buyThreshold.toFixed(1)}% 에, ${expactedBuyPrice} 원에 ${volumeToBuy} 매수 주문 걸기`);
-        const buyOrder = await buyTether(expactedBuyPrice, volumeToBuy);
+        console.log(`[주문 ${order.id}] 매수 주문 생성: 김치 ${buyThreshold.toFixed(1)}% 에, ${expactedBuyPrice} 원에 ${volumeToBuy} ${coinType} 매수 주문 걸기`);
+        const buyOrder = await buyCoin(expactedBuyPrice, volumeToBuy, coinType);
         if (buyOrder) {
           setBuyOrdered(order, buyOrder.uuid, buyOrder.price, buyOrder.volume); 
           console.log(`[주문 ${order.id}] 매수 주문 성공, UUID: ${buyOrder.uuid}`);
@@ -751,8 +783,8 @@ async function trade() {
   if (accountInfo) {
     console.log('========= 코인 및 현금 정보 ===========');
     accountInfo.forEach((asset) => {
-      if (asset.currency !== 'KRW' && asset.currency !== 'USDT') {
-        return; // KRW와 USDT를 제외한 다른 자산은 출력하지 않음
+      if (asset.currency !== 'KRW' && asset.currency !== 'USDT' && asset.currency !== 'USDC') {
+        return; // KRW, USDT, USDC를 제외한 다른 자산은 출력하지 않음
       }
 
       console.log(
@@ -762,9 +794,10 @@ async function trade() {
     console.log('-----------------------------------');
 
     const rate = await getExchangeRate();
-    const tetherPrice = await getTetherPrice();
+    const tetherPrice = await getCoinPrice('USDT');
+    const usdcPrice = await getCoinPrice('USDC');
 
-    // 김치 프리미엄 계산
+    // 김치 프리미엄 계산 (USDT 기준)
     const kimchiPremium = ((tetherPrice - rate)/rate) * 100;
 
     // 다중 주문 처리: 각 주문의 상태 확인 및 업데이트
@@ -782,28 +815,30 @@ async function trade() {
       }
     }
 
-    updateCashBalnce(orderState, accountInfo, tetherPrice);
+    updateCashBalnce(orderState, accountInfo, { USDT: tetherPrice, USDC: usdcPrice });
     
-    console.log(`현재 테더: ${tetherPrice}원, 환율: ${rate}원, 김프: ${kimchiPremium.toFixed(2)}%`);
+    console.log(`현재 USDT: ${tetherPrice}원, USDC: ${usdcPrice}원, 환율: ${rate}원, 김프: ${kimchiPremium.toFixed(2)}%`);
 
     // 매도 대기 또는 매수 대기 주문 처리 (sell_pending → sell_ordered, buy_pending → buy_ordered)
     await processPendingOrders(orderState, rate);
   }
 }
 
-function updateCashBalnce(orderState, accountInfo, tetherPrice) {
+function updateCashBalnce(orderState, accountInfo, coinPrices) {
   let isUpdated = false;
 
   const krwAccount = accountInfo.find(asset => asset.currency === 'KRW');
   const usdtAccount = accountInfo.find(asset => asset.currency === 'USDT');
+  const usdcAccount = accountInfo.find(asset => asset.currency === 'USDC');
 
-  if (krwAccount == null || usdtAccount == null) {
-    console.error('KRW 또는 USDT 계정을 찾을 수 없습니다.');
+  if (krwAccount == null) {
+    console.error('KRW 계정을 찾을 수 없습니다.');
     return false;
   }
 
   const availableMoney = parseFloat(krwAccount.balance);
-  const availableUsdt = parseFloat(usdtAccount.balance);
+  const availableUsdt = usdtAccount ? parseFloat(usdtAccount.balance) : 0;
+  const availableUsdc = usdcAccount ? parseFloat(usdcAccount.balance) : 0;
 
   const buyWaitingAmount = orderState.orders
         .filter(o => o.status === 'buy_pending' || o.status === 'buy_ordered')
@@ -811,23 +846,31 @@ function updateCashBalnce(orderState, accountInfo, tetherPrice) {
           if (order.status === 'buy_ordered' && order.price) {
             // buy_ordered 상태이고 price가 있으면 volume * price
             return sum + ((order.volume || 0) * order.price);
-          } else if (order.status === 'buy_pending' && order.buyThreshold != null && tetherPrice) {
+          } else if (order.status === 'buy_pending' && order.buyThreshold != null) {
             // buy_pending 상태일 때는 예상 가격 계산 (volume * expactedBuyPrice)
-            const expactedBuyPrice = Math.round(tetherPrice * (1 + order.buyThreshold / 100));
-            return sum + ((order.volume || 0) * expactedBuyPrice);
+            const coinType = order.coinType || 'USDT';
+            const coinPrice = coinPrices[coinType];
+            if (coinPrice) {
+              const expactedBuyPrice = Math.round(coinPrice * (1 + order.buyThreshold / 100));
+              return sum + ((order.volume || 0) * expactedBuyPrice);
+            }
           }
           return sum;
         }, 0);
   
   const krwBalance = availableMoney + buyWaitingAmount;
 
-  // 매도 대기 중인 주문들의 테더 합계 계산 - pending과 ordered 모두 포함
+  // 매도 대기 중인 주문들의 코인 합계 계산 - pending과 ordered 모두 포함
   const sellWaitingOrders = orderState.orders.filter(o => o.status === 'sell_pending' || o.status === 'sell_ordered');
-  const sellWaitingUsdt = sellWaitingOrders.reduce((sum, order) => {
-    // volume은 항상 수량
-    return sum + (parseFloat(order.volume) || 0);
-  }, 0);
+  const sellWaitingUsdt = sellWaitingOrders
+    .filter(o => (o.coinType || 'USDT') === 'USDT')
+    .reduce((sum, order) => sum + (parseFloat(order.volume) || 0), 0);
+  const sellWaitingUsdc = sellWaitingOrders
+    .filter(o => o.coinType === 'USDC')
+    .reduce((sum, order) => sum + (parseFloat(order.volume) || 0), 0);
+  
   const usdtBalance = availableUsdt + sellWaitingUsdt;
+  const usdcBalance = availableUsdc + sellWaitingUsdc;
 
   // 전체 원화 평가 금액
   if (cashBalance.krwBalance != krwBalance) {
@@ -835,9 +878,15 @@ function updateCashBalnce(orderState, accountInfo, tetherPrice) {
     isUpdated = true;
   }
 
-  // 전체 테더 평가 금액
+  // 전체 USDT 평가 금액
   if (cashBalance.usdtBalance != usdtBalance) {
     cashBalance.usdtBalance = usdtBalance;
+    isUpdated = true;
+  }
+
+  // 전체 USDC 평가 금액
+  if (cashBalance.usdcBalance != usdcBalance) {
+    cashBalance.usdcBalance = usdcBalance;
     isUpdated = true;
   }
   
@@ -847,9 +896,15 @@ function updateCashBalnce(orderState, accountInfo, tetherPrice) {
     isUpdated = true;
   }
    
-  // 매도 가능 테더 잔액
+  // 매도 가능 USDT 잔액
   if (cashBalance.availableUsdt != availableUsdt) {
     cashBalance.availableUsdt = availableUsdt;
+    isUpdated = true;
+  }
+
+  // 매도 가능 USDC 잔액
+  if (cashBalance.availableUsdc != availableUsdc) {
+    cashBalance.availableUsdc = availableUsdc;
     isUpdated = true;
   }
   
@@ -916,7 +971,8 @@ const upbitTradeModule = {
   },
   trade: trade,
   loop: loop,
-  getTetherPrice: getTetherPrice
+  getTetherPrice: getTetherPrice,
+  getCoinPrice: getCoinPrice
 };
 
 module.exports = upbitTradeModule;

@@ -15,13 +15,16 @@ export default function TradePage() {
   const [tradeAmount, setTradeAmount] = useState(''); // 매수 금액/수량 입력값
   const [sellAmount, setSellAmount] = useState(''); // 매도 금액/수량 입력값
   const [isTradeByMoney, setIsTradeByMoney] = useState(true); // 매매 방식: true=금액, false=수량
+  const [coinType, setCoinType] = useState('USDT'); // 코인 타입: 'USDT' or 'USDC'
   const [logs, setLogs] = useState('불러오는 중...');
   const [configLoaded, setConfigLoaded] = useState(false);
   const [balance, setBalance] = useState({ 
     krwBalance: 0, 
     usdtBalance: 0, 
+    usdcBalance: 0,
     availableMoney: 0, 
-    availableUsdt: 0 
+    availableUsdt: 0,
+    availableUsdc: 0
   });
   const [monitorData, setMonitorData] = useState(null);
   const [tasks, setTasks] = useState([]);
@@ -278,8 +281,10 @@ export default function TradePage() {
           setBalance({
             krwBalance: data.balance.krwBalance || 0,
             usdtBalance: data.balance.usdtBalance || 0,
+            usdcBalance: data.balance.usdcBalance || 0,
             availableMoney: data.balance.availableMoney || 0,
-            availableUsdt: data.balance.availableUsdt || 0
+            availableUsdt: data.balance.availableUsdt || 0,
+            availableUsdc: data.balance.availableUsdc || 0
           });
         }
       }
@@ -340,7 +345,8 @@ export default function TradePage() {
           amount: Number(amount),
           buyThreshold: buyThreshold,
           sellThreshold: sellThreshold,
-          isTradeByMoney: isTradeByMoney
+          isTradeByMoney: isTradeByMoney,
+          coinType: coinType
         })
       });
 
@@ -391,7 +397,8 @@ export default function TradePage() {
           amount: Number(amount),
           buyThreshold: buyThreshold,
           sellThreshold: sellThreshold,
-          isTradeByMoney: isTradeByMoney // 매도 방식 전달
+          isTradeByMoney: isTradeByMoney, // 매도 방식 전달
+          coinType: coinType
         })
       });
 
@@ -532,13 +539,20 @@ export default function TradePage() {
               </div>
               <div style={{ width: '1px', height: '40px', backgroundColor: '#bbb' }}></div>
               <div style={{ textAlign: 'center' }}>
-                <div style={{ fontSize: '12px', color: '#666', marginBottom: '5px' }}>보유 테더</div>
+                <div style={{ fontSize: '12px', color: '#666', marginBottom: '5px' }}>보유 USDT</div>
                 <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#1976d2' }}>
                   {Number(balance.usdtBalance || 0).toFixed(1)} USDT
                 </div>
               </div>
+              <div style={{ width: '1px', height: '40px', backgroundColor: '#bbb' }}></div>
+              <div style={{ textAlign: 'center' }}>
+                <div style={{ fontSize: '12px', color: '#666', marginBottom: '5px' }}>보유 USDC</div>
+                <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#1976d2' }}>
+                  {Number(balance.usdcBalance || 0).toFixed(1)} USDC
+                </div>
+              </div>
             </div>
-            {/* 두 번째 줄: 주문 가능 현금, 주문 가능 테더 */}
+            {/* 두 번째 줄: 주문 가능 현금, 주문 가능 USDT, 주문 가능 USDC */}
             <div style={{
               display: 'flex',
               justifyContent: 'space-around',
@@ -552,9 +566,16 @@ export default function TradePage() {
               </div>
               <div style={{ width: '1px', height: '40px', backgroundColor: '#bbb' }}></div>
               <div style={{ textAlign: 'center' }}>
-                <div style={{ fontSize: '12px', color: '#666', marginBottom: '5px' }}>주문 가능 테더</div>
+                <div style={{ fontSize: '12px', color: '#666', marginBottom: '5px' }}>주문 가능 USDT</div>
                 <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#1976d2' }}>
                   {Number(balance.availableUsdt || 0).toFixed(1)} USDT
+                </div>
+              </div>
+              <div style={{ width: '1px', height: '40px', backgroundColor: '#bbb' }}></div>
+              <div style={{ textAlign: 'center' }}>
+                <div style={{ fontSize: '12px', color: '#666', marginBottom: '5px' }}>주문 가능 USDC</div>
+                <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#1976d2' }}>
+                  {Number(balance.availableUsdc || 0).toFixed(1)} USDC
                 </div>
               </div>
             </div>
@@ -639,10 +660,23 @@ export default function TradePage() {
 
           {/* 탭 내용 */}
           <div>
-            {/* 테더 매수 탭 */}
+            {/* 코인 매수 탭 */}
             {activeTab === 'buy' && (
               <div id="buyTab">
                 <div style={{ marginBottom: '15px', padding: '15px', backgroundColor: '#f5f5f5', borderRadius: '4px' }}>
+                  <div style={{ fontSize: '14px', color: '#666', marginBottom: '10px' }}>코인 타입</div>
+                  <select value={coinType} onChange={(e) => setCoinType(e.target.value)} style={{
+                    width: '100%',
+                    padding: '12px',
+                    marginBottom: '15px',
+                    boxSizing: 'border-box',
+                    fontSize: '16px',
+                    border: '1px solid #ddd',
+                    borderRadius: '4px'
+                  }}>
+                    <option value="USDT">USDT</option>
+                    <option value="USDC">USDC</option>
+                  </select>
                   <div style={{ fontSize: '14px', color: '#666', marginBottom: '10px' }}>매매 방식</div>
                   <label style={{ display: 'block', marginBottom: '10px' }}>
                     <input type="radio" name="trade-type" value="money" checked={isTradeByMoney} onChange={() => {
@@ -694,7 +728,7 @@ export default function TradePage() {
                     fontSize: '16px',
                     border: '1px solid #ddd',
                     borderRadius: '4px'
-                  }} placeholder={isTradeByMoney ? "매수 금액 (원)" : "매수 수량 (USDT)"} />
+                  }} placeholder={isTradeByMoney ? "매수 금액 (원)" : `매수 수량 (${coinType})`} />
                   <div style={{ fontSize: '12px', color: '#666', marginTop: '5px' }}>현재 보유 금액: {Number(balance.availableMoney || 0).toLocaleString()}원</div>
                   <button onClick={addBuyTask} style={{
                     width: '100%',
@@ -712,10 +746,23 @@ export default function TradePage() {
               </div>
             )}
 
-            {/* 테더 매도 탭 */}
+            {/* 코인 매도 탭 */}
             {activeTab === 'sell' && (
               <div id="sellTab">
                 <div style={{ marginBottom: '15px', padding: '15px', backgroundColor: '#f5f5f5', borderRadius: '4px' }}>
+                  <div style={{ fontSize: '14px', color: '#666', marginBottom: '10px' }}>코인 타입</div>
+                  <select value={coinType} onChange={(e) => setCoinType(e.target.value)} style={{
+                    width: '100%',
+                    padding: '12px',
+                    marginBottom: '15px',
+                    boxSizing: 'border-box',
+                    fontSize: '16px',
+                    border: '1px solid #ddd',
+                    borderRadius: '4px'
+                  }}>
+                    <option value="USDT">USDT</option>
+                    <option value="USDC">USDC</option>
+                  </select>
                   <div style={{ fontSize: '14px', color: '#666', marginBottom: '10px' }}>매매 방식</div>
                   <label style={{ display: 'block', marginBottom: '10px' }}>
                     <input type="radio" name="sell-trade-type" value="money" checked={isTradeByMoney} onChange={() => {
@@ -767,12 +814,12 @@ export default function TradePage() {
                     fontSize: '16px',
                     border: '1px solid #ddd',
                     borderRadius: '4px'
-                  }} placeholder={isTradeByMoney ? "매도 금액 (원)" : "매도 수량 (USDT)"} />
+                  }} placeholder={isTradeByMoney ? "매도 금액 (원)" : `매도 수량 (${coinType})`} />
                   <div style={{ fontSize: '12px', color: '#666', marginTop: '5px' }}>
                     {isTradeByMoney ? (
                       <>현재 보유 금액: {Number(balance.availableMoney || 0).toLocaleString()}원</>
                     ) : (
-                      <>현재 보유 테더: {Number(balance.availableUsdt || 0).toFixed(1)} USDT</>
+                      <>현재 보유 {coinType}: {Number(coinType === 'USDC' ? (balance.availableUsdc || 0) : (balance.availableUsdt || 0)).toFixed(1)} {coinType}</>
                     )}
                   </div>
                   <button onClick={addSellTask} style={{
@@ -805,7 +852,7 @@ export default function TradePage() {
                 cursor: 'pointer',
                 fontSize: '16px',
                 fontWeight: 'bold'
-              }}>테더 매수</button>
+              }}>코인 매수</button>
               <button onClick={() => setActiveTab('sell')} style={{
                 flex: 1,
                 padding: '12px',
@@ -816,7 +863,7 @@ export default function TradePage() {
                 cursor: 'pointer',
                 fontSize: '16px',
                 fontWeight: 'bold'
-              }}>테더 매도</button>
+              }}>코인 매도</button>
             </div>
           </div>
 
@@ -926,7 +973,7 @@ export default function TradePage() {
                                 <div>매도가: {Number(task.price).toLocaleString()}원</div>
                               )}
                               {task.volume && (
-                                <div>수량: {Number(task.volume).toFixed(1)} USDT</div>
+                                <div>수량: {Number(task.volume).toFixed(1)} {task.coinType || 'USDT'}</div>
                               )}
                             </>
                           )}
@@ -940,14 +987,14 @@ export default function TradePage() {
                                 <div>매수가: {Number(task.price).toLocaleString()}원</div>
                               )}
                               {task.volume && (
-                                <div>수량: {Number(task.volume).toFixed(1)} USDT</div>
+                                <div>수량: {Number(task.volume).toFixed(1)} {task.coinType || 'USDT'}</div>
                               )}
                             </>
                           )}
                           {task.status !== 'sell_ordered' && task.type === 'sell' && (
                             <>
                               {task.volume && (
-                                <div>매도 수량: {Number(task.volume).toFixed(1)} USDT</div>
+                                <div>매도 수량: {Number(task.volume).toFixed(1)} {task.coinType || 'USDT'}</div>
                               )}
                               {task.price && (
                                 <div>매도가: {Number(task.price).toLocaleString()}원</div>

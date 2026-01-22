@@ -64,17 +64,17 @@ function loadUpbitTradeModule() {
 }
 
 // volume 계산 함수
-async function calculateVolume(type, amount, isTradeByMoney, buyThreshold, sellThreshold) {
+async function calculateVolume(type, amount, isTradeByMoney, buyThreshold, sellThreshold, coinType = 'USDT') {
   if (isTradeByMoney) {
-    // isTradeByMoney가 true일 경우 테더 가격을 가져와서 volume 계산
+    // isTradeByMoney가 true일 경우 코인 가격을 가져와서 volume 계산
     const module = loadUpbitTradeModule();
-    if (!module || typeof module.getTetherPrice !== 'function') {
-      throw new Error('테더 가격을 가져올 수 없습니다');
+    if (!module || typeof module.getCoinPrice !== 'function') {
+      throw new Error('코인 가격을 가져올 수 없습니다');
     }
 
-    const tetherPrice = await module.getTetherPrice();
-    if (!tetherPrice) {
-      throw new Error('테더 가격 조회 실패');
+    const coinPrice = await module.getCoinPrice(coinType);
+    if (!coinPrice) {
+      throw new Error(`${coinType} 가격 조회 실패`);
     }
 
     const money = Number(amount);
@@ -84,12 +84,12 @@ async function calculateVolume(type, amount, isTradeByMoney, buyThreshold, sellT
       if (buyThreshold == null) {
         throw new Error('매수 작업은 buyThreshold 값이 필요합니다');
       }
-      expactedPrice = Math.round(tetherPrice * (1 + buyThreshold / 100));
+      expactedPrice = Math.round(coinPrice * (1 + buyThreshold / 100));
     } else {
       if (sellThreshold == null) {
         throw new Error('매도 작업은 sellThreshold 값이 필요합니다');
       }
-      expactedPrice = Math.round(tetherPrice * (1 + sellThreshold / 100));
+      expactedPrice = Math.round(coinPrice * (1 + sellThreshold / 100));
     }
 
     const volume = Math.floor(money / expactedPrice);
@@ -132,7 +132,7 @@ export async function POST(request) {
 
   try {
     const body = await request.json();
-    const { type, amount, isTradeByMoney, buyThreshold, sellThreshold } = body; // type: 'buy' or 'sell', amount: 투자 금액 또는 수량, isTradeByMoney: 매매 방식, buyThreshold/sellThreshold: 프리미엄
+    const { type, amount, isTradeByMoney, buyThreshold, sellThreshold, coinType } = body; // type: 'buy' or 'sell', amount: 투자 금액 또는 수량, isTradeByMoney: 매매 방식, buyThreshold/sellThreshold: 프리미엄, coinType: 'USDT' or 'USDC'
 
     if (!type || !['buy', 'sell'].includes(type)) {
       return Response.json({ error: 'type은 "buy" 또는 "sell"이어야 합니다' }, { status: 400 });
@@ -142,6 +142,9 @@ export async function POST(request) {
       return Response.json({ error: 'amount는 0보다 큰 숫자여야 합니다' }, { status: 400 });
     }
 
+    // coinType 검증 및 기본값 설정
+    const validCoinType = (coinType === 'USDC' || coinType === 'USDT') ? coinType : 'USDT';
+
     // 매도 작업의 경우 isTradeByMoney는 무조건 웹페이지에서 전달받은 값 사용
     if (type === 'sell' && isTradeByMoney === undefined) {
       return Response.json({ error: '매도 작업은 isTradeByMoney 값이 필요합니다' }, { status: 400 });
@@ -150,7 +153,7 @@ export async function POST(request) {
     // volume 계산
     let volume;
     try {
-      volume = await calculateVolume(type, amount, isTradeByMoney, buyThreshold, sellThreshold);
+      volume = await calculateVolume(type, amount, isTradeByMoney, buyThreshold, sellThreshold, validCoinType);
     } catch (error) {
       const statusCode = error.message.includes('필요합니다') || error.message.includes('0 이하') ? 400 : 500;
       return Response.json({ error: error.message }, { status: statusCode });
@@ -164,7 +167,8 @@ export async function POST(request) {
       sellThreshold: sellThreshold,
       createdAt: new Date().toISOString(),
       type: type,
-      volume: Number(volume)
+      volume: Number(volume),
+      coinType: validCoinType
     };
 
     // 메모리 업데이트
