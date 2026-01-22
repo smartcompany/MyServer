@@ -7,6 +7,7 @@ const logFilePath = getTradeServerPath('trade-logs.txt');
 
 export async function GET(request) {
   const auth = verifyToken(request);
+  
   if (auth.error) {
     return Response.json({ error: auth.error }, { status: auth.status });
   }
