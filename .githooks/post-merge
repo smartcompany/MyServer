@@ -81,7 +81,8 @@ pm2_recreate_by_file() {
   pm2 delete "$app_name" 2>/dev/null || true
 
   echo "🚀 ${app_name} 시작 중... (file=${file_path})"
-  pm2 start "$file_path" --name "$app_name"
+  # 작업 디렉토리를 명시적으로 설정하여 상대 경로 파일들을 찾을 수 있도록 함
+  pm2 start "$file_path" --name "$app_name" --cwd "$ROOT_DIR"
 }
 # package.json이나 package-lock.json이 변경되었는지 확인
 if echo "$CHANGED_FILES" | grep -qE "(package\.json|package-lock\.json)"; then
