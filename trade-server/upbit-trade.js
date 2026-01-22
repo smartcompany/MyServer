@@ -797,13 +797,16 @@ function updateCashBalnce(orderState, accountInfo, tetherPrice) {
   const krwAccount = accountInfo.find(asset => asset.currency === 'KRW');
   const usdtAccount = accountInfo.find(asset => asset.currency === 'USDT');
 
-  if (krwAccount == null || usdtAccount == null) {
-    console.error('KRW 또는 USDT 계정을 찾을 수 없습니다.');
-    return false;
-  }
+  // KRW 또는 USDT 계정이 없으면 0으로 처리하고 계속 진행
+  const availableMoney = krwAccount ? parseFloat(krwAccount.balance) : 0;
+  const availableUsdt = usdtAccount ? parseFloat(usdtAccount.balance) : 0;
 
-  const availableMoney = parseFloat(krwAccount.balance);
-  const availableUsdt = parseFloat(usdtAccount.balance);
+  if (krwAccount == null) {
+    console.log('[updateCashBalnce] KRW 계정이 없습니다. 0원으로 처리합니다.');
+  }
+  if (usdtAccount == null) {
+    console.log('[updateCashBalnce] USDT 계정이 없습니다. 0으로 처리합니다.');
+  }
 
   const buyWaitingAmount = orderState.orders
         .filter(o => o.status === 'buy_pending' || o.status === 'buy_ordered')
