@@ -28,6 +28,7 @@ export default function TradePage() {
   const [monitorData, setMonitorData] = useState(null);
   const [tasks, setTasks] = useState([]);
   const [taskTab, setTaskTab] = useState('tasks'); // 'tasks' or 'logs'
+  const [currentTime, setCurrentTime] = useState('');
 
   useEffect(() => {
     checkAuth();
@@ -49,6 +50,28 @@ export default function TradePage() {
       };
     }
   }, [mainArea]);
+
+  // 현재 시간 업데이트 (1초마다)
+  useEffect(() => {
+    const updateTime = () => {
+      const now = new Date();
+      const koreaTime = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Seoul' }));
+      const timeString = koreaTime.toLocaleTimeString('ko-KR', { 
+        hour: '2-digit', 
+        minute: '2-digit', 
+        second: '2-digit',
+        hour12: false 
+      });
+      setCurrentTime(timeString);
+    };
+    
+    updateTime(); // 즉시 실행
+    const timeInterval = setInterval(updateTime, 1000);
+    
+    return () => {
+      clearInterval(timeInterval);
+    };
+  }, []);
 
   function checkAuth() {
     const token = localStorage.getItem('token');
@@ -935,7 +958,21 @@ export default function TradePage() {
           {/* 거래 중지 시간 설정 */}
           <div style={{ marginTop: '20px', padding: '15px', backgroundColor: '#fff3e0', borderRadius: '4px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
-              <h3 style={{ margin: 0 }}>⏰ 거래 중지 시간 설정</h3>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <h3 style={{ margin: 0 }}>⏰ 거래 중지 시간 설정</h3>
+                {currentTime && (
+                  <span style={{ 
+                    fontSize: '14px', 
+                    color: '#666', 
+                    fontWeight: 'normal',
+                    padding: '4px 8px',
+                    backgroundColor: '#f5f5f5',
+                    borderRadius: '4px'
+                  }}>
+                    현재 시간: {currentTime}
+                  </span>
+                )}
+              </div>
               <div style={{ display: 'flex', gap: '10px' }}>
                 <button onClick={addStopTradingTime} style={{
                   padding: '6px 12px',
