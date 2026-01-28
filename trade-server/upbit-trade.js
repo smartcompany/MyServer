@@ -677,19 +677,31 @@ async function processSellOrder(order, orderState, rate) {
   return true; // 처리 완료
 }
 
-async function processPendingOrders(orderState, rate) {
+async function processPendingOrders(orderState, rate, tetherPrice) {
   for (const order of orderState.orders) {
     // 매도 대기 중인 주문에 대해 매도 주문 생성 (sell_pending → sell_ordered)
     const buyThreshold = order.buyThreshold;
     const sellThreshold = order.sellThreshold;
 
-    if (buyThreshold == null || sellThreshold == null) {
-      console.log(`[주문 ${order.id}] 매수 또는 매도 기준 프리미엄 설정 없음`);
+    if (buyThreshold == null || sellThreshold == null || tetherPrice == null) {
+      console.log(`[주문 ${order.id}] 매수 또는 매도 기준 프리미엄 설정 없거나 테더 가격 없음`);
       return false; // 처리 실패
     }
 
-    const expactedBuyPrice = Math.round(rate * (1 + buyThreshold / 100));
-    const expactedSellPrice = Math.round(rate * (1 + sellThreshold / 100));
+    let expactedBuyPrice = Math.round(rate * (1 + buyThreshold / 100));
+    let expactedSellPrice = Math.round(rate * (1 + sellThreshold / 100));
+    
+    // 매수 가격은 현재 테더 가격보다 낮아야 함 (현재가가 최고값)
+    if (expactedBuyPrice > tetherPrice) {
+      expactedBuyPrice = tetherPrice;
+      console.log(`[주문 ${order.id}] 계산된 매수가가 현재가(${tetherPrice}원)보다 높아 현재가로 조정: ${expactedBuyPrice}원`);
+    }
+    
+    // 매도 가격은 현재 테더 가격보다 높아야 함 (현재가가 최저값)
+    if (expactedSellPrice < tetherPrice) {
+      expactedSellPrice = tetherPrice;
+      console.log(`[주문 ${order.id}] 계산된 매도가가 현재가(${tetherPrice}원)보다 낮아 현재가로 조정: ${expactedSellPrice}원`);
+    }
     
     if (order.status === 'sell_pending') {
       // volume은 이미 수량으로 계산되어 있음
@@ -900,7 +912,7 @@ async function trade() {
   updateCashBalnce(orderState, accountInfo, tetherPrice);
 
   // 매도 대기 또는 매수 대기 주문 처리 (sell_pending → sell_ordered, buy_pending → buy_ordered)
-  await processPendingOrders(orderState, rate);
+  await processPendingOrders(orderState, rate, tetherPrice);
 }
 
 function updateCashBalnce(orderState, accountInfo, tetherPrice) {
