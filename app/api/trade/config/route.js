@@ -56,15 +56,12 @@ export async function POST(request) {
     let changed = false;
 
     updates.forEach(({ key, value }) => {
-      console.log(`📥 [config API] 업데이트 요청: ${key} = ${value} (타입: ${typeof value})`);
-      if (key in config) {
-        const oldValue = config[key];
-        config[key] = value;
-        console.log(`🔧 설정 변경됨: ${key} = ${value} (이전: ${oldValue})`);
-        changed = true;
-      } else {
-        console.log(`⚠️ [config API] 알 수 없는 설정 키: ${key}`);
-      }
+      console.log(`📥 [config API] 업데이트 요청: ${key} = ${JSON.stringify(value)} (타입: ${typeof value})`);
+      // stopTradingTimes 같은 배열도 업데이트 가능하도록 key 존재 여부 체크 제거
+      const oldValue = config[key];
+      config[key] = value;
+      console.log(`🔧 설정 변경됨: ${key} = ${JSON.stringify(value)} (이전: ${JSON.stringify(oldValue)})`);
+      changed = true;
     });
     
     console.log(`📋 [config API] 최종 config:`, JSON.stringify(config, null, 2));

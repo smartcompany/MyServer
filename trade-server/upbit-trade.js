@@ -573,7 +573,7 @@ async function processBuyOrder(order, orderState, rate) {
   switch (orderedData.state) {
     case 'done':
       // 매수 체결 → 매도 대기 상태로 전환
-      console.log(`[주문 ${order.id}] 매수 주문 처리됨: ${orderedData.price}원, 수량: ${orderedData.volume}`);
+      console.log(`매수 주문 처리됨: ${orderedData.price}원, 수량: ${orderedData.volume} [주문 ${order.id}]`);
       
       // 테더 매도로 전환 (수량과 예상 매도 가격 전달)
       setSellPending(order, orderedData.volume, expactedSellPrice);
@@ -724,29 +724,39 @@ async function processPendingOrders(orderState, rate) {
   }
 }
 
-async function trade() {
-  const prevConfig = loadConfig();
-  const config = loadConfig();
+// stopTradingTimes 체크 함수
+function isInStopTradingTime(config) {
+  if (!config.stopTradingTimes || !Array.isArray(config.stopTradingTimes) || config.stopTradingTimes.length === 0) {
+    return false;
+  }
 
-  let orderState = loadOrderState();
-  
-  if (prevConfig.isTrading == true) {
-    if (config.isTrading == false) {
-      console.log('트레이딩 중지');
-    }
-  } else {
-    if (config.isTrading == true) {
-      console.log('트레이딩 시작');
+  const now = moment().tz("Asia/Seoul");
+  const currentTime = now.format("HH:mm:ss");
+  const currentDate = now.format("YYYY-MM-DD");
+
+  for (const timeRange of config.stopTradingTimes) {
+    const startTime = timeRange.start;
+    const endTime = timeRange.end;
+
+    // endTime이 startTime보다 작으면 다음날까지 (예: 23:00-01:00)
+    if (endTime < startTime) {
+      // 현재 시간이 startTime 이후이거나 endTime 이전이면 중지 시간
+      if (currentTime >= startTime || currentTime <= endTime) {
+        return true;
+      }
+    } else {
+      // 일반적인 경우 (예: 08:00-09:00)
+      if (currentTime >= startTime && currentTime <= endTime) {
+        return true;
+      }
     }
   }
 
-  if (config.isTrading == false) { 
-    return; 
-  }
+  return false;
+}
 
-  // command 처리 (clearAllOrders 또는 clearOrders)
-  await handleCommand(orderState);
-
+// 계정 정보 및 시장 정보 로그 출력 함수
+async function logAccountAndMarketInfo() {
   const accountInfo = await getAccountInfo();
   if (accountInfo) {
     console.log('========= 코인 및 현금 정보 ===========');
@@ -767,28 +777,130 @@ async function trade() {
     // 김치 프리미엄 계산
     const kimchiPremium = ((tetherPrice - rate)/rate) * 100;
 
-    // 다중 주문 처리: 각 주문의 상태 확인 및 업데이트
-    for (const order of orderState.orders) {
-      // 매수 주문 대기 중인 주문 체크 (업비트에 주문 넣은 상태)
-      if (order.status === 'buy_ordered') {
-        await processBuyOrder(order, orderState, rate);
-        continue; // 다음 주문으로
-      }
+    console.log(`현재 테더: ${tetherPrice}원, 환율: ${rate}원, 김프: ${kimchiPremium.toFixed(2)}%`);
+    
+    return { accountInfo, rate, tetherPrice, kimchiPremium };
+  }
+  return null;
+}
 
-      // 매도 주문 대기 중인 주문 체크 (업비트에 주문 넣은 상태)
-      if (order.status === 'sell_ordered') {
-        await processSellOrder(order, orderState, rate);
-        continue; // 다음 주문으로
+// 모든 활성 주문 취소 함수
+async function cancelAllActiveOrders(orderState) {
+  console.log('[거래 중지] 모든 활성 주문 취소 시작');
+  
+  const activeOrders = orderState.orders.filter(
+    order => order.status === 'buy_ordered' || order.status === 'sell_ordered'
+  );
+
+  if (activeOrders.length === 0) {
+    console.log('[거래 중지] 취소할 활성 주문이 없습니다');
+    return;
+  }
+
+  console.log(`[거래 중지] ${activeOrders.length}개의 활성 주문 취소 중...`);
+  
+  let canceledCount = 0;
+  
+  for (const order of activeOrders) {
+    try {
+      console.log(`[거래 중지] 주문 ${order.id} 취소 중 (UUID: ${order.uuid})`);
+      const cancelResult = await cancelOrder(order.uuid);
+      
+      if (cancelResult != null) {
+        // 취소 성공 시 상태를 pending으로 되돌림 (재개 시 다시 주문을 걸 수 있도록)
+        if (order.status === 'buy_ordered') {
+          order.status = 'buy_pending';
+          order.uuid = null; // UUID 제거 (새로운 주문을 걸 때 다시 생성됨)
+          console.log(`[거래 중지] 주문 ${order.id} 취소 성공 → buy_pending 상태로 복원`);
+        } else if (order.status === 'sell_ordered') {
+          order.status = 'sell_pending';
+          order.uuid = null; // UUID 제거 (새로운 주문을 걸 때 다시 생성됨)
+          console.log(`[거래 중지] 주문 ${order.id} 취소 성공 → sell_pending 상태로 복원`);
+        }
+        canceledCount++;
+      } else {
+        console.log(`[거래 중지] 주문 ${order.id} 취소 실패`);
       }
+    } catch (error) {
+      console.error(`[거래 중지] 주문 ${order.id} 취소 중 에러:`, error.message);
+    }
+  }
+
+  // 상태 변경사항 저장
+  saveOrderState(orderState);
+  
+  console.log(`[거래 중지] 주문 취소 완료: ${canceledCount}/${activeOrders.length}개 주문 취소 성공 (pending 상태로 복원됨)`);
+}
+
+async function trade() {
+  const prevConfig = loadConfig();
+  const config = loadConfig();
+
+  let orderState = loadOrderState();
+  
+  if (prevConfig.isTrading == true) {
+    if (config.isTrading == false) {
+      console.log('트레이딩 중지');
+    }
+  } else {
+    if (config.isTrading == true) {
+      console.log('트레이딩 시작');
+    }
+  }
+
+  if (config.isTrading == false) { 
+    return; 
+  }
+
+  // stopTradingTimes 체크
+  if (isInStopTradingTime(config)) {
+    // 중지 시간대: 계정 및 시장 정보 로그 출력
+    console.log('⏸️ [거래 중지 시간대] 거래가 중지된 시간대입니다.');
+    await logAccountAndMarketInfo();
+    
+    // 중지 시간대: 모든 활성 주문 취소
+    const hasActiveOrders = orderState.orders.some(
+      order => order.status === 'buy_ordered' || order.status === 'sell_ordered'
+    );
+    
+    if (hasActiveOrders) {
+      await cancelAllActiveOrders(orderState);
+    }
+    
+    console.log('중지 시간대에는 거래 로직 실행하지 않음');
+    return;
+  }
+
+  // command 처리 (clearAllOrders 또는 clearOrders)
+  await handleCommand(orderState);
+
+  // 계정 정보 및 시장 정보 로그 출력
+  const marketInfo = await logAccountAndMarketInfo();
+  if (!marketInfo) {
+    return;
+  }
+  
+  const { accountInfo, rate, tetherPrice, kimchiPremium } = marketInfo;
+
+  // 다중 주문 처리: 각 주문의 상태 확인 및 업데이트
+  for (const order of orderState.orders) {
+    // 매수 주문 대기 중인 주문 체크 (업비트에 주문 넣은 상태)
+    if (order.status === 'buy_ordered') {
+      await processBuyOrder(order, orderState, rate);
+      continue; // 다음 주문으로
     }
 
-    updateCashBalnce(orderState, accountInfo, tetherPrice);
-    
-    console.log(`현재 테더: ${tetherPrice}원, 환율: ${rate}원, 김프: ${kimchiPremium.toFixed(2)}%`);
-
-    // 매도 대기 또는 매수 대기 주문 처리 (sell_pending → sell_ordered, buy_pending → buy_ordered)
-    await processPendingOrders(orderState, rate);
+    // 매도 주문 대기 중인 주문 체크 (업비트에 주문 넣은 상태)
+    if (order.status === 'sell_ordered') {
+      await processSellOrder(order, orderState, rate);
+      continue; // 다음 주문으로
+    }
   }
+
+  updateCashBalnce(orderState, accountInfo, tetherPrice);
+
+  // 매도 대기 또는 매수 대기 주문 처리 (sell_pending → sell_ordered, buy_pending → buy_ordered)
+  await processPendingOrders(orderState, rate);
 }
 
 function updateCashBalnce(orderState, accountInfo, tetherPrice) {

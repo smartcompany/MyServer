@@ -2,5 +2,15 @@
   "isTrading": true,
   "buyThreshold": 0.5,
   "sellThreshold": 2.5,
-  "isTradeByMoney": true
+  "isTradeByMoney": true,
+  "stopTradingTimes": [
+    {
+      "start": "08:00:00",
+      "end": "09:00:00"
+    },
+    {
+      "start": "23:00:00",
+      "end": "01:00:00"
+    }
+  ]
 }

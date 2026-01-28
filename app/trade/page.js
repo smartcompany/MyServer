@@ -12,6 +12,8 @@ export default function TradePage() {
     sell: '',
     isTrading: false
   });
+  const [stopTradingTimes, setStopTradingTimes] = useState([]);
+  const [localStopTradingTimes, setLocalStopTradingTimes] = useState([]); // 임시 저장용
   const [tradeAmount, setTradeAmount] = useState(''); // 매수 금액/수량 입력값
   const [sellAmount, setSellAmount] = useState(''); // 매도 금액/수량 입력값
   const [isTradeByMoney, setIsTradeByMoney] = useState(true); // 매매 방식: true=금액, false=수량
@@ -136,6 +138,9 @@ export default function TradePage() {
         isTrading: Boolean(data.isTrading)
       });
       setIsTradeByMoney(data.isTradeByMoney ?? true);
+      const times = data.stopTradingTimes ?? [];
+      setStopTradingTimes(times);
+      setLocalStopTradingTimes(times); // 로컬 state도 동기화
       setConfigLoaded(true);
     } catch (error) {
       alert(`❌ 설정 로드 실패: ${error.message || '알 수 없는 오류'}`);
@@ -179,6 +184,80 @@ export default function TradePage() {
       // 실패 시 이전 값으로 되돌리기
       setConfig(prev => ({ ...prev, isTrading: !isTrading }));
     }
+  }
+
+  async function updateStopTradingTimes(newTimes) {
+    const token = localStorage.getItem('token');
+    if (!configLoaded) {
+      console.warn('설정이 아직 로드되지 않았습니다. 잠시 후 다시 시도하세요.');
+      alert('설정이 아직 로드되지 않았습니다. 잠시 후 다시 시도하세요.');
+      return false;
+    }
+
+    try {
+      const res = await fetch('/api/trade/config', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ' + token
+        },
+        body: JSON.stringify({
+          updates: [
+            { key: 'stopTradingTimes', value: newTimes }
+          ]
+        })
+      });
+
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        console.error('거래 중지 시간 업데이트 실패:', errorData.error || 'Unknown error');
+        alert('❌ 거래 중지 시간 업데이트 실패: ' + (errorData.error || 'Unknown error'));
+        // 실패 시 이전 값으로 되돌리기 위해 config 다시 로드
+        loadConfig();
+        return false;
+      } else {
+        setStopTradingTimes(newTimes);
+        alert('✅ 거래 중지 시간이 성공적으로 적용되었습니다.');
+        return true;
+      }
+    } catch (error) {
+      console.error('거래 중지 시간 업데이트 실패:', error);
+      alert('❌ 거래 중지 시간 업데이트 실패: ' + error.message);
+      loadConfig();
+      return false;
+    }
+  }
+
+  function addStopTradingTime() {
+    const newTimes = [...localStopTradingTimes, { start: '00:00:00', end: '00:00:00' }];
+    setLocalStopTradingTimes(newTimes);
+  }
+
+  function removeStopTradingTime(index) {
+    const newTimes = localStopTradingTimes.filter((_, i) => i !== index);
+    setLocalStopTradingTimes(newTimes);
+  }
+
+  function updateStopTradingTime(index, field, value) {
+    const newTimes = [...localStopTradingTimes];
+    // HTML time input은 HH:mm 형식이므로 :00 초를 추가하여 HH:mm:ss 형식으로 변환
+    const formattedValue = value.length === 5 ? value + ':00' : value;
+    newTimes[index] = { ...newTimes[index], [field]: formattedValue };
+    setLocalStopTradingTimes(newTimes);
+  }
+
+  async function applyStopTradingTimes() {
+    const success = await updateStopTradingTimes(localStopTradingTimes);
+    if (success) {
+      // 성공 시 로컬 state도 동기화
+      setLocalStopTradingTimes(localStopTradingTimes);
+    }
+  }
+
+  // stopTradingTimes의 시간 형식을 HTML time input용으로 변환 (HH:mm:ss -> HH:mm)
+  function formatTimeForInput(timeString) {
+    if (!timeString) return '00:00';
+    return timeString.substring(0, 5); // HH:mm:ss -> HH:mm
   }
 
   async function confirmReset() {
@@ -850,6 +929,109 @@ export default function TradePage() {
                   fontWeight: 'bold'
                 }}>매매 초기화</button>
               </div>
+            </div>
+          </div>
+
+          {/* 거래 중지 시간 설정 */}
+          <div style={{ marginTop: '20px', padding: '15px', backgroundColor: '#fff3e0', borderRadius: '4px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
+              <h3 style={{ margin: 0 }}>⏰ 거래 중지 시간 설정</h3>
+              <div style={{ display: 'flex', gap: '10px' }}>
+                <button onClick={addStopTradingTime} style={{
+                  padding: '6px 12px',
+                  fontSize: '14px',
+                  backgroundColor: '#2196F3',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '4px',
+                  cursor: 'pointer',
+                  fontWeight: 'bold'
+                }}>+ 추가</button>
+              </div>
+            </div>
+            {localStopTradingTimes.length === 0 ? (
+              <div style={{ padding: '20px', textAlign: 'center', color: '#999' }}>
+                거래 중지 시간이 설정되지 않았습니다.
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                {localStopTradingTimes.map((timeRange, index) => (
+                  <div key={index} style={{
+                    display: 'flex',
+                    gap: '10px',
+                    alignItems: 'center',
+                    padding: '10px',
+                    backgroundColor: 'white',
+                    borderRadius: '4px',
+                    border: '1px solid #ddd'
+                  }}>
+                    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '5px' }}>
+                      <label style={{ fontSize: '12px', color: '#666' }}>시작 시간</label>
+                      <input
+                        type="time"
+                        value={formatTimeForInput(timeRange.start)}
+                        onChange={(e) => updateStopTradingTime(index, 'start', e.target.value)}
+                        style={{
+                          padding: '8px',
+                          fontSize: '14px',
+                          border: '1px solid #ddd',
+                          borderRadius: '4px',
+                          width: '100%'
+                        }}
+                      />
+                    </div>
+                    <div style={{ fontSize: '20px', color: '#999', marginTop: '20px' }}>~</div>
+                    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '5px' }}>
+                      <label style={{ fontSize: '12px', color: '#666' }}>종료 시간</label>
+                      <input
+                        type="time"
+                        value={formatTimeForInput(timeRange.end)}
+                        onChange={(e) => updateStopTradingTime(index, 'end', e.target.value)}
+                        style={{
+                          padding: '8px',
+                          fontSize: '14px',
+                          border: '1px solid #ddd',
+                          borderRadius: '4px',
+                          width: '100%'
+                        }}
+                      />
+                    </div>
+                    <button
+                      onClick={() => removeStopTradingTime(index)}
+                      style={{
+                        padding: '8px 12px',
+                        fontSize: '14px',
+                        backgroundColor: '#f44336',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: '4px',
+                        cursor: 'pointer',
+                        fontWeight: 'bold',
+                        marginTop: '20px'
+                      }}
+                    >삭제</button>
+                  </div>
+                ))}
+              </div>
+            )}
+            <div style={{ marginTop: '15px', display: 'flex', justifyContent: 'flex-end' }}>
+              <button
+                onClick={applyStopTradingTimes}
+                style={{
+                  padding: '10px 24px',
+                  fontSize: '14px',
+                  backgroundColor: '#4CAF50',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '4px',
+                  cursor: 'pointer',
+                  fontWeight: 'bold',
+                  boxShadow: '0 2px 4px rgba(0,0,0,0.2)'
+                }}
+              >✅ 적용</button>
+            </div>
+            <div style={{ marginTop: '10px', fontSize: '12px', color: '#666' }}>
+              💡 설정된 시간대에는 모든 활성 주문이 취소되고 거래가 중지됩니다.
             </div>
           </div>
 
