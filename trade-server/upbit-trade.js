@@ -33,6 +33,7 @@ if (envResult.error) {
 }
 
 const axios = require('axios');
+const cheerio = require('cheerio');
 const querystring = require('querystring');
 const crypto = require('crypto');
 const jwt = require('jsonwebtoken');
@@ -55,7 +56,7 @@ if (!ACCESS_KEY || !SECRET_KEY) {
   console.error(`   .env 파일 경로: ${envPath}`);
 } 
 const SERVER_URL = 'https://api.upbit.com';
-const EXCHANGE_RATE_URL = 'https://rate-history.vercel.app/api/rate-history';
+const NAVER_EXCHANGE_RATE_URL = 'https://finance.naver.com/marketindex/exchangeDailyQuote.naver?marketindexCd=FX_USDKRW';
 
 // projectRoot는 위에서 이미 정의됨
 const tradeServerDir = path.join(projectRoot, 'trade-server');
@@ -431,13 +432,29 @@ async function getActiveOrders() {
 
 async function getExchangeRate() {
   try {
-    // API 호출
-    const response = await axios.get(EXCHANGE_RATE_URL);
+    // 네이버 환율 페이지에서 직접 스크래핑
+    const response = await axios.get(`${NAVER_EXCHANGE_RATE_URL}&page=1`);
     if (response.status === 200) {
-      // 날짜가 가장 최근인 환율을 찾기 response.data의 key는 날짜 형식
-      const latestDate = Object.keys(response.data).sort().pop();
-      const latestRate = response.data[latestDate];
-      return latestRate;
+      const $ = cheerio.load(response.data);
+      const rows = $('table.tbl_exchange tbody tr');
+      
+      // 첫 번째 행이 오늘 날짜의 최신 환율
+      if (rows.length > 0) {
+        const firstRow = rows.first();
+        const tds = firstRow.find('td');
+        const rateStr = $(tds[1]).text().trim().replace(/,/g, '');
+        const rate = parseFloat(rateStr);
+        
+        if (!isNaN(rate)) {
+          return rate;
+        } else {
+          console.error('Error: 환율 파싱 실패 - 숫자로 변환할 수 없음:', rateStr);
+          return null;
+        }
+      } else {
+        console.error('Error: 환율 데이터를 찾을 수 없음');
+        return null;
+      }
     } else {
       console.error(`Error: ${response.status}, ${response.data}`);
       return null;
