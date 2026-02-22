@@ -1,0 +1,16 @@
+너는 한국 오프라인 소모임 앱 카피라이터다.
+다음 정보를 바탕으로 실제 사람이 만든 것 같은 모임 문구를 만들어라.
+
+호스트명: {{HOST_NAME}}
+지역: {{LOCATION}}
+메인 카테고리: {{MAIN_CATEGORY}}
+서브 카테고리: {{SUB_CATEGORY}}
+
+요구사항:
+- title: 12~28자 자연스러운 한국어
+- description: 80~180자, 과장 없이 구체적
+- locationDetail: 8~30자, 실제 모임 장소 느낌
+- 앱 톤에 맞게 친근하고 담백하게
+
+아래 JSON만 출력:
+{"title":"", "description":"", "locationDetail":""}

@@ -1,0 +1,78 @@
+{
+  "byMainCategory": {
+    "운동/액티비티": [
+      "https://hqztxxpafzkrwephbonq.supabase.co/storage/v1/object/public/lets-meet/meetingsBot/sports_activity.png"
+    ],
+    "댄스/취미 클래스": [
+      "https://hqztxxpafzkrwephbonq.supabase.co/storage/v1/object/public/lets-meet/meetingsBot/dance_hobby.png"
+    ],
+    "여행/나들이": [
+      "https://hqztxxpafzkrwephbonq.supabase.co/storage/v1/object/public/lets-meet/meetingsBot/travel_outing.png"
+    ],
+    "맛집/카페": [
+      "https://hqztxxpafzkrwephbonq.supabase.co/storage/v1/object/public/lets-meet/meetingsBot/food_cafe.png"
+    ],
+    "자기계발/스터디": [
+      "https://hqztxxpafzkrwephbonq.supabase.co/storage/v1/object/public/lets-meet/meetingsBot/self_dev_study.png",
+      "https://hqztxxpafzkrwephbonq.supabase.co/storage/v1/object/public/lets-meet/meetingsBot/self_dev_workspace.png"
+    ],
+    "문화/예술": [
+      "https://hqztxxpafzkrwephbonq.supabase.co/storage/v1/object/public/lets-meet/meetingsBot/culture_art.png"
+    ],
+    "게임/엔터테인먼트": [
+      "https://hqztxxpafzkrwephbonq.supabase.co/storage/v1/object/public/lets-meet/meetingsBot/game_entertainment.png"
+    ],
+    "소셜/친목": [
+      "https://hqztxxpafzkrwephbonq.supabase.co/storage/v1/object/public/lets-meet/meetingsBot/social_friendship.png",
+      "https://hqztxxpafzkrwephbonq.supabase.co/storage/v1/object/public/lets-meet/meetingsBot/social_group.png"
+    ],
+    "힐링/라이프스타일": [
+      "https://hqztxxpafzkrwephbonq.supabase.co/storage/v1/object/public/lets-meet/meetingsBot/healing_lifestyle.png"
+    ],
+    "기타": [
+      "https://hqztxxpafzkrwephbonq.supabase.co/storage/v1/object/public/lets-meet/meetingsBot/others_creative.png"
+    ]
+  },
+  "bySubCategory": {
+    "러닝": [],
+    "헬스": [],
+    "등산": [],
+    "클라이밍": [],
+    "요가": [],
+    "축구": [],
+    "배드민턴": [],
+    "살사": [],
+    "바차타": [],
+    "힙합": [],
+    "K-pop댄스": [],
+    "탱고": [],
+    "국내여행": [],
+    "근교 드라이브": [],
+    "당일치기": [],
+    "맛집투어": [],
+    "식사모임": [],
+    "브런치": [],
+    "술 한잔": [],
+    "디저트": [],
+    "독서": [],
+    "외국어": [],
+    "재테크": [],
+    "코딩": [],
+    "글쓰기": [],
+    "전시회": [],
+    "공연": [],
+    "영화": [],
+    "사진": [],
+    "그림": [],
+    "보드게임": [],
+    "콘솔게임": [],
+    "온라인게임": [],
+    "방탈출": [],
+    "신규친구": [],
+    "수다": [],
+    "동네모임": [],
+    "산책": [],
+    "명상": [],
+    "마인드풀니스": []
+  }
+}
