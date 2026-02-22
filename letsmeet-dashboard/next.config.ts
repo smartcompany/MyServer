@@ -4,7 +4,6 @@ const BASE_PATH = "/letsmeet-dashboard";
 
 const nextConfig: NextConfig = {
   basePath: BASE_PATH,
-  env: { NEXT_PUBLIC_BASE_PATH: BASE_PATH },
   reactStrictMode: true,
   turbopack: {
     root: __dirname,

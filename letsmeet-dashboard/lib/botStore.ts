@@ -4,6 +4,9 @@ import { BotConfig, BotLog, BotMeeting, BotState } from "./types";
 
 const BOT_STATE_DIR = path.join(process.cwd(), "data");
 const BOT_STATE_PATH = path.join(BOT_STATE_DIR, "bot-state.json");
+const BOT_LOGS_PATH = path.join(BOT_STATE_DIR, "bot-logs.json");
+
+const MAX_LOGS = 300;
 
 async function ensureDataDir() {
   await fs.mkdir(BOT_STATE_DIR, { recursive: true });
@@ -25,7 +28,6 @@ function defaultConfig(): BotConfig {
 function defaultState(): BotState {
   return {
     config: defaultConfig(),
-    logs: [],
     botMeetings: [],
     weeklyCounters: {},
   };
@@ -49,7 +51,7 @@ async function ensureStateFile() {
   }
 }
 
-function parseWithDefaults(raw: string): BotState {
+function parseStateWithDefaults(raw: string): BotState {
   const parsed = JSON.parse(raw) as Partial<BotState>;
   return {
     ...defaultState(),
@@ -58,7 +60,6 @@ function parseWithDefaults(raw: string): BotState {
       ...defaultConfig(),
       ...(parsed.config ?? {}),
     },
-    logs: parsed.logs ?? [],
     botMeetings: parsed.botMeetings ?? [],
     weeklyCounters: parsed.weeklyCounters ?? {},
   };
@@ -68,7 +69,7 @@ export async function readBotState(): Promise<BotState> {
   await ensureStateFile();
   const raw = await fs.readFile(BOT_STATE_PATH, "utf-8");
   try {
-    return parseWithDefaults(raw);
+    return parseStateWithDefaults(raw);
   } catch {
     const state = defaultState();
     await writeBotState(state);
@@ -76,20 +77,43 @@ export async function readBotState(): Promise<BotState> {
   }
 }
 
-export async function writeBotState(state: BotState): Promise<void> {
+export async function writeBotState(state: Omit<BotState, "logs">): Promise<void> {
   await ensureDataDir();
   const payload = JSON.stringify(state, null, 2);
   await fs.writeFile(BOT_STATE_PATH, payload, "utf-8");
 }
 
-export function appendLog(state: BotState, log: Omit<BotLog, "id" | "ts">): BotState {
+async function readBotLogsRaw(): Promise<BotLog[]> {
+  await ensureDataDir();
+  try {
+    const raw = await fs.readFile(BOT_LOGS_PATH, "utf-8");
+    const parsed = JSON.parse(raw) as { logs?: BotLog[] };
+    return Array.isArray(parsed.logs) ? parsed.logs : [];
+  } catch {
+    return [];
+  }
+}
+
+export async function readBotLogs(): Promise<BotLog[]> {
+  return readBotLogsRaw();
+}
+
+export async function appendLog(log: Omit<BotLog, "id" | "ts">): Promise<void> {
   const newLog: BotLog = {
     id: crypto.randomUUID(),
     ts: new Date().toISOString(),
     ...log,
   };
-  const logs = [newLog, ...state.logs].slice(0, 300);
-  return { ...state, logs };
+  const logs = [newLog, ...(await readBotLogsRaw())].slice(0, MAX_LOGS);
+  await ensureDataDir();
+  await fs.writeFile(BOT_LOGS_PATH, JSON.stringify({ logs }, null, 2), "utf-8");
+  const prefix = `[${newLog.ts}] [letsmeet] [${newLog.level.toUpperCase()}]`;
+  console.log(prefix, newLog.message);
+}
+
+export async function clearBotLogs(): Promise<void> {
+  await ensureDataDir();
+  await fs.writeFile(BOT_LOGS_PATH, JSON.stringify({ logs: [] }, null, 2), "utf-8");
 }
 
 export function addMeeting(

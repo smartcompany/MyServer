@@ -5,6 +5,7 @@
 const POLL_INTERVAL_MS = 10_000;
 const HOURLY_INTERVAL_MS = 60 * 60 * 1000;
 const STARTUP_DELAY_MS = 5_000;
+const BASE_PATH = "/letsmeet-dashboard";
 
 function log(...args: unknown[]) {
   const ts = new Date().toISOString();
@@ -19,18 +20,28 @@ function shouldRunTick(config: { runNow?: boolean; isRunning?: boolean; lastTick
   return Date.now() - last >= HOURLY_INTERVAL_MS;
 }
 
+let firstPollOk = false;
+
 async function poll(baseUrl: string, token: string) {
   try {
     const res = await fetch(`${baseUrl}/api/bot-config`, {
       cache: "no-store",
       headers: { "x-internal-simulator": token },
     });
-    if (!res.ok) return;
+    if (!res.ok) {
+      log("bot-config 실패:", res.status, res.statusText, "(폴링 URL:", `${baseUrl}/api/bot-config`, ")");
+      return;
+    }
+    if (!firstPollOk) {
+      firstPollOk = true;
+      log("폴링 연결 성공 (bot-config 정상)");
+    }
     const json = await res.json();
     const config = json.config ?? null;
     if (!shouldRunTick(config)) return;
 
-    log("tick 실행 중...");
+    const reason = config?.runNow === true ? "runNow=true" : "1시간 주기 tick";
+    log(reason, "→ tick 실행 중...");
     const tickRes = await fetch(`${baseUrl}/api/bot-control/simulate`, {
       method: "POST",
       headers: {
@@ -56,7 +67,7 @@ function startSimulatorPolling() {
     return;
   }
   const port = process.env.PORT || "3100";
-  const baseUrl = `http://localhost:${port}`;
+  const baseUrl = `http://localhost:${port}${BASE_PATH}`;
   log(`시작 (BASE_URL=${baseUrl}, POLL=${POLL_INTERVAL_MS}ms)`);
 
   setTimeout(() => {

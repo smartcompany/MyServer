@@ -40,7 +40,6 @@ export type BotLog = {
 
 export type BotState = {
   config: BotConfig;
-  logs: BotLog[];
   botMeetings: BotMeeting[];
   weeklyCounters: Record<string, BotWeeklyCounter>;
 };

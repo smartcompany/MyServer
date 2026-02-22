@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { BotConfig, BotLog, DashboardUser } from "@/lib/types";
 
-const BASE = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
+const BASE = "/letsmeet-dashboard";
 
 type LogsResponse = { isRunning: boolean; logs: BotLog[]; botMeetingsCount: number };
 

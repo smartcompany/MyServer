@@ -79,14 +79,23 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  // 외부 호출(UI, GitHub Actions): runNow만 세팅 후 즉시 반환. 실제 tick은 pm2 simulator가 처리.
+  // 외부 호출(UI, GitHub Actions): runNow만 세팅 후 즉시 반환. 실제 tick은 instrumentation 폴링이 처리.
   if (!isFromPm2Simulator) {
     const state = await readBotState();
     if (!state.config.isRunning && !isManualRun) {
+      await appendLog({
+        level: "warn",
+        message: "1회 시뮬레이션 스킵: isRunning=false. 'AI 봇 진행 시작'을 먼저 눌러주세요.",
+      });
       return NextResponse.json({ ok: true, skipped: true, reason: "STOPPED" });
     }
     state.config.runNow = true;
     state.config.updatedAt = new Date().toISOString();
+    await appendLog({
+      level: "info",
+      message:
+        "1회 시뮬레이션 트리거됨 - 폴링이 tick을 실행할 때까지 기다려주세요 (최대 ~10초). 동작 안 하면 pm2 logs letsmeet-dashboard 확인.",
+    });
     await writeBotState(state);
     return NextResponse.json({ ok: true, triggered: true });
   }
@@ -94,12 +103,10 @@ export async function POST(request: NextRequest) {
   // pm2 simulator 내부 호출: 실제 tick 실행
   const requestId = crypto.randomUUID().slice(0, 8);
   const log = async (level: "info" | "warn" | "error", message: string) => {
-    const latestState = await readBotState();
-    const nextState = appendLog(latestState, {
+    await appendLog({
       level,
       message: `[simulate:${requestId}] ${message}`,
     });
-    await writeBotState(nextState);
   };
 
   try {
@@ -323,7 +330,7 @@ export async function POST(request: NextRequest) {
       },
     };
 
-    state = appendLog(state, {
+    await appendLog({
       level: "info",
       message: `[simulate:${requestId}] tick 완료: creators=${creators.length}, created=${createdNow}, appliers=${appliers.length}, applied=${appliedNow}, approved=${approvedNow}`,
     });

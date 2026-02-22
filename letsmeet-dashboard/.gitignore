@@ -1,4 +1,4 @@
 .env.local
 .next
 node_modules
-data/bot-state.json
+data/

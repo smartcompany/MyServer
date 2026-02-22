@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { appendLog, readBotState, toBotStateApiError, writeBotState } from "@/lib/botStore";
+import { appendLog, readBotState, toBotStateApiError } from "@/lib/botStore";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 
 export const runtime = "nodejs";
@@ -23,12 +23,10 @@ export async function POST(request: NextRequest) {
   let state: Awaited<ReturnType<typeof readBotState>> | null = null;
   const requestId = crypto.randomUUID().slice(0, 8);
   const log = async (level: "info" | "warn" | "error", message: string) => {
-    if (!state) return;
-    state = appendLog(state, {
+    await appendLog({
       level,
       message: `[approve-applications:${requestId}] ${message}`,
     });
-    await writeBotState(state);
   };
 
   try {

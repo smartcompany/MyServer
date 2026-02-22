@@ -9,12 +9,12 @@ export async function POST() {
     state.config.isRunning = false;
     state.config.updatedAt = new Date().toISOString();
 
-    const nextState = appendLog(state, {
+    await appendLog({
       level: "warn",
       message: "AI 봇 진행 중지",
     });
-    await writeBotState(nextState);
-    return NextResponse.json({ ok: true, config: nextState.config });
+    await writeBotState(state);
+    return NextResponse.json({ ok: true, config: state.config });
   } catch (error) {
     const apiError = toBotStateApiError(error);
     return NextResponse.json({ error: apiError.error }, { status: apiError.status });

@@ -158,12 +158,10 @@ export async function POST(request: NextRequest) {
   const requestId = crypto.randomUUID().slice(0, 8);
   const log = async (level: "info" | "warn" | "error", message: string) => {
     try {
-      const latestState = await readBotState();
-      const nextState = appendLog(latestState, {
+      await appendLog({
         level,
         message: `[create-meeting:${requestId}] ${message}`,
       });
-      await writeBotState(nextState);
     } catch (e) {
       console.error("[create-meeting] failed to write bot log:", e);
     }
@@ -280,6 +278,7 @@ export async function POST(request: NextRequest) {
       title: meeting.title as string,
       createdAt: (meeting.created_at as string) ?? new Date().toISOString(),
     });
+    await writeBotState(state);
     await log("info", `수동 모임 생성: host=${hostForLog}, meeting=${meeting.id}, title="${meeting.title}"`);
 
     return NextResponse.json({
