@@ -161,7 +161,7 @@ export default function DashboardPage() {
     setError(null);
     try {
       await refreshLogsOnly();
-      const res = await fetch(`${BASE}/api/bot-control/simulate`, { method: "POST" });
+      const res = await fetch(`${BASE}/api/bot-control/trigger`, { method: "POST" });
       if (!res.ok) {
         const body = (await res.json()) as { error?: string };
         throw new Error(body.error ?? `요청 실패: ${res.status}`);

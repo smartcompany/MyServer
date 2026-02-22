@@ -69,38 +69,15 @@ export async function POST(request: NextRequest) {
 
   const internalSimulator = request.headers.get("x-internal-simulator")?.trim();
   const isFromPm2Simulator = internalSimulator === expectedToken;
-  const providedToken = request.headers.get("x-dashboard-token")?.trim();
-  const simulateSource = request.headers.get("x-simulate-source");
-  const isManualRun = simulateSource === "dashboard-manual";
 
   if (!isFromPm2Simulator) {
-    if (!providedToken || providedToken !== expectedToken) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    return NextResponse.json(
+      { error: "Simulate is internal only. Use /api/bot-control/trigger for manual run." },
+      { status: 403 }
+    );
   }
 
-  // 외부 호출(UI, GitHub Actions): runNow만 세팅 후 즉시 반환. 실제 tick은 instrumentation 폴링이 처리.
-  if (!isFromPm2Simulator) {
-    const state = await readBotState();
-    if (!state.config.isRunning && !isManualRun) {
-      await appendLog({
-        level: "warn",
-        message: "1회 시뮬레이션 스킵: isRunning=false. 'AI 봇 진행 시작'을 먼저 눌러주세요.",
-      });
-      return NextResponse.json({ ok: true, skipped: true, reason: "STOPPED" });
-    }
-    state.config.runNow = true;
-    state.config.updatedAt = new Date().toISOString();
-    await appendLog({
-      level: "info",
-      message:
-        "1회 시뮬레이션 트리거됨 - 폴링이 tick을 실행할 때까지 기다려주세요 (최대 ~10초). 동작 안 하면 pm2 logs letsmeet-dashboard 확인.",
-    });
-    await writeBotState(state);
-    return NextResponse.json({ ok: true, triggered: true });
-  }
-
-  // pm2 simulator 내부 호출: 실제 tick 실행
+  // 시뮬레이터 내부 호출: tick 실행 (runNow 모름)
   const requestId = crypto.randomUUID().slice(0, 8);
   const log = async (level: "info" | "warn" | "error", message: string) => {
     await appendLog({
@@ -112,7 +89,8 @@ export async function POST(request: NextRequest) {
   try {
     const initialState = await readBotState();
     const cfg = initialState.config;
-    const isManualTrigger = cfg.runNow === true;
+    const isManualTrigger = request.headers.get("x-simulate-trigger") === "runNow";
+
     let workingState = {
       ...initialState,
       botMeetings: [...initialState.botMeetings],
@@ -334,7 +312,6 @@ export async function POST(request: NextRequest) {
       level: "info",
       message: `[simulate:${requestId}] tick 완료: creators=${creators.length}, created=${createdNow}, appliers=${appliers.length}, applied=${appliedNow}, approved=${approvedNow}`,
     });
-    state.config.runNow = false;
     state.config.lastTickAt = new Date().toISOString();
     state.config.updatedAt = new Date().toISOString();
     await writeBotState(state);

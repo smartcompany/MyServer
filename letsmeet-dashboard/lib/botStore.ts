@@ -135,3 +135,19 @@ export function toBotStateApiError(error: unknown): { status: number; error: str
   const message = error instanceof Error ? error.message : "Unknown error";
   return { status: 500, error: message };
 }
+
+/** runNow가 true이면 false로 소비. 소비했으면 true, 이미 false였으면 false */
+export async function consumeRunNow(): Promise<boolean> {
+  try {
+    await fs.access(BOT_STATE_PATH);
+  } catch {
+    return false;
+  }
+  const raw = await fs.readFile(BOT_STATE_PATH, "utf-8");
+  const parsed = JSON.parse(raw) as { config?: { runNow?: boolean; updatedAt?: string } };
+  if (parsed.config?.runNow !== true) return false;
+  parsed.config.runNow = false;
+  parsed.config.updatedAt = new Date().toISOString();
+  await fs.writeFile(BOT_STATE_PATH, JSON.stringify(parsed, null, 2), "utf-8");
+  return true;
+}

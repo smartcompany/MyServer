@@ -32,6 +32,7 @@ function isValidBasicAuth(request: NextRequest, expectedUser: string, expectedPa
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const isSimulateApi = pathname === "/api/bot-control/simulate";
+  const isTriggerApi = pathname === "/api/bot-control/trigger";
   const isBotConfig = pathname === "/api/bot-config";
   const internalToken = process.env.DASHBOARD_TOKEN?.trim();
 
@@ -62,7 +63,7 @@ export function proxy(request: NextRequest) {
     return unauthorizedResponse();
   }
 
-  if (isSimulateApi) {
+  if (isSimulateApi || isTriggerApi) {
     const dashboardToken = process.env.DASHBOARD_TOKEN?.trim();
     if (!dashboardToken) {
       return new NextResponse("DASHBOARD_TOKEN is not configured", { status: 500 });
@@ -70,7 +71,7 @@ export function proxy(request: NextRequest) {
 
     const requestHeaders = new Headers(request.headers);
     requestHeaders.set("x-dashboard-token", dashboardToken);
-    requestHeaders.set("x-simulate-source", "dashboard-manual");
+    if (isSimulateApi) requestHeaders.set("x-simulate-source", "dashboard-manual");
     return NextResponse.next({
       request: {
         headers: requestHeaders,
@@ -82,5 +83,5 @@ export function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/", "/api/bot-control/simulate", "/api/bot-config"],
+  matcher: ["/", "/api/bot-control/simulate", "/api/bot-control/trigger", "/api/bot-config"],
 };
