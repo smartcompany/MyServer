@@ -1,4 +1,8 @@
 /**
+ * @deprecated 시뮬레이터 로직은 instrumentation.ts로 통합됨.
+ * letsmeet-dashboard 기동 시 자동으로 폴링이 시작됩니다.
+ * 이 파일은 레거시 참조용으로만 유지됩니다.
+ *
  * LetsMeet 봇 시뮬레이터 - pm2로 상시 실행
  * - 10초마다 bot-state 폴링
  * - runNow이면 즉시 tick 실행

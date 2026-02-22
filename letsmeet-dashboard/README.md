@@ -50,10 +50,9 @@ npm run build
 pm2 start ecosystem.config.cjs
 ```
 
-- `letsmeet-dashboard`: Next.js (모니터링 UI + API, 포트 3100)
-- `letsmeet-simulator`: 10초마다 bot-state 폴링, runNow 또는 1시간 주기로 tick 실행
+- `letsmeet-dashboard`: Next.js (모니터링 UI + API, 포트 3100) - 시뮬레이터 폴링 포함 (instrumentation)
 
-환경변수 `.env.local`에 `DASHBOARD_BASE_URL`과 `DASHBOARD_TOKEN` 필요.
+환경변수 `.env.local`에 `DASHBOARD_TOKEN` 필요.
 basePath 배포 시 URL에 전체 경로 포함: `https://smartzero.duckdns.org/letsmeet-dashboard`
 
 ## 환경 변수
@@ -63,7 +62,6 @@ basePath 배포 시 URL에 전체 경로 포함: `https://smartzero.duckdns.org/
 - `FIREBASE_SERVICE_ACCOUNT_KEY` (JSON 문자열 또는 파일 경로)
 - `OPENAI_API_KEY` (선택: 봇 모임 문구 AI 생성)
 - `DASHBOARD_TOKEN` (필수: API/시뮬레이터 인증)
-- `DASHBOARD_BASE_URL` (pm2 시뮬레이터용, 예: `http://localhost:3100`)
 
 ## API
 

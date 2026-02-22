@@ -23,12 +23,5 @@ module.exports = {
       args: "start",
       env: { NODE_ENV: "production", PORT: 3100 },
     },
-    {
-      name: "letsmeet-simulator",
-      cwd: path.join(__dirname, "letsmeet-dashboard"),
-      script: "simulator/letsmeet-simulator.js",
-      interpreter: "node",
-      env: { NODE_ENV: "production" },
-    },
   ],
 };

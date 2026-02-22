@@ -11,12 +11,5 @@ module.exports = {
       args: "start",
       env: { NODE_ENV: "production" },
     },
-    {
-      name: "letsmeet-simulator",
-      cwd: __dirname,
-      script: "simulator/letsmeet-simulator.js",
-      interpreter: "node",
-      env: { NODE_ENV: "production" },
-    },
   ],
 };

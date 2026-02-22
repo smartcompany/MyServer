@@ -125,6 +125,7 @@ pm2 delete nextjs-server 2>/dev/null || true
 pm2 delete letsmeet-dashboard 2>/dev/null || true
 
 # 작업 디렉토리를 명시적으로 설정하여 next 명령어를 찾을 수 있도록 함
+# letsmeet-simulator는 letsmeet-dashboard instrumentation에서 함께 실행됨
 cd "$ROOT_DIR" || exit 1
 pm2 start npm --name nextjs-server --cwd "$ROOT_DIR" -- start
 pm2 start npm --name letsmeet-dashboard --cwd "$ROOT_DIR/letsmeet-dashboard" -- start
