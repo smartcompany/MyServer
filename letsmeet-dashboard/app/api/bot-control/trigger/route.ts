@@ -19,14 +19,6 @@ export async function POST(request: NextRequest) {
   }
 
   const state = await readBotState();
-  if (!state.config.isRunning) {
-    await appendLog({
-      level: "warn",
-      message: "1회 시뮬레이션 스킵: isRunning=false. 'AI 봇 진행 시작'을 먼저 눌러주세요.",
-    });
-    return NextResponse.json({ ok: true, skipped: true, reason: "STOPPED" });
-  }
-
   state.config.runNow = true;
   state.config.updatedAt = new Date().toISOString();
   await writeBotState(state);
