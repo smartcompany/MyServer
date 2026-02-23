@@ -10,7 +10,10 @@
 - 수동 1회 실행(simulate)
 - 실행 로그 확인
 
-> 봇 상태/로그는 로컬 파일 `data/bot-state.json`에 저장됩니다.
+> 봇 상태/로그는 로컬 `data/` 폴더에 저장됩니다.
+> - `data/bot-state.json` - 봇 설정, 모임 목록, 카운터
+> - `data/bot-logs.json` - 실행 로그
+> - `app/api/bot-control/create-meeting/meeting-image-pool.json` - 모임 이미지 URL 풀
 
 ## 실행
 
@@ -62,7 +65,6 @@ basePath 배포 시 URL에 전체 경로 포함: `https://smartzero.duckdns.org/
 - `FIREBASE_SERVICE_ACCOUNT_KEY` (JSON 문자열 또는 파일 경로)
 - `OPENAI_API_KEY` (선택: 봇 모임 문구 AI 생성)
 - `DASHBOARD_TOKEN` (필수: API/시뮬레이터 인증)
-
 ## API
 
 - `GET /api/users` 사용자 목록

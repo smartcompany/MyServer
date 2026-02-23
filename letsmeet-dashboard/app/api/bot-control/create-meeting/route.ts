@@ -6,8 +6,8 @@ import {
   toBotStateApiError,
   writeBotState,
 } from "@/lib/botStore";
+import meetingImagePoolJson from "./meeting-image-pool.json";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
-import meetingImagePoolJson from "@/data/meeting-image-pool.json";
 import promptTemplateSource from "./prompt.txt";
 import OpenAI from "openai";
 
@@ -96,7 +96,7 @@ async function loadPromptTemplate() {
   return promptTemplateCache;
 }
 
-async function pickMeetingImageUrl(mainCategory: string, subCategory: string) {
+function pickMeetingImageUrl(mainCategory: string, subCategory: string) {
   const pool = meetingImagePool;
   const fromSub = pool.bySubCategory?.[subCategory] ?? [];
   if (fromSub.length > 0) return pick(fromSub);
@@ -203,7 +203,7 @@ export async function POST(request: NextRequest) {
     const location = pick(LOCATIONS);
     const meetingDate = makeFutureDate();
     const hostName = (userRow.full_name as string) || "봇 사용자";
-    const pickedImageUrl = await pickMeetingImageUrl(mainCategory, subCategory);
+    const pickedImageUrl = pickMeetingImageUrl(mainCategory, subCategory);
 
     await log("info", `AI 문구 생성 시작: host=${hostForLog}`);
     let generated: GeneratedMeetingCopy;
