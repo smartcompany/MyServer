@@ -291,15 +291,18 @@ async function handleCommand(orderState) {
       const successfullyCanceled = [];
       
       for (const order of ordersToCancel) {
-        console.log(`주문 ${order.id} 취소 시작`);
+        console.log(`주문 ${order.id} 취소/삭제 시작`);
         console.log(`주문 상태: ${order.status}`);
         console.log(`주문 UUID: ${order.uuid}`);
         let cancelResult = null;
         if (order.status === 'buy_ordered' || order.status === 'sell_ordered') {
           cancelResult = await cancelOrder(order.uuid);
+        } else if (order.status === 'buy_pending' || order.status === 'sell_pending') {
+          // Limit Order 전 상태: 거래소에 주문 없음 → API 호출 없이 리스트에서만 제거
+          cancelResult = { removed: true };
         }
         
-        // 취소 성공한 경우만 제거 대상에 추가
+        // 취소 성공 또는 pending 제거인 경우만 제거 대상에 추가
         // cancelOrder는 성공 시 response.data 반환, 이미 취소된 경우 { uuid, state: 'done' } 반환, 실패 시 null 반환
         if (cancelResult != null) {
           successfullyCanceled.push(order.id);
@@ -1038,7 +1041,9 @@ async function loop() {
     } catch (e) {
       console.error('Loop error:', e);
     }
-    await new Promise((resolve) => setTimeout(resolve, 10000)); // 10초 대기
+
+    await new Promise((resolve) => setTimeout(resolve, 500)); // 3초 대기 (config/삭제 반영 속도)
+
   }
 }
 

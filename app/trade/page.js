@@ -44,7 +44,7 @@ export default function TradePage() {
         loadLogs();
         loadMonitorData();
         loadTasks();
-      }, 3000);
+      }, 1000);
       return () => {
         clearInterval(dataInterval);
       };

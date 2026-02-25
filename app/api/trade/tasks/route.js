@@ -220,24 +220,28 @@ export async function DELETE(request) {
     }
 
     const task = orderState.orders[taskIndex];
-    
-    // 진행 중인 주문이 있으면 취소 명령 추가 (ordered 상태일 때만)
-    // 메모리 업데이트
-    updateOrderState((state) => {
-      if (task.status === 'buy_ordered' || task.status === 'sell_ordered') {
-        // command로 취소 처리 (upbit-trade.js에서 처리)
+    const isPending = task.status === 'buy_pending' || task.status === 'sell_pending';
+
+    if (isPending) {
+      // Limit Order 전: 거래소에 주문 없음 → API에서 바로 목록에서 제거 (웹 반영 즉시)
+      updateOrderState((state) => {
+        state.orders = state.orders.filter((o) => o.id !== taskId);
+        return state;
+      });
+    } else {
+      // ordered: 거래소 취소 필요 → command로 upbit-trade가 취소 후 제거
+      updateOrderState((state) => {
         if (!state.command) {
           state.command = 'clearOrders';
           state.commandParams = [taskId];
         } else if (state.command === 'clearOrders' && Array.isArray(state.commandParams)) {
           state.commandParams.push(taskId);
         }
-      }
-      // 작업 제거는 upbit-trade.js의 handleCommand에서 처리
-      return state;
-    });
+        return state;
+      });
+    }
     
-    saveOrderStateImmediately(); // command 설정은 즉시 저장
+    saveOrderStateImmediately();
 
     console.log(`✅ [tasks API] 작업 삭제: ID=${taskId}`);
 
