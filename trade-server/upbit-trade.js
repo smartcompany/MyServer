@@ -332,7 +332,11 @@ async function handleCommand(orderState) {
       const ordersToCancel = [];
       for (const order of orderState.orders) {
         const isMatch = orderIdsToClear.includes(order.id);
-        console.log(`ID 비교: order.id="${order.id}", orderIdsToClear.includes=${isMatch}, orderIdsToClear=${JSON.stringify(orderIdsToClear)}`);
+        console.log(
+          `ID 비교: order.id="${order.id}", orderIdsToClear.includes=${isMatch}, orderIdsToClear=${JSON.stringify(
+            orderIdsToClear,
+          )}`,
+        );
         if (isMatch) {
           ordersToCancel.push(order);
         }
