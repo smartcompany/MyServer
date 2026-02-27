@@ -101,18 +101,52 @@ const OrderType = {
   SELL: 'sell',
 };
 
-let cashBalance = loadCashBalance();
+// orderState 파일 경로: 이 파일과 동일한 trade-server 디렉토리 기준
+const orderStateFilePath = path.join(__dirname, 'orderState.json');
 
-// 메모리 기반 orderState 모듈 로드 (CommonJS)
-const orderStateMemory = require('./orderState-memory');
+const DEFAULT_ORDER_STATE = {
+  orders: [],
+  command: null,
+  commandParams: null,
+  tetherPrice: null,
+};
+
+function readOrderStateFromFile() {
+  try {
+    if (!fs.existsSync(orderStateFilePath)) {
+      fs.writeFileSync(orderStateFilePath, JSON.stringify(DEFAULT_ORDER_STATE, null, 2));
+      return { ...DEFAULT_ORDER_STATE };
+    }
+    const data = fs.readFileSync(orderStateFilePath, 'utf8');
+    const parsed = JSON.parse(data);
+    return {
+      ...DEFAULT_ORDER_STATE,
+      ...parsed,
+      orders: Array.isArray(parsed.orders) ? parsed.orders : [],
+    };
+  } catch (err) {
+    console.error('❌ [upbit-trade][orderState] 파일 읽기 실패:', err);
+    return { ...DEFAULT_ORDER_STATE };
+  }
+}
+
+function writeOrderStateToFile(state) {
+  try {
+    fs.writeFileSync(orderStateFilePath, JSON.stringify(state, null, 2));
+  } catch (err) {
+    console.error('❌ [upbit-trade][orderState] 파일 저장 실패:', err);
+  }
+}
 
 function loadOrderState() {
-  return orderStateMemory.getOrderState();
+  return readOrderStateFromFile();
 }
 
 function saveOrderState(state) {
-  orderStateMemory.updateOrderState(() => state);
+  writeOrderStateToFile(state);
 }
+
+let cashBalance = loadCashBalance();
 
 function loadCashBalance () {
   let cashData;
