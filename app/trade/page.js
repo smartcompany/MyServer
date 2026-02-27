@@ -29,6 +29,8 @@ export default function TradePage() {
   const [tasks, setTasks] = useState([]);
   const [taskTab, setTaskTab] = useState('tasks'); // 'tasks' or 'logs'
   const [currentTime, setCurrentTime] = useState('');
+  const [addingBuyTask, setAddingBuyTask] = useState(false);
+  const [addingSellTask, setAddingSellTask] = useState(false);
 
   useEffect(() => {
     checkAuth();
@@ -37,13 +39,9 @@ export default function TradePage() {
   useEffect(() => {
     if (mainArea) {
       loadConfig();
-      loadLogs();
-      loadMonitorData();
-      loadTasks();
+      loadSummary();
       const dataInterval = setInterval(() => {
-        loadLogs();
-        loadMonitorData();
-        loadTasks();
+        loadSummary();
       }, 1000);
       return () => {
         clearInterval(dataInterval);
@@ -88,6 +86,43 @@ export default function TradePage() {
       // 토큰이 만료되었거나 유효하지 않음
       localStorage.removeItem('token');
       showLogin();
+    }
+  }
+
+  async function loadSummary() {
+    const token = localStorage.getItem('token');
+    try {
+      const res = await fetch('/api/trade/summary', {
+        method: 'GET',
+        headers: { Authorization: 'Bearer ' + token },
+      });
+      if (!res.ok) {
+        console.error('요약 API 응답 실패:', res.status, res.statusText);
+        return;
+      }
+      const data = await res.json();
+
+      if (typeof data.logs === 'string') {
+        setLogs(data.logs);
+      }
+
+      if (data.monitor) {
+        setMonitorData(data.monitor);
+        if (data.monitor.balance) {
+          setBalance({
+            krwBalance: data.monitor.balance.krwBalance || 0,
+            usdtBalance: data.monitor.balance.usdtBalance || 0,
+            availableMoney: data.monitor.balance.availableMoney || 0,
+            availableUsdt: data.monitor.balance.availableUsdt || 0,
+          });
+        }
+      }
+
+      if (data.tasks) {
+        setTasks(data.tasks.tasks || data.tasks || []);
+      }
+    } catch (error) {
+      console.error('요약 로드 실패:', error);
     }
   }
 
@@ -408,6 +443,8 @@ export default function TradePage() {
   }
 
   async function addBuyTask() {
+    if (addingBuyTask) return;
+    setAddingBuyTask(true);
     const token = localStorage.getItem('token');
     const buyInput = document.getElementById('buy');
     const sellInput = document.getElementById('sell');
@@ -458,10 +495,14 @@ export default function TradePage() {
     } catch (error) {
       console.error('매수 작업 추가 실패:', error);
       alert('매수 작업 추가 실패');
+    } finally {
+      setAddingBuyTask(false);
     }
   }
 
   async function addSellTask() {
+    if (addingSellTask) return;
+    setAddingSellTask(true);
     const token = localStorage.getItem('token');
     const buyInput = document.getElementById('buy');
     const sellInput = document.getElementById('sell');
@@ -509,6 +550,8 @@ export default function TradePage() {
     } catch (error) {
       console.error('매도 작업 추가 실패:', error);
       alert('매도 작업 추가 실패');
+    } finally {
+      setAddingSellTask(false);
     }
   }
 
@@ -798,18 +841,18 @@ export default function TradePage() {
                     borderRadius: '4px'
                   }} placeholder={isTradeByMoney ? "매수 금액 (원)" : "매수 수량 (USDT)"} />
                   <div style={{ fontSize: '12px', color: '#666', marginTop: '5px' }}>현재 보유 금액: {Number(balance.availableMoney || 0).toLocaleString()}원</div>
-                  <button onClick={addBuyTask} style={{
+                  <button onClick={addBuyTask} disabled={addingBuyTask} style={{
                     width: '100%',
                     padding: '12px',
                     marginTop: '15px',
                     fontSize: '16px',
-                    backgroundColor: '#2196F3',
+                    backgroundColor: addingBuyTask ? '#90CAF9' : '#2196F3',
                     color: 'white',
                     border: 'none',
                     borderRadius: '4px',
-                    cursor: 'pointer',
+                    cursor: addingBuyTask ? 'default' : 'pointer',
                     fontWeight: 'bold'
-                  }}>매수 작업 추가</button>
+                  }}>{addingBuyTask ? '매수 작업 추가 중...' : '매수 작업 추가'}</button>
                 </div>
               </div>
             )}
@@ -877,18 +920,18 @@ export default function TradePage() {
                       <>현재 보유 테더: {Number(balance.availableUsdt || 0).toFixed(1)} USDT</>
                     )}
                   </div>
-                  <button onClick={addSellTask} style={{
+                  <button onClick={addSellTask} disabled={addingSellTask} style={{
                     width: '100%',
                     padding: '12px',
                     marginTop: '15px',
                     fontSize: '16px',
-                    backgroundColor: '#FF9800',
+                    backgroundColor: addingSellTask ? '#FFCC80' : '#FF9800',
                     color: 'white',
                     border: 'none',
                     borderRadius: '4px',
-                    cursor: 'pointer',
+                    cursor: addingSellTask ? 'default' : 'pointer',
                     fontWeight: 'bold'
-                  }}>매도 작업 추가</button>
+                  }}>{addingSellTask ? '매도 작업 추가 중...' : '매도 작업 추가'}</button>
                 </div>
               </div>
             )}
