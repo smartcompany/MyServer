@@ -294,7 +294,7 @@ function makeEncryptToken(orderData) {
 // command 처리 함수 (clearAllOrders 또는 clearOrders)
 async function handleCommand(orderState) {
   if (!orderState || !orderState.command) {
-    // 처리할 command 없음
+    console.log('⏭️ [upbit-trade][handleCommand] 처리할 command 없음 → 바로 리턴');
     return;
   }
 
