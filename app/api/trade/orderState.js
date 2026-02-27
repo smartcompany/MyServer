@@ -60,9 +60,21 @@ function readOrderStateFromFile() {
 function saveOrderStateToFile(state) {
   try {
     const cleanedState = removeNullValues(state);
+    console.log('💾 [api][orderState] 파일 저장 시도', {
+      path: orderStateFilePath,
+      totalOrders: Array.isArray(cleanedState.orders) ? cleanedState.orders.length : 0,
+      command: cleanedState.command,
+      commandParams: cleanedState.commandParams,
+    });
     fs.writeFileSync(orderStateFilePath, JSON.stringify(cleanedState, null, 2));
+    console.log('✅ [api][orderState] 파일 저장 성공', {
+      path: orderStateFilePath,
+    });
   } catch (err) {
-    console.error('❌ [orderState] 파일 저장 실패:', err);
+    console.error('❌ [api][orderState] 파일 저장 실패:', {
+      path: orderStateFilePath,
+      error: err.message,
+    });
   }
 }
 

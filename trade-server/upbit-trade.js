@@ -113,6 +113,10 @@ const DEFAULT_ORDER_STATE = {
 
 function readOrderStateFromFile() {
   try {
+    console.log('🔍 [upbit-trade][orderState] 파일 읽기 시도', {
+      path: orderStateFilePath,
+    });
+    
     if (!fs.existsSync(orderStateFilePath)) {
       fs.writeFileSync(orderStateFilePath, JSON.stringify(DEFAULT_ORDER_STATE, null, 2));
       return { ...DEFAULT_ORDER_STATE };
@@ -132,9 +136,21 @@ function readOrderStateFromFile() {
 
 function writeOrderStateToFile(state) {
   try {
+    console.log('💾 [upbit-trade][orderState] 파일 저장 시도', {
+      path: orderStateFilePath,
+      totalOrders: Array.isArray(state.orders) ? state.orders.length : 0,
+      command: state.command,
+      commandParams: state.commandParams,
+    });
     fs.writeFileSync(orderStateFilePath, JSON.stringify(state, null, 2));
+    console.log('✅ [upbit-trade][orderState] 파일 저장 성공', {
+      path: orderStateFilePath,
+    });
   } catch (err) {
-    console.error('❌ [upbit-trade][orderState] 파일 저장 실패:', err);
+    console.error('❌ [upbit-trade][orderState] 파일 저장 실패:', {
+      path: orderStateFilePath,
+      error: err.message,
+    });
   }
 }
 
