@@ -41,17 +41,6 @@ export async function GET(request) {
   }
 
   try {
-    // 1) 로그 (마지막 20줄)
-    let logs = '';
-    try {
-      if (fs.existsSync(logFilePath)) {
-        const data = fs.readFileSync(logFilePath, 'utf8');
-        logs = data.trim().split('\n').slice(-20).join('\n');
-      }
-    } catch (e) {
-      console.error('summary: 로그 읽기 실패:', e);
-    }
-
     const configFilePath = getTradeServerPath('config.json');
     let isTrading = false;
     let config = {};
@@ -112,7 +101,6 @@ export async function GET(request) {
     };
 
     return Response.json({
-      logs,
       monitor,
       tasks: tasksPayload,
     });

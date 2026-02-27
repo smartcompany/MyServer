@@ -113,10 +113,6 @@ const DEFAULT_ORDER_STATE = {
 
 function readOrderStateFromFile() {
   try {
-    console.log('🔍 [upbit-trade][orderState] 파일 읽기 시도', {
-      path: orderStateFilePath,
-    });
-    
     if (!fs.existsSync(orderStateFilePath)) {
       fs.writeFileSync(orderStateFilePath, JSON.stringify(DEFAULT_ORDER_STATE, null, 2));
       return { ...DEFAULT_ORDER_STATE };
@@ -129,23 +125,13 @@ function readOrderStateFromFile() {
       orders: Array.isArray(parsed.orders) ? parsed.orders : [],
     };
   } catch (err) {
-    console.error('❌ [upbit-trade][orderState] 파일 읽기 실패:', err);
     return { ...DEFAULT_ORDER_STATE };
   }
 }
 
 function writeOrderStateToFile(state) {
   try {
-    console.log('💾 [upbit-trade][orderState] 파일 저장 시도', {
-      path: orderStateFilePath,
-      totalOrders: Array.isArray(state.orders) ? state.orders.length : 0,
-      command: state.command,
-      commandParams: state.commandParams,
-    });
     fs.writeFileSync(orderStateFilePath, JSON.stringify(state, null, 2));
-    console.log('✅ [upbit-trade][orderState] 파일 저장 성공', {
-      path: orderStateFilePath,
-    });
   } catch (err) {
     console.error('❌ [upbit-trade][orderState] 파일 저장 실패:', {
       path: orderStateFilePath,
@@ -210,7 +196,7 @@ async function getAccountInfo() {
 
     const response = await axios.get(`${SERVER_URL}/v1/accounts`, { headers });
     const duration = Date.now() - start;
-    console.log('⏱️ [Upbit][getAccountInfo] 응답 시간(ms):', duration);
+    //console.log('⏱️ [Upbit][getAccountInfo] 응답 시간(ms):', duration);
 
     if (response.status === 200) {
       return response.data;
@@ -469,7 +455,7 @@ async function checkOrderedData(orderedUuid) {
     const duration = Date.now() - start;
 
     if (response.status === 200) {
-      console.log('[Upbit][checkOrderedData] 주문 상태 확인 성공, ⏱️ duration(ms)=', duration);
+      //console.log('[Upbit][checkOrderedData] 주문 상태 확인 성공, ⏱️ duration(ms)=', duration);
       return response.data;
     } else {
       console.error(`❌ [Upbit][checkOrderedData] 응답 에러: HTTP ${response.status}`, response.data, '⏱️ duration(ms)=', duration);
@@ -508,7 +494,7 @@ async function getActiveOrders() {
     const duration = Date.now() - start;
 
     if (response.status === 200) {
-      console.log('[Upbit][getActiveOrders] 활성 주문 조회 성공, ⏱️ duration(ms)=', duration);
+      //console.log('[Upbit][getActiveOrders] 활성 주문 조회 성공, ⏱️ duration(ms)=', duration);
       return response.data;
     } else {
       console.error(`❌ [Upbit][getActiveOrders] 응답 에러: HTTP ${response.status}`, response.data, '⏱️ duration(ms)=', duration);

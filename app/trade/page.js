@@ -52,6 +52,22 @@ export default function TradePage() {
     }
   }, [mainArea]);
 
+  // 로그 탭이 보일 때만 1초마다 로그 폴링
+  useEffect(() => {
+    if (!mainArea) return;
+    if (taskTab !== 'logs') return;
+
+    // 탭을 연 직후 한 번 즉시 로드
+    loadLogs();
+    const logInterval = setInterval(() => {
+      loadLogs();
+    }, 1000);
+
+    return () => {
+      clearInterval(logInterval);
+    };
+  }, [mainArea, taskTab]);
+
   // 현재 시간 업데이트 (1초마다)
   useEffect(() => {
     const updateTime = () => {
@@ -104,10 +120,6 @@ export default function TradePage() {
         return;
       }
       const data = await res.json();
-
-      if (typeof data.logs === 'string') {
-        setLogs(data.logs);
-      }
 
       if (data.monitor) {
         setMonitorData(data.monitor);
