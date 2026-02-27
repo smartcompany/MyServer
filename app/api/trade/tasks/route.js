@@ -1,6 +1,6 @@
 import { verifyToken } from '../middleware';
 import { getTradeServerPath } from '../utils';
-import { getOrderState, updateOrderState, saveOrderStateImmediately } from '../orderState';
+import { getOrderState, updateOrderState } from '../orderState';
 import fs from 'fs';
 import path from 'path';
 
@@ -248,8 +248,6 @@ export async function DELETE(request) {
         return state;
       });
     }
-    
-    saveOrderStateImmediately();
 
     // 최신 상태 다시 읽어서 응답에 포함 (클라이언트에서 바로 반영 가능)
     const updatedState = getOrderState();

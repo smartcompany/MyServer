@@ -1,6 +1,6 @@
 import path from 'path';
 import fs from 'fs';
-import { updateOrderState, saveOrderStateImmediately } from './orderState';
+import { updateOrderState } from './orderState';
 
 // 프로젝트 루트 경로 찾기 (Next.js 빌드 환경에서도 올바른 경로 사용)
 export function getProjectRoot() {
@@ -44,7 +44,6 @@ export function needInitForOrderState() {
     state.commandParams = null;
     return state;
   });
-  saveOrderStateImmediately();
 }
 
 // orderState에 선택 주문 취소 명령 설정
@@ -58,6 +57,5 @@ export function clearOrders(orderIds) {
     state.commandParams = orderIds;
     return state;
   });
-  saveOrderStateImmediately();
 }
 

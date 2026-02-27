@@ -1,5 +1,5 @@
 import { verifyToken } from '../middleware';
-import { getOrderState, updateOrderState, saveOrderStateImmediately } from '../orderState';
+import { getOrderState, updateOrderState } from '../orderState';
 import { clearOrders } from '../utils';
 
 // 주문 목록 조회
@@ -83,7 +83,6 @@ export async function DELETE(request) {
       state.commandParams = [orderId];
       return state;
     });
-    saveOrderStateImmediately();
 
     return Response.json({ message: '주문 취소 요청이 접수되었습니다. 처리 중입니다.' });
   } catch (error) {
