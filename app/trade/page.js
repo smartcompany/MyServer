@@ -41,9 +41,10 @@ export default function TradePage() {
   useEffect(() => {
     if (mainArea) {
       loadConfig();
-      loadSummary();
+      loadMonitorData();
+      loadTasks();
       const dataInterval = setInterval(() => {
-        loadSummary();
+        loadMonitorData();
       }, 1000);
       return () => {
         clearInterval(dataInterval);
@@ -505,10 +506,9 @@ export default function TradePage() {
       if (res.ok) {
         const data = await res.json();
         console.log('[trade] addBuyTask: 성공', data);
-        if (data.task) {
-          setTasks((prev) => [...prev, data.task]);
-        }
         alert(data.message || '매수 작업이 추가되었습니다');
+        // 서버 상태 기준으로 작업 목록 재로딩
+        await loadTasks();
       } else {
         const error = await res.json();
         console.error('[trade] addBuyTask: 실패 응답', res.status, error);
@@ -578,10 +578,9 @@ export default function TradePage() {
       if (res.ok) {
         const data = await res.json();
         console.log('[trade] addSellTask: 성공', data);
-        if (data.task) {
-          setTasks((prev) => [...prev, data.task]);
-        }
         alert(data.message || '매도 작업이 추가되었습니다');
+        // 서버 상태 기준으로 작업 목록 재로딩
+        await loadTasks();
       } else {
         const error = await res.json();
         console.error('[trade] addSellTask: 실패 응답', res.status, error);
@@ -615,10 +614,9 @@ export default function TradePage() {
 
       if (res.ok) {
         console.log('[trade] deleteTask: 성공', data);
-        if (Array.isArray(data.tasks)) {
-          setTasks(data.tasks);
-        }
         alert(data.message || '작업이 삭제되었습니다');
+        // 삭제 성공 후 최신 작업 목록 재로딩
+        await loadTasks();
       } else {
         console.error('[trade] deleteTask: 실패 응답', res.status, data);
         alert(data.error || '작업 삭제 실패');
@@ -1171,7 +1169,11 @@ export default function TradePage() {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
               <h3 style={{ margin: 0 }}>📋 진행 중인 작업</h3>
               <div style={{ display: 'flex', gap: '5px' }}>
-                <button onClick={() => setTaskTab('tasks')} style={{
+                <button onClick={() => {
+                  setTaskTab('tasks');
+                  // 작업 목록 탭을 눌렀을 때 최신 작업 목록 로딩
+                  loadTasks();
+                }} style={{
                   padding: '6px 12px',
                   fontSize: '14px',
                   backgroundColor: taskTab === 'tasks' ? '#2196F3' : '#e0e0e0',
