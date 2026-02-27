@@ -243,11 +243,16 @@ export async function DELETE(request) {
     
     saveOrderStateImmediately();
 
+    // 최신 상태 다시 읽어서 응답에 포함 (클라이언트에서 바로 반영 가능)
+    const updatedState = getOrderState();
+
     console.log(`✅ [tasks API] 작업 삭제: ID=${taskId}`);
 
     return Response.json({
       success: true,
-      message: '작업이 삭제되었습니다'
+      message: '작업이 삭제되었습니다',
+      tasks: updatedState.orders || [],
+      total: updatedState.orders?.length || 0
     });
   } catch (error) {
     console.error('작업 삭제 실패:', error);

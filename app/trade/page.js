@@ -31,6 +31,7 @@ export default function TradePage() {
   const [currentTime, setCurrentTime] = useState('');
   const [addingBuyTask, setAddingBuyTask] = useState(false);
   const [addingSellTask, setAddingSellTask] = useState(false);
+  const [deletingTaskId, setDeletingTaskId] = useState(null);
 
   useEffect(() => {
     checkAuth();
@@ -444,7 +445,6 @@ export default function TradePage() {
 
   async function addBuyTask() {
     if (addingBuyTask) return;
-    setAddingBuyTask(true);
     const token = localStorage.getItem('token');
     const buyInput = document.getElementById('buy');
     const sellInput = document.getElementById('sell');
@@ -461,6 +461,8 @@ export default function TradePage() {
       alert('매수 기준 김치 프리미엄 또는 매도 기준 김치 프리미엄을 입력해주세요');
       return;
     }
+
+    setAddingBuyTask(true);
 
     // 작업 추가
     try {
@@ -485,9 +487,10 @@ export default function TradePage() {
 
       if (res.ok) {
         const data = await res.json();
+        if (data.task) {
+          setTasks((prev) => [...prev, data.task]);
+        }
         alert(data.message || '매수 작업이 추가되었습니다');
-        loadTasks();
-        loadConfig(); // 설정 다시 로드
       } else {
         const error = await res.json();
         alert(error.error || '매수 작업 추가 실패');
@@ -502,7 +505,6 @@ export default function TradePage() {
 
   async function addSellTask() {
     if (addingSellTask) return;
-    setAddingSellTask(true);
     const token = localStorage.getItem('token');
     const buyInput = document.getElementById('buy');
     const sellInput = document.getElementById('sell');
@@ -518,7 +520,10 @@ export default function TradePage() {
       alert('매수 기준 김치 프리미엄 또는 매도 기준 김치 프리미엄을 입력해주세요');
       return;
     }
-        // 작업 추가
+    
+    setAddingSellTask(true);
+
+    // 작업 추가
     try {
       const sellThreshold = Number(sellInput?.value);
       const buyThreshold = Number(buyInput?.value);
@@ -540,9 +545,10 @@ export default function TradePage() {
 
       if (res.ok) {
         const data = await res.json();
+        if (data.task) {
+          setTasks((prev) => [...prev, data.task]);
+        }
         alert(data.message || '매도 작업이 추가되었습니다');
-        loadTasks();
-        loadConfig(); // 설정 다시 로드
       } else {
         const error = await res.json();
         alert(error.error || '매도 작업 추가 실패');
@@ -560,6 +566,8 @@ export default function TradePage() {
       return;
     }
 
+    setDeletingTaskId(taskId);
+
     const token = localStorage.getItem('token');
     try {
       const res = await fetch(`/api/trade/tasks?id=${taskId}`, {
@@ -567,16 +575,21 @@ export default function TradePage() {
         headers: { 'Authorization': 'Bearer ' + token }
       });
 
+      const data = await res.json().catch(() => ({}));
+
       if (res.ok) {
-        alert('작업이 삭제되었습니다');
-        loadTasks();
+        if (Array.isArray(data.tasks)) {
+          setTasks(data.tasks);
+        }
+        alert(data.message || '작업이 삭제되었습니다');
       } else {
-        const error = await res.json();
-        alert(error.error || '작업 삭제 실패');
+        alert(data.error || '작업 삭제 실패');
       }
     } catch (error) {
       console.error('작업 삭제 실패:', error);
       alert('작업 삭제 실패');
+    } finally {
+      setDeletingTaskId(null);
     }
   }
 
@@ -1169,15 +1182,21 @@ export default function TradePage() {
                             </span>
                           </div>
                           {(task.status === 'buy_pending' || task.status === 'sell_pending' || task.status === 'buy_ordered' || task.status === 'sell_ordered') && (
-                            <button onClick={() => deleteTask(task.id)} style={{
-                              backgroundColor: '#f44336',
-                              color: 'white',
-                              border: 'none',
-                              borderRadius: '4px',
-                              padding: '5px 10px',
-                              cursor: 'pointer',
-                              fontSize: '12px'
-                            }}>삭제</button>
+                            <button
+                              onClick={() => deleteTask(task.id)}
+                              disabled={deletingTaskId === task.id}
+                              style={{
+                                backgroundColor: deletingTaskId === task.id ? '#ef9a9a' : '#f44336',
+                                color: 'white',
+                                border: 'none',
+                                borderRadius: '4px',
+                                padding: '5px 10px',
+                                cursor: deletingTaskId === task.id ? 'default' : 'pointer',
+                                fontSize: '12px'
+                              }}
+                            >
+                              {deletingTaskId === task.id ? '삭제 중...' : '삭제'}
+                            </button>
                           )}
                         </div>
                         <div style={{ fontSize: '14px', lineHeight: '1.6' }}>
