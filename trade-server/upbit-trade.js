@@ -66,6 +66,28 @@ const cashBalanceLogPath = path.join(tradeServerDir, 'cashBalance.json');
 const configFilePath = path.join(tradeServerDir, 'config.json');
 const logFilePath = path.join(tradeServerDir, 'trade-logs.txt');
 
+// 로그 파일 최대 크기 (바이트). 넘으면 백업 후 새 파일 생성.
+// 2MB 정도면 라즈베리파이에서도 무리 없이 읽을 수 있음.
+const MAX_LOG_SIZE_BYTES = 2 * 1024 * 1024;
+
+function rotateLogIfNeeded() {
+  try {
+    if (!fs.existsSync(logFilePath)) return;
+    const stat = fs.statSync(logFilePath);
+    if (!stat || typeof stat.size !== 'number') return;
+    if (stat.size < MAX_LOG_SIZE_BYTES) return;
+
+    const ts = moment().tz('Asia/Seoul').format('YYYYMMDD_HHmmss');
+    const backupPath = path.join(tradeServerDir, `trade-logs-${ts}.txt`);
+
+    // 기존 로그 파일을 백업 파일로 이동
+    fs.renameSync(logFilePath, backupPath);
+  } catch (err) {
+    // 로테이션 실패해도 서비스는 계속 진행
+    originalError?.('❌ [upbit-trade][logRotate] 실패:', err.message);
+  }
+}
+
 // log.js 대신 직접 로그 함수 구현 (경로 문제 해결)
 const formatDate = () => {
   return moment().tz("Asia/Seoul").format("YYYY-MM-DD HH:mm:ss");
@@ -78,6 +100,7 @@ console.log = (...args) => {
   const dateString = formatDate();
   const message = `[${dateString}] ${args.join(' ')}\n`;
   try {
+    rotateLogIfNeeded();
     fs.appendFileSync(logFilePath, message);
   } catch (err) {
     // 로그 파일 쓰기 실패해도 계속 진행
@@ -89,6 +112,7 @@ console.error = (...args) => {
   const dateString = formatDate();
   const message = `[${dateString}] ERROR: ${args.join(' ')}\n`;
   try {
+    rotateLogIfNeeded();
     fs.appendFileSync(logFilePath, message);
   } catch (err) {
     // 로그 파일 쓰기 실패해도 계속 진행
@@ -301,15 +325,9 @@ function makeEncryptToken(orderData) {
 // command 처리 함수 (clearAllOrders 또는 clearOrders)
 async function handleCommand(orderState) {
   if (!orderState || !orderState.command) {
-    console.log('⏭️ [upbit-trade][handleCommand] 처리할 command 없음 → 바로 리턴');
+    //console.log('⏭️ [upbit-trade][handleCommand] 처리할 command 없음 → 바로 리턴');
     return;
   }
-
-  console.log('🧩 [upbit-trade][handleCommand] 시작', {
-    command: orderState.command,
-    commandParams: orderState.commandParams,
-    totalOrders: Array.isArray(orderState.orders) ? orderState.orders.length : 0,
-  });
 
   switch (orderState.command) {
     case 'clearAllOrders':
@@ -323,15 +341,9 @@ async function handleCommand(orderState) {
       orderState.command = null;
       orderState.commandParams = null;
       saveOrderState(orderState);
-      console.log('✅ [upbit-trade][handleCommand] 모든 주문 취소 완료', {
-        totalOrdersAfter: orderState.orders.length,
-      });
       break;
       
     case 'clearOrders':
-      console.log('🗑️ [upbit-trade][handleCommand] 선택 주문 취소 시작', {
-        commandParams: orderState.commandParams,
-      });
       const orderIdsToClear = orderState.commandParams;
             
       // commandParams에 지정된 주문 ID들만 취소 및 제거
@@ -376,11 +388,6 @@ async function handleCommand(orderState) {
       orderState.command = null;
       orderState.commandParams = null;
       saveOrderState(orderState);
-      console.log('✅ [upbit-trade][handleCommand] 선택 주문 취소 완료', {
-        successCount: successfullyCanceled.length,
-        targetCount: ordersToCancel.length,
-        totalOrdersAfter: orderState.orders.length,
-      });
       break;
       
     default:
