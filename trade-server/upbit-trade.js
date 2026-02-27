@@ -1127,7 +1127,7 @@ async function loop() {
       console.error('Loop error:', e);
     }
 
-    await new Promise((resolve) => setTimeout(resolve, 500)); // 3초 대기 (config/삭제 반영 속도)
+    await new Promise((resolve) => setTimeout(resolve, 3000)); // 3초 대기 (config/삭제 반영 속도)
 
   }
 }
