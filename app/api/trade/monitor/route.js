@@ -74,6 +74,7 @@ export async function GET(request) {
         config: config,
       },
       orders: {
+        tetherPrice: orderState.tetherPrice,
         total: orderState.orders?.length || 0,
         buyPending: orderState.orders?.filter(o => o.status === 'buy_pending').length || 0,
         buyOrdered: orderState.orders?.filter(o => o.status === 'buy_ordered').length || 0,

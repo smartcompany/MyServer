@@ -108,42 +108,6 @@ export default function TradePage() {
     }
   }
 
-  async function loadSummary() {
-    const token = localStorage.getItem('token');
-    try {
-      const res = await fetch('/api/trade/summary', {
-        method: 'GET',
-        headers: { Authorization: 'Bearer ' + token },
-      });
-      if (!res.ok) {
-        console.error('요약 API 응답 실패:', res.status, res.statusText);
-        return;
-      }
-      const data = await res.json();
-
-      if (data.monitor) {
-        setMonitorData(data.monitor);
-        if (data.monitor.balance) {
-          setBalance({
-            krwBalance: data.monitor.balance.krwBalance || 0,
-            usdtBalance: data.monitor.balance.usdtBalance || 0,
-            availableMoney: data.monitor.balance.availableMoney || 0,
-            availableUsdt: data.monitor.balance.availableUsdt || 0,
-          });
-        }
-        if (typeof data.monitor.tetherPrice === 'number') {
-          setTetherPrice(data.monitor.tetherPrice);
-        }
-      }
-
-      if (data.tasks) {
-        setTasks(data.tasks.tasks || data.tasks || []);
-      }
-    } catch (error) {
-      console.error('요약 로드 실패:', error);
-    }
-  }
-
   async function login(e) {
     e.preventDefault();
     const id = document.getElementById('id').value;
@@ -436,6 +400,10 @@ export default function TradePage() {
             availableMoney: data.balance.availableMoney || 0,
             availableUsdt: data.balance.availableUsdt || 0
           });
+        }
+        // orderState에 저장된 테더 가격을 모니터 API에서 받아와서 상태에 반영
+        if (data.orders && typeof data.orders.tetherPrice === 'number') {
+          setTetherPrice(data.orders.tetherPrice);
         }
       }
     } catch (error) {
