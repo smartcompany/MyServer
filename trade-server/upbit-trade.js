@@ -205,8 +205,8 @@ function saveConfig(config) {
 }
 
 async function getAccountInfo() {
+  const start = Date.now();
   try {
-    const start = Date.now();
     // JWT 생성
     const payload = {
       access_key: ACCESS_KEY,
@@ -236,8 +236,8 @@ async function getAccountInfo() {
 }
 
 async function sellTether(price, volume) {
+  const start = Date.now();
   try {
-    const start = Date.now();
     // 지정가 매도 주문 데이터
     const orderData = {
       market: 'KRW-USDT', // 테더 시장
@@ -271,9 +271,8 @@ async function sellTether(price, volume) {
 }
 
 async function buyTether(price, volume) {
+  const start = Date.now();
   try {
-    const start = Date.now();
-    
     // 지정가 매수 주문 데이터
     const orderData = {
       market: 'KRW-USDT', // 테더 시장
@@ -396,8 +395,8 @@ async function handleCommand(orderState) {
 }
 
 async function cancelOrder(orderedUuid) {
+  const start = Date.now();
   try {
-    const start = Date.now();
     console.log(`주문 취소 할 ID: ${orderedUuid}`);
     const queryData = {
       uuid: orderedUuid, // 취소할 주문의 UUID
@@ -443,8 +442,8 @@ async function cancelOrder(orderedUuid) {
 }
 
 async function checkOrderedData(orderedUuid) {
+  const start = Date.now();
   try {
-    const start = Date.now();
     console.log(`주문 상태 확인: ${orderedUuid}`);
     const queryData = {
       uuid: orderedUuid,
@@ -484,8 +483,8 @@ async function checkOrderedData(orderedUuid) {
 }
 
 async function getActiveOrders() {
+  const start = Date.now();
   try {
-    const start = Date.now();
     const payload = {
       access_key: ACCESS_KEY,
       nonce: uuid.v4(),
