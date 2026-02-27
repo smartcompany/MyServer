@@ -259,6 +259,17 @@ function makeEncryptToken(orderData) {
 
 // command 처리 함수 (clearAllOrders 또는 clearOrders)
 async function handleCommand(orderState) {
+  if (!orderState || !orderState.command) {
+    // 처리할 command 없음
+    return;
+  }
+
+  console.log('🧩 [upbit-trade][handleCommand] 시작', {
+    command: orderState.command,
+    commandParams: orderState.commandParams,
+    totalOrders: Array.isArray(orderState.orders) ? orderState.orders.length : 0,
+  });
+
   switch (orderState.command) {
     case 'clearAllOrders':
       console.log('초기화 필요: 모든 주문 취소 시작');
@@ -271,11 +282,15 @@ async function handleCommand(orderState) {
       orderState.command = null;
       orderState.commandParams = null;
       saveOrderState(orderState);
-      console.log('모든 주문 취소 완료');
+      console.log('✅ [upbit-trade][handleCommand] 모든 주문 취소 완료', {
+        totalOrdersAfter: orderState.orders.length,
+      });
       break;
       
     case 'clearOrders':
-      console.log('선택 주문 취소 시작');
+      console.log('🗑️ [upbit-trade][handleCommand] 선택 주문 취소 시작', {
+        commandParams: orderState.commandParams,
+      });
       const orderIdsToClear = orderState.commandParams;
             
       // commandParams에 지정된 주문 ID들만 취소 및 제거
@@ -316,7 +331,11 @@ async function handleCommand(orderState) {
       orderState.command = null;
       orderState.commandParams = null;
       saveOrderState(orderState);
-      console.log(`선택 주문 취소 완료: ${successfullyCanceled.length}/${ordersToCancel.length}개 주문 취소 성공`);
+      console.log('✅ [upbit-trade][handleCommand] 선택 주문 취소 완료', {
+        successCount: successfullyCanceled.length,
+        targetCount: ordersToCancel.length,
+        totalOrdersAfter: orderState.orders.length,
+      });
       break;
       
     default:

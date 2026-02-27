@@ -107,6 +107,11 @@ export async function GET(request) {
 
   try {
     const orderState = getOrderState();
+    console.log('🧾 [tasks API][DELETE] 현재 orderState 요약', {
+      totalOrders: Array.isArray(orderState.orders) ? orderState.orders.length : 0,
+      command: orderState.command,
+      commandParams: orderState.commandParams,
+    });
 
     return Response.json({
       tasks: orderState.orders || [],
@@ -228,6 +233,10 @@ export async function DELETE(request) {
     }
 
     const task = orderState.orders[taskIndex];
+    console.log('🗑️ [tasks API][DELETE] 삭제 대상 작업', {
+      taskId,
+      status: task.status,
+    });
     const isPending = task.status === 'buy_pending' || task.status === 'sell_pending';
 
     if (isPending) {
@@ -239,12 +248,20 @@ export async function DELETE(request) {
     } else {
       // ordered: 거래소 취소 필요 → command로 upbit-trade가 취소 후 제거
       updateOrderState((state) => {
+        console.log('⚙️ [tasks API][DELETE] clearOrders command 설정 이전', {
+          prevCommand: state.command,
+          prevCommandParams: state.commandParams,
+        });
         if (!state.command) {
           state.command = 'clearOrders';
           state.commandParams = [taskId];
         } else if (state.command === 'clearOrders' && Array.isArray(state.commandParams)) {
           state.commandParams.push(taskId);
         }
+        console.log('⚙️ [tasks API][DELETE] clearOrders command 설정 이후', {
+          nextCommand: state.command,
+          nextCommandParams: state.commandParams,
+        });
         return state;
       });
     }
@@ -252,7 +269,13 @@ export async function DELETE(request) {
     // 최신 상태 다시 읽어서 응답에 포함 (클라이언트에서 바로 반영 가능)
     const updatedState = getOrderState();
 
-    console.log(`✅ [tasks API] 작업 삭제: ID=${taskId}`);
+    console.log('✅ [tasks API][DELETE] 작업 삭제 처리 완료', {
+      taskId,
+      isPending,
+      totalOrdersAfter: Array.isArray(updatedState.orders) ? updatedState.orders.length : 0,
+      commandAfter: updatedState.command,
+      commandParamsAfter: updatedState.commandParams,
+    });
 
     return Response.json({
       success: true,
