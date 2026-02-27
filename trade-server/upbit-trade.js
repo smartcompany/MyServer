@@ -196,6 +196,7 @@ function saveConfig(config) {
 
 async function getAccountInfo() {
   try {
+    const start = Date.now();
     // JWT 생성
     const payload = {
       access_key: ACCESS_KEY,
@@ -208,6 +209,8 @@ async function getAccountInfo() {
     };
 
     const response = await axios.get(`${SERVER_URL}/v1/accounts`, { headers });
+    const duration = Date.now() - start;
+    console.log('⏱️ [Upbit][getAccountInfo] 응답 시간(ms):', duration);
 
     if (response.status === 200) {
       return response.data;
@@ -216,13 +219,15 @@ async function getAccountInfo() {
       return null;
     }
   } catch (error) {
-    console.error('Error fetching account info:', error.message);
+    const duration = Date.now() - start;
+    console.error('❌ [Upbit][getAccountInfo] 실패, duration(ms)=', duration, 'message=', error.message);
     return null;
   }
 }
 
 async function sellTether(price, volume) {
   try {
+    const start = Date.now();
     // 지정가 매도 주문 데이터
     const orderData = {
       market: 'KRW-USDT', // 테더 시장
@@ -239,22 +244,25 @@ async function sellTether(price, volume) {
     };
 
     const response = await axios.post(`${SERVER_URL}/v1/orders`, orderData, { headers });
+    const duration = Date.now() - start;
 
     if (response.status === 201) {
-      console.log('지정가 매도 주문 성공:', response.data);
+      console.log('지정가 매도 주문 성공:', response.data, '⏱️ duration(ms)=', duration);
       return response.data;
     } else {
-      console.error(`Error: ${response.status}, ${response.data}`);
+      console.error(`❌ [Upbit][sellTether] 응답 에러: HTTP ${response.status}`, response.data, '⏱️ duration(ms)=', duration);
       return null;
     }
   } catch (error) {
-    console.error('Error placing limit sell order:', error.response?.data || error.message);
+    const duration = Date.now() - start;
+    console.error('❌ [Upbit][sellTether] 실패:', error.response?.data || error.message, '⏱️ duration(ms)=', duration);
     return null;
   }
 }
 
 async function buyTether(price, volume) {
   try {
+    const start = Date.now();
     
     // 지정가 매수 주문 데이터
     const orderData = {
@@ -272,22 +280,19 @@ async function buyTether(price, volume) {
     };
 
     const response = await axios.post(`${SERVER_URL}/v1/orders`, orderData, { headers });
+    const duration = Date.now() - start;
 
     if (response.status === 201) {
-      //console.log('지정가 매수 주문 성공:', response.data);
+      console.log('지정가 매수 주문 성공:', response.data, '⏱️ duration(ms)=', duration);
       return response.data;
     } else {
-      console.error(`❌ 매수 주문 API 응답 에러: HTTP ${response.status}`, response.data);
+      console.error(`❌ [Upbit][buyTether] 응답 에러: HTTP ${response.status}`, response.data, '⏱️ duration(ms)=', duration);
       return null;
     }
   } catch (error) {
+    const duration = Date.now() - start;
     const errorData = error.response?.data;
-    console.error('❌ 매수 주문 실패 (401 등):');
-    if (errorData) {
-      console.error(`   Upbit 응답 상세: ${JSON.stringify(errorData)}`);
-    } else {
-      console.error(`   에러 메시지: ${error.message}`);
-    }
+    console.error('❌ [Upbit][buyTether] 실패 (401 등):', errorData || error.message, '⏱️ duration(ms)=', duration);
     return null;
   }
 }
@@ -399,6 +404,7 @@ async function handleCommand(orderState) {
 
 async function cancelOrder(orderedUuid) {
   try {
+    const start = Date.now();
     console.log(`주문 취소 할 ID: ${orderedUuid}`);
     const queryData = {
       uuid: orderedUuid, // 취소할 주문의 UUID
@@ -414,15 +420,17 @@ async function cancelOrder(orderedUuid) {
       headers, 
       params: queryData
     });
+    const duration = Date.now() - start;
 
     if (response.status === 200) {
-      //console.log('주문 취소 성공:', response.data);
+      console.log('주문 취소 성공:', response.data, '⏱️ duration(ms)=', duration);
       return response.data;
     } else {
-      console.error(`❌ 주문 취소 API 응답 에러: HTTP ${response.status}`, response.data);
+      console.error(`❌ [Upbit][cancelOrder] 응답 에러: HTTP ${response.status}`, response.data, '⏱️ duration(ms)=', duration);
       return null;
     }
   } catch (error) {
+    const duration = Date.now() - start;
     const errorData = error.response?.data;
 
     // 이미 취소된 주문이면 성공으로 간주하고 진행
@@ -431,7 +439,7 @@ async function cancelOrder(orderedUuid) {
       return { uuid: orderedUuid, state: 'done' };
     }
 
-    console.error('❌ 주문 취소 실패 (401 등):');
+    console.error('❌ [Upbit][cancelOrder] 실패 (401 등): duration(ms)=', duration);
     if (errorData) {
       console.error(`   Upbit 응답 상세: ${JSON.stringify(errorData)}`);
     } else {
@@ -443,6 +451,7 @@ async function cancelOrder(orderedUuid) {
 
 async function checkOrderedData(orderedUuid) {
   try {
+    const start = Date.now();
     console.log(`주문 상태 확인: ${orderedUuid}`);
     const queryData = {
       uuid: orderedUuid,
@@ -457,30 +466,33 @@ async function checkOrderedData(orderedUuid) {
       headers,
       params: queryData
     });
+    const duration = Date.now() - start;
 
     if (response.status === 200) {
-      //console.log('주문 상태 확인 성공:', JSON.stringify(response.data));
+      console.log('[Upbit][checkOrderedData] 주문 상태 확인 성공, ⏱️ duration(ms)=', duration);
       return response.data;
     } else {
-      console.error(`Error: ${response.status}, ${response.data}`);
+      console.error(`❌ [Upbit][checkOrderedData] 응답 에러: HTTP ${response.status}`, response.data, '⏱️ duration(ms)=', duration);
       return null;
     }
   } catch (error) {
+    const duration = Date.now() - start;
     const errorData = error.response?.data;
     
     // 취소된 주문이거나 존재하지 않는 주문이면 cancel 상태로 반환
     if (errorData?.error?.name === 'canceled_order' || errorData?.error?.name === 'order_not_found') {
-      console.log(`ℹ️ [checkOrderedData] 주문이 취소되었거나 존재하지 않습니다. (ID: ${orderedUuid})`);
+      console.log(`ℹ️ [checkOrderedData] 주문이 취소되었거나 존재하지 않습니다. (ID: ${orderedUuid}), ⏱️ duration(ms)=${duration}`);
       return { uuid: orderedUuid, state: 'cancel' };
     }
     
-    console.error('Error checking ordered data:', error.message);
+    console.error('❌ [Upbit][checkOrderedData] 실패:', error.message, '⏱️ duration(ms)=', duration);
     return null;
   }
 }
 
 async function getActiveOrders() {
   try {
+    const start = Date.now();
     const payload = {
       access_key: ACCESS_KEY,
       nonce: uuid.v4(),
@@ -493,15 +505,18 @@ async function getActiveOrders() {
 
     // 활성화된 주문 조회 API 호출
     const response = await axios.get(`${SERVER_URL}/v1/orders`, { headers });
+    const duration = Date.now() - start;
 
     if (response.status === 200) {
+      console.log('[Upbit][getActiveOrders] 활성 주문 조회 성공, ⏱️ duration(ms)=', duration);
       return response.data;
     } else {
-      console.error(`Error: ${response.status}, ${response.data}`);
+      console.error(`❌ [Upbit][getActiveOrders] 응답 에러: HTTP ${response.status}`, response.data, '⏱️ duration(ms)=', duration);
       return null;
     }
   } catch (error) {
-    console.error('Error fetching active orders:', error.message);
+    const duration = Date.now() - start;
+    console.error('❌ [Upbit][getActiveOrders] 실패:', error.message, '⏱️ duration(ms)=', duration);
     return null;
   }
 }
