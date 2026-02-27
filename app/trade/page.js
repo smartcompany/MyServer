@@ -32,6 +32,7 @@ export default function TradePage() {
   const [addingBuyTask, setAddingBuyTask] = useState(false);
   const [addingSellTask, setAddingSellTask] = useState(false);
   const [deletingTaskId, setDeletingTaskId] = useState(null);
+  const [tetherPrice, setTetherPrice] = useState(null);
 
   useEffect(() => {
     checkAuth();
@@ -116,6 +117,9 @@ export default function TradePage() {
             availableMoney: data.monitor.balance.availableMoney || 0,
             availableUsdt: data.monitor.balance.availableUsdt || 0,
           });
+        }
+        if (typeof data.monitor.tetherPrice === 'number') {
+          setTetherPrice(data.monitor.tetherPrice);
         }
       }
 
@@ -462,6 +466,11 @@ export default function TradePage() {
       return;
     }
 
+    if (isTradeByMoneyRadio?.value === 'money' && (tetherPrice == null || Number(tetherPrice) <= 0)) {
+      alert('테더 가격을 아직 불러오지 못했습니다. 잠시 후 다시 시도해주세요.');
+      return;
+    }
+
     setAddingBuyTask(true);
 
     // 작업 추가
@@ -469,6 +478,13 @@ export default function TradePage() {
       const isTradeByMoney = isTradeByMoneyRadio?.value === 'money';
       const buyThreshold = Number(buyInput?.value);
       const sellThreshold = Number(sellInput?.value);
+
+      console.log('[trade] addBuyTask: 요청 시작', {
+        amount: Number(amount),
+        buyThreshold,
+        sellThreshold,
+        isTradeByMoney,
+      });
 
       const res = await fetch('/api/trade/tasks', {
         method: 'POST',
@@ -481,18 +497,21 @@ export default function TradePage() {
           amount: Number(amount),
           buyThreshold: buyThreshold,
           sellThreshold: sellThreshold,
-          isTradeByMoney: isTradeByMoney
+          isTradeByMoney: isTradeByMoney,
+          tetherPrice: tetherPrice
         })
       });
 
       if (res.ok) {
         const data = await res.json();
+        console.log('[trade] addBuyTask: 성공', data);
         if (data.task) {
           setTasks((prev) => [...prev, data.task]);
         }
         alert(data.message || '매수 작업이 추가되었습니다');
       } else {
         const error = await res.json();
+        console.error('[trade] addBuyTask: 실패 응답', res.status, error);
         alert(error.error || '매수 작업 추가 실패');
       }
     } catch (error) {
@@ -521,12 +540,24 @@ export default function TradePage() {
       return;
     }
     
+    if (isTradeByMoney && (tetherPrice == null || Number(tetherPrice) <= 0)) {
+      alert('테더 가격을 아직 불러오지 못했습니다. 잠시 후 다시 시도해주세요.');
+      return;
+    }
+    
     setAddingSellTask(true);
 
     // 작업 추가
     try {
       const sellThreshold = Number(sellInput?.value);
       const buyThreshold = Number(buyInput?.value);
+
+      console.log('[trade] addSellTask: 요청 시작', {
+        amount: Number(amount),
+        buyThreshold,
+        sellThreshold,
+        isTradeByMoney,
+      });
 
       const res = await fetch('/api/trade/tasks', {
         method: 'POST',
@@ -539,18 +570,21 @@ export default function TradePage() {
           amount: Number(amount),
           buyThreshold: buyThreshold,
           sellThreshold: sellThreshold,
-          isTradeByMoney: isTradeByMoney // 매도 방식 전달
+          isTradeByMoney: isTradeByMoney, // 매도 방식 전달
+          tetherPrice: tetherPrice
         })
       });
 
       if (res.ok) {
         const data = await res.json();
+        console.log('[trade] addSellTask: 성공', data);
         if (data.task) {
           setTasks((prev) => [...prev, data.task]);
         }
         alert(data.message || '매도 작업이 추가되었습니다');
       } else {
         const error = await res.json();
+        console.error('[trade] addSellTask: 실패 응답', res.status, error);
         alert(error.error || '매도 작업 추가 실패');
       }
     } catch (error) {
@@ -570,6 +604,8 @@ export default function TradePage() {
 
     const token = localStorage.getItem('token');
     try {
+      console.log('[trade] deleteTask: 요청 시작', { taskId });
+
       const res = await fetch(`/api/trade/tasks?id=${taskId}`, {
         method: 'DELETE',
         headers: { 'Authorization': 'Bearer ' + token }
@@ -578,11 +614,13 @@ export default function TradePage() {
       const data = await res.json().catch(() => ({}));
 
       if (res.ok) {
+        console.log('[trade] deleteTask: 성공', data);
         if (Array.isArray(data.tasks)) {
           setTasks(data.tasks);
         }
         alert(data.message || '작업이 삭제되었습니다');
       } else {
+        console.error('[trade] deleteTask: 실패 응답', res.status, data);
         alert(data.error || '작업 삭제 실패');
       }
     } catch (error) {

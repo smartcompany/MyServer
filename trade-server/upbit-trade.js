@@ -933,6 +933,10 @@ async function trade() {
 
   // 매도 대기 또는 매수 대기 주문 처리 (sell_pending → sell_ordered, buy_pending → buy_ordered)
   await processPendingOrders(orderState, rate, tetherPrice);
+
+  // 현재 테더 가격을 orderState에 저장 (요약/웹에서 재사용)
+  orderState.tetherPrice = tetherPrice;
+  saveOrderState(orderState);
 }
 
 function updateCashBalnce(orderState, accountInfo, tetherPrice) {

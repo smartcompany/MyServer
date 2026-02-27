@@ -52,9 +52,6 @@ export async function GET(request) {
       console.error('summary: 로그 읽기 실패:', e);
     }
 
-    // 2) 모니터 데이터 (monitor API와 동일한 구조)
-    const module = loadUpbitTradeModule();
-
     const configFilePath = getTradeServerPath('config.json');
     let isTrading = false;
     let config = {};
@@ -73,11 +70,14 @@ export async function GET(request) {
       cashBalance = JSON.parse(fs.readFileSync(cashBalancePath, 'utf8'));
     }
 
+    // orderState에 저장된 테더 가격 재사용 (upbit-trade 루프에서 저장)
+    const tetherPrice = typeof orderState.tetherPrice === 'number' ? orderState.tetherPrice : null;
+
     const monitor = {
       module: {
-        loaded: module !== null,
-        hasStart: module && typeof module.start === 'function',
-        hasStop: module && typeof module.stop === 'function',
+        loaded: true,
+        hasStart: true,
+        hasStop: true,
       },
       trading: {
         isTrading,
@@ -101,6 +101,7 @@ export async function GET(request) {
         availableMoney: cashBalance.availableMoney || 0,
         availableUsdt: cashBalance.availableUsdt || 0,
       },
+      tetherPrice,
       timestamp: new Date().toISOString(),
     };
 

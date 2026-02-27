@@ -64,17 +64,12 @@ function loadUpbitTradeModule() {
 }
 
 // volume 계산 함수
-async function calculateVolume(type, amount, isTradeByMoney, buyThreshold, sellThreshold) {
+// tetherPriceOverride는 필수(웹에서 현재 테더 가격을 전달)
+async function calculateVolume(type, amount, isTradeByMoney, buyThreshold, sellThreshold, tetherPriceOverride) {
   if (isTradeByMoney) {
-    // isTradeByMoney가 true일 경우 테더 가격을 가져와서 volume 계산
-    const module = loadUpbitTradeModule();
-    if (!module || typeof module.getTetherPrice !== 'function') {
-      throw new Error('테더 가격을 가져올 수 없습니다');
-    }
-
-    const tetherPrice = await module.getTetherPrice();
-    if (!tetherPrice) {
-      throw new Error('테더 가격 조회 실패');
+    const tetherPrice = Number(tetherPriceOverride);
+    if (!tetherPrice || Number.isNaN(tetherPrice) || tetherPrice <= 0) {
+      throw new Error('테더 가격(tetherPrice)이 필요합니다');
     }
 
     const money = Number(amount);
@@ -115,7 +110,8 @@ export async function GET(request) {
 
     return Response.json({
       tasks: orderState.orders || [],
-      total: orderState.orders?.length || 0
+      total: orderState.orders?.length || 0,
+      tetherPrice: typeof orderState.tetherPrice === 'number' ? orderState.tetherPrice : null
     });
   } catch (error) {
     console.error('작업 목록 조회 실패:', error);
@@ -132,10 +128,10 @@ export async function POST(request) {
 
   try {
     const body = await request.json();
-    const { type, amount, isTradeByMoney, buyThreshold, sellThreshold } = body; // type: 'buy' or 'sell', amount: 투자 금액 또는 수량, isTradeByMoney: 매매 방식, buyThreshold/sellThreshold: 프리미엄
+    const { type, amount, isTradeByMoney, buyThreshold, sellThreshold, tetherPrice } = body; // type: 'buy' or 'sell', amount: 투자 금액 또는 수량, isTradeByMoney: 매매 방식, buyThreshold/sellThreshold: 프리미엄, tetherPrice: 현재 테더 가격
 
     if (!type || !['buy', 'sell'].includes(type)) {
-      return Response.json({ error: 'type은 "buy" 또는 "sell"이어야 합니다' }, { status: 400 });
+      return Response.json({ error: 'type은 \"buy\" 또는 \"sell\"이어야 합니다' }, { status: 400 });
     }
 
     if (!amount || Number(amount) <= 0) {
@@ -147,10 +143,22 @@ export async function POST(request) {
       return Response.json({ error: '매도 작업은 isTradeByMoney 값이 필요합니다' }, { status: 400 });
     }
 
+    // 금액 기반 매매라면 tetherPrice는 필수
+    if (isTradeByMoney && (tetherPrice == null || Number(tetherPrice) <= 0 || Number.isNaN(Number(tetherPrice)))) {
+      return Response.json({ error: 'tetherPrice는 0보다 큰 숫자여야 합니다' }, { status: 400 });
+    }
+
     // volume 계산
     let volume;
     try {
-      volume = await calculateVolume(type, amount, isTradeByMoney, buyThreshold, sellThreshold);
+      volume = await calculateVolume(
+        type,
+        amount,
+        isTradeByMoney,
+        buyThreshold,
+        sellThreshold,
+        tetherPrice != null ? Number(tetherPrice) : undefined
+      );
     } catch (error) {
       const statusCode = error.message.includes('필요합니다') || error.message.includes('0 이하') ? 400 : 500;
       return Response.json({ error: error.message }, { status: statusCode });

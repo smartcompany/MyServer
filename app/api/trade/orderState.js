@@ -24,7 +24,7 @@ function initOrderState() {
 
   try {
     if (!fs.existsSync(orderStateFilePath)) {
-      global.orderStateMemory.orderState = { orders: [], command: null, commandParams: null };
+      global.orderStateMemory.orderState = { orders: [], command: null, commandParams: null, tetherPrice: null };
       saveOrderStateToFile();
       return;
     }
@@ -32,12 +32,13 @@ function initOrderState() {
     const parsed = JSON.parse(data);
     
     if (!Array.isArray(parsed.orders)) {
-      global.orderStateMemory.orderState = { orders: [], command: null, commandParams: null };
+      global.orderStateMemory.orderState = { orders: [], command: null, commandParams: null, tetherPrice: null };
     } else {
       global.orderStateMemory.orderState = {
         orders: parsed.orders || [],
         command: parsed.command || null,
-        commandParams: parsed.commandParams || null
+        commandParams: parsed.commandParams || null,
+        tetherPrice: parsed.tetherPrice || null
       };
     }
     console.log(`✅ [orderState] 메모리 초기화 완료: ${global.orderStateMemory.orderState.orders.length}개 주문`);
