@@ -70,6 +70,8 @@ const logFilePath = path.join(tradeServerDir, 'trade-logs.txt');
 // 2MB 정도면 라즈베리파이에서도 무리 없이 읽을 수 있음.
 const MAX_LOG_SIZE_BYTES = 2 * 1024 * 1024;
 
+const backupLogsDir = path.join(tradeServerDir, 'backup_logs');
+
 function rotateLogIfNeeded() {
   try {
     if (!fs.existsSync(logFilePath)) return;
@@ -77,10 +79,14 @@ function rotateLogIfNeeded() {
     if (!stat || typeof stat.size !== 'number') return;
     if (stat.size < MAX_LOG_SIZE_BYTES) return;
 
-    const ts = moment().tz('Asia/Seoul').format('YYYYMMDD_HHmmss');
-    const backupPath = path.join(tradeServerDir, `trade-logs-${ts}.txt`);
+    if (!fs.existsSync(backupLogsDir)) {
+      fs.mkdirSync(backupLogsDir, { recursive: true });
+    }
 
-    // 기존 로그 파일을 백업 파일로 이동
+    const ts = moment().tz('Asia/Seoul').format('YYYYMMDD_HHmmss');
+    const backupPath = path.join(backupLogsDir, `trade-logs-${ts}.txt`);
+
+    // 기존 로그 파일을 backup_logs 폴더로 이동
     fs.renameSync(logFilePath, backupPath);
   } catch (err) {
     // 로테이션 실패해도 서비스는 계속 진행

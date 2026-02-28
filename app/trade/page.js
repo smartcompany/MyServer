@@ -380,6 +380,26 @@ export default function TradePage() {
     }
   }
 
+  async function deleteBackupLogs() {
+    if (!confirm('백업 로그를 모두 삭제할까요?')) return;
+    const token = localStorage.getItem('token');
+    try {
+      const res = await fetch('/api/trade/logs/backups', {
+        method: 'DELETE',
+        headers: { 'Authorization': 'Bearer ' + token }
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        alert(data.error || '백업 로그 삭제 실패');
+        return;
+      }
+      alert(data.message || `백업 로그 ${data.deleted || 0}개를 삭제했습니다.`);
+    } catch (error) {
+      console.error('백업 로그 삭제 실패:', error);
+      alert('백업 로그 삭제 실패');
+    }
+  }
+
 
   async function loadMonitorData() {
     const token = localStorage.getItem('token');
@@ -1290,7 +1310,7 @@ export default function TradePage() {
 
             {taskTab === 'logs' && (
               <div>
-                <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '10px' }}>
+                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginBottom: '10px' }}>
                   <button onClick={downloadLogs} style={{
                     padding: '6px 12px',
                     fontSize: '14px',
@@ -1305,6 +1325,21 @@ export default function TradePage() {
                     gap: '5px'
                   }}>
                     📥 다운로드
+                  </button>
+                  <button onClick={deleteBackupLogs} style={{
+                    padding: '6px 12px',
+                    fontSize: '14px',
+                    backgroundColor: '#f44336',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '4px',
+                    cursor: 'pointer',
+                    fontWeight: 'bold',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '5px'
+                  }}>
+                    🗑️ 백업 삭제
                   </button>
                 </div>
                 <pre style={{
