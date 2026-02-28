@@ -794,13 +794,11 @@ async function processPendingOrders(orderState, rate, tetherPrice) {
     // 매수 가격은 현재 테더 가격보다 낮아야 함 (현재가가 최고값)
     if (expactedBuyPrice > tetherPrice) {
       expactedBuyPrice = tetherPrice;
-      console.log(`[주문 ${order.id}] 계산된 매수가가 현재가(${tetherPrice}원)보다 높아 현재가로 조정: ${expactedBuyPrice}원`);
     }
     
     // 매도 가격은 현재 테더 가격보다 높아야 함 (현재가가 최저값)
     if (expactedSellPrice < tetherPrice) {
       expactedSellPrice = tetherPrice;
-      console.log(`[주문 ${order.id}] 계산된 매도가가 현재가(${tetherPrice}원)보다 낮아 현재가로 조정: ${expactedSellPrice}원`);
     }
     
     if (order.status === 'sell_pending') {

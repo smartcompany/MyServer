@@ -61,7 +61,7 @@ export default function TradePage() {
     loadLogs();
     const logInterval = setInterval(() => {
       loadLogs();
-    }, 1000);
+    }, 3000);
 
     return () => {
       clearInterval(logInterval);
