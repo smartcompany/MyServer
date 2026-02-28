@@ -42,7 +42,6 @@ export default function TradePage() {
     if (mainArea) {
       loadConfig();
       loadMonitorData();
-      loadTasks();
       const dataInterval = setInterval(() => {
         loadMonitorData();
       }, 1000);
@@ -404,6 +403,10 @@ export default function TradePage() {
         // orderState에 저장된 테더 가격을 모니터 API에서 받아와서 상태에 반영
         if (data.orders && typeof data.orders.tetherPrice === 'number') {
           setTetherPrice(data.orders.tetherPrice);
+        }
+        // 모니터 API에 포함된 작업 목록으로 상태 갱신 (orderState 한 번 읽기로 통합)
+        if (Array.isArray(data.tasks)) {
+          setTasks(data.tasks);
         }
       }
     } catch (error) {

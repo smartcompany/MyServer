@@ -85,6 +85,9 @@ export async function GET(request) {
         buyWaiting: (orderState.orders?.filter(o => o.status === 'buy_pending' || o.status === 'buy_ordered').length || 0),
         sellWaiting: (orderState.orders?.filter(o => o.status === 'sell_pending' || o.status === 'sell_ordered').length || 0),
       },
+      // 작업 목록 (orderState.orders) — loadMonitorData 한 번으로 모니터+작업 목록 갱신
+      tasks: orderState.orders || [],
+      total: orderState.orders?.length || 0,
       balance: {
         krwBalance: cashBalance.krwBalance || 0,
         usdtBalance: cashBalance.usdtBalance || 0,
