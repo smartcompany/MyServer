@@ -36,9 +36,6 @@ export async function GET(request) {
   }
 
   try {
-    const token = makeUpbitToken();
-    const headers = { Authorization: `Bearer ${token}` };
-
     const result = {
       upbitXrpBalance: null,
       upbitKrwBalance: null,
@@ -56,6 +53,8 @@ export async function GET(request) {
 
     // 1) 계정 보유 현금/코인
     try {
+      const token = makeUpbitToken();
+      const headers = { Authorization: `Bearer ${token}` };
       const accountsRes = await fetch(`${UPBIT_SERVER}/v1/accounts`, { headers });
       if (!accountsRes.ok) {
         const errText = await accountsRes.text();
@@ -73,6 +72,8 @@ export async function GET(request) {
 
     // 2) KRW-XRP 체결 대기 주문 중 매수 주문 금액 합계
     try {
+      const token = makeUpbitToken();
+      const headers = { Authorization: `Bearer ${token}` };
       const ordersRes = await fetch(`${UPBIT_SERVER}/v1/orders?market=KRW-XRP&state=wait`, { headers });
       if (!ordersRes.ok) {
         const errText = await ordersRes.text();
