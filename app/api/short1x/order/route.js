@@ -115,7 +115,11 @@ export async function POST(request) {
   } catch (err) {
     const msg = err.retMsg || err.message || '주문 처리 중 오류가 발생했습니다.';
     const code = err.retCode;
-    console.error('[short1x] Bybit 주문 오류:', msg, code, err);
+    console.error(`[short1x][order][${reqId}] Bybit 주문 오류`, {
+      message: msg,
+      retCode: code,
+      raw: err,
+    });
     return Response.json(
       { error: msg, retCode: code },
       { status: code === 10001 ? 401 : 502 }

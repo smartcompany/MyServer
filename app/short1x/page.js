@@ -304,15 +304,21 @@ export default function Short1xPage() {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        setMessage({ type: 'error', text: data.error || '주문 실패' });
+        const errMsg = data.error || '주문 실패';
+        setMessage({ type: 'error', text: errMsg });
+        alert(errMsg);
         return;
       }
+      const successMsg = data.message + (data.orderId ? ` (주문 ID: ${data.orderId})` : '');
       setMessage({
         type: 'success',
-        text: data.message + (data.orderId ? ` (주문 ID: ${data.orderId})` : '')
+        text: successMsg
       });
+      alert(successMsg);
     } catch (err) {
-      setMessage({ type: 'error', text: err.message || '주문 요청 실패' });
+      const errMsg = err.message || '주문 요청 실패';
+      setMessage({ type: 'error', text: errMsg });
+      alert(errMsg);
     } finally {
       setLoading(false);
     }
