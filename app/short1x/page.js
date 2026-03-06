@@ -726,7 +726,11 @@ export default function Short1xPage() {
                 )}
                 {withdrawAddresses.map((item) => {
                   const value = `${item.withdraw_address}||${item.secondary_address || ''}||${item.net_type}`;
-                  const label = `${item.exchange_name || item.wallet_type || item.beneficiary_name || '등록 주소'} / ${item.net_type}${item.secondary_address ? ` / 태그 ${item.secondary_address}` : ''}`;
+                  const label = [
+                    item.withdraw_address,
+                    item.secondary_address ? `태그 ${item.secondary_address}` : null,
+                    item.net_type ? item.net_type : null,
+                  ].filter(Boolean).join(' / ');
                   return (
                     <option key={value} value={value}>
                       {label}
