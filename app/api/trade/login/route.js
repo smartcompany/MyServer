@@ -112,7 +112,7 @@ export async function POST(request) {
 
     const PASSWORD_HASH = getStoredHash();
     if (!PASSWORD_HASH || PASSWORD_HASH.length !== 60) {
-      console.error('❌ PASSWORD_HASH 없음 또는 60자 아님 (길이:', PASSWORD_HASH.length, ')');
+      console.error('❌ PASSWORD_HASH 없음 또는 60자 아님');
       return Response.json({ error: '서버 설정 오류' }, { status: 500 });
     }
 
@@ -152,10 +152,8 @@ export async function POST(request) {
 
     if (!passwordOk) {
       recordFailedLogin(ip);
-      console.error('[login] 인증 실패: 비밀번호 불일치 (해시 길이:', PASSWORD_HASH.length, ')');
       return Response.json({
         error: isDev ? '비밀번호가 올바르지 않습니다. scripts/gen-password-hash.js로 다시 생성해보세요.' : '인증 실패',
-        ...(isDev && { readHash: PASSWORD_HASH, readHashLength: PASSWORD_HASH.length }),
       }, { status: 401 });
     }
 
