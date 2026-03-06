@@ -80,8 +80,11 @@ export async function POST(request) {
       withdrawId: id,
     });
   } catch (err) {
-    const msg = err?.retMsg || err?.message || 'Bybit 출금 처리 중 오류가 발생했습니다.';
+    let msg = err?.retMsg || err?.message || 'Bybit 출금 처리 중 오류가 발생했습니다.';
     const code = err?.retCode;
+    if (typeof msg === 'string' && /permission denied|api key permission/i.test(msg)) {
+      msg = 'API 키 권한 부족입니다. Bybit에서 해당 API 키에 [지갑 - 출금(Withdraw)] 권한을 활성화해주세요. (마스터 API 키만 출금 가능합니다.)';
+    }
     console.error(`[short1x][bybit-withdraw][${reqId}] error`, { retCode: code, retMsg: msg });
     return Response.json(
       { error: msg, retCode: code },

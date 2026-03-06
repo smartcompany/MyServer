@@ -11,6 +11,13 @@ function formatNumberInput(value) {
   return num.toLocaleString();
 }
 
+function formatDecimalInput(value) {
+  const s = String(value).replace(/[^\d.]/g, '');
+  const parts = s.split('.');
+  if (parts.length > 2) return parts[0] + '.' + parts.slice(1).join('');
+  return s;
+}
+
 function mapUpbitInfo(data) {
   return {
     upbitXrpBalance: data.upbitXrpBalance,
@@ -41,6 +48,9 @@ export default function Short1xPage() {
   const [upbitPrice, setUpbitPrice] = useState('');
   const [upbitVolume, setUpbitVolume] = useState('');
   const [upbitOrderLoading, setUpbitOrderLoading] = useState(false);
+  const [upbitSellPrice, setUpbitSellPrice] = useState('');
+  const [upbitSellVolume, setUpbitSellVolume] = useState('');
+  const [upbitSellOrderLoading, setUpbitSellOrderLoading] = useState(false);
   const [withdrawAddresses, setWithdrawAddresses] = useState([]);
   const [withdrawAddressValue, setWithdrawAddressValue] = useState('');
   const [withdrawAmount, setWithdrawAmount] = useState('');
@@ -276,6 +286,45 @@ export default function Short1xPage() {
       setMessage({ type: 'error', text: err.message || '주문 요청 실패' });
     } finally {
       setUpbitOrderLoading(false);
+    }
+  }
+
+  async function placeUpbitSellOrder(e) {
+    e.preventDefault();
+    const price = Number(String(upbitSellPrice).replace(/,/g, ''));
+    const volume = Number(String(upbitSellVolume).replace(/,/g, ''));
+    if (!Number.isFinite(price) || price <= 0 || !Number.isFinite(volume) || volume <= 0) {
+      setMessage({ type: 'error', text: '지정가(원)와 XRP 수량을 올바르게 입력해주세요.' });
+      return;
+    }
+    setUpbitSellOrderLoading(true);
+    setMessage(null);
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch('/api/short1x/upbit-order', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+        body: JSON.stringify({ price, volume, side: 'ask' }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setMessage({ type: 'error', text: data.error || '업비트 매도 주문 실패' });
+        return;
+      }
+      setMessage({ type: 'success', text: data.message || '매도 주문 접수됨' });
+      setUpbitSellPrice('');
+      setUpbitSellVolume('');
+      fetch('/api/short1x/upbit-info', { headers: { Authorization: 'Bearer ' + token } })
+        .then((r) => r.json())
+        .then((d) => {
+          if (d.error) setUpbitInfo({ accountError: d.error });
+          else setUpbitInfo(mapUpbitInfo(d));
+        })
+        .catch(() => setUpbitInfo({ accountError: '업비트 정보 조회 실패' }));
+    } catch (err) {
+      setMessage({ type: 'error', text: err.message || '매도 주문 요청 실패' });
+    } finally {
+      setUpbitSellOrderLoading(false);
     }
   }
 
@@ -706,6 +755,45 @@ export default function Short1xPage() {
             }}
           >
             {upbitOrderLoading ? '주문 중...' : '매수 주문'}
+          </button>
+        </form>
+        <form onSubmit={placeUpbitSellOrder} style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'flex-end', marginTop: 8 }}>
+          <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+            <span style={{ fontSize: 12, color: '#555' }}>지정가(원)</span>
+            <input
+              type="text"
+              inputMode="numeric"
+              placeholder="예: 1,000"
+              value={upbitSellPrice}
+              onChange={(e) => setUpbitSellPrice(formatNumberInput(e.target.value))}
+              style={{ width: 120, padding: '6px 8px' }}
+            />
+          </label>
+          <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+            <span style={{ fontSize: 12, color: '#555' }}>XRP 수량</span>
+            <input
+              type="text"
+              inputMode="decimal"
+              placeholder="예: 100"
+              value={upbitSellVolume}
+              onChange={(e) => setUpbitSellVolume(formatDecimalInput(e.target.value))}
+              style={{ width: 120, padding: '6px 8px' }}
+            />
+          </label>
+          <button
+            type="submit"
+            disabled={upbitSellOrderLoading}
+            style={{
+              padding: '8px 14px',
+              backgroundColor: upbitSellOrderLoading ? '#999' : '#c62828',
+              color: 'white',
+              border: 'none',
+              borderRadius: 6,
+              cursor: upbitSellOrderLoading ? 'not-allowed' : 'pointer',
+              fontWeight: 'bold',
+            }}
+          >
+            {upbitSellOrderLoading ? '주문 중...' : '매도 주문'}
           </button>
         </form>
         <div style={{ marginTop: 16, paddingTop: 12, borderTop: '1px solid rgba(0,0,0,0.08)' }}>

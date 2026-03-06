@@ -24,8 +24,8 @@ function makeOrderToken(orderData) {
 }
 
 /**
- * POST: 업비트 KRW-XRP 지정가 매수 주문
- * body: { price: number (원), volume: number (XRP 수량) }
+ * POST: 업비트 KRW-XRP 지정가 매수/매도 주문
+ * body: { price: number (원), volume: number (XRP 수량), side?: 'bid' | 'ask' } — side 기본값 'bid'(매수)
  */
 export async function POST(request) {
   const auth = verifyToken(request);
@@ -40,11 +40,12 @@ export async function POST(request) {
     );
   }
 
-  let price, volume;
+  let price, volume, side;
   try {
     const body = await request.json();
     price = Number(body?.price);
     volume = Number(body?.volume);
+    side = body?.side === 'ask' ? 'ask' : 'bid';
     if (!Number.isFinite(price) || price <= 0 || !Number.isFinite(volume) || volume <= 0) {
       return Response.json(
         { error: '가격(원)과 수량(XRP)을 올바르게 입력해주세요.' },
@@ -57,7 +58,7 @@ export async function POST(request) {
 
   const orderData = {
     market: 'KRW-XRP',
-    side: 'bid',
+    side,
     price: String(Math.round(price)),
     volume: String(volume),
     ord_type: 'limit',
@@ -82,13 +83,13 @@ export async function POST(request) {
     }
     return Response.json({
       success: true,
-      message: '업비트 XRP 지정가 매수 주문이 접수되었습니다.',
+      message: side === 'ask' ? '업비트 XRP 지정가 매도 주문이 접수되었습니다.' : '업비트 XRP 지정가 매수 주문이 접수되었습니다.',
       uuid: data.uuid,
       price,
       volume,
     });
   } catch (err) {
-    console.error('[short1x] 업비트 매수 주문 오류:', err.message);
+    console.error('[short1x] 업비트 주문 오류:', err.message);
     return Response.json(
       { error: err.message || '업비트 주문 실패' },
       { status: 502 }
