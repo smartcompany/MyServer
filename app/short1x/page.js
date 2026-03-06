@@ -1037,7 +1037,10 @@ export default function Short1xPage() {
                 )}
                 {upbitDepositAddresses.map((item, idx) => {
                   const value = `${item.deposit_address}||${item.secondary_address || ''}`;
-                  const label = `${item.net_type}${item.secondary_address ? ` / 태그 ${item.secondary_address}` : ''}`;
+                  const label = [
+                    item.deposit_address,
+                    item.secondary_address ? `태그 ${item.secondary_address}` : null,
+                  ].filter(Boolean).join(' / ');
                   return (
                     <option key={idx} value={value}>
                       {label}
