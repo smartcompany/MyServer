@@ -8,6 +8,12 @@ const UPBIT_ACC_KEY = process.env.UPBIT_ACC_KEY;
 const UPBIT_SEC_KEY = process.env.UPBIT_SEC_KEY;
 const UPBIT_SERVER = 'https://api.upbit.com';
 
+function maskAddress(addr) {
+  if (!addr) return '';
+  if (addr.length <= 12) return addr;
+  return `${addr.slice(0, 6)}...${addr.slice(-6)}`;
+}
+
 function makeQueryToken(params) {
   if (!UPBIT_ACC_KEY || !UPBIT_SEC_KEY) {
     throw new Error('UPBIT_ACC_KEY, UPBIT_SEC_KEY가 설정되지 않았어요');
@@ -33,6 +39,7 @@ function makeSimpleToken() {
 }
 
 export async function POST(request) {
+  const reqId = uuidv4();
   const auth = verifyToken(request);
   if (auth.error) {
     return Response.json({ error: auth.error }, { status: auth.status });
@@ -61,6 +68,14 @@ export async function POST(request) {
   }
 
   try {
+    console.log(`[short1x][upbit-withdraw][${reqId}] start`, {
+      currency: 'XRP',
+      netType,
+      amount,
+      address: maskAddress(address),
+      hasSecondaryAddress: Boolean(secondaryAddress),
+    });
+
     // 등록된 출금 허용 주소인지 재확인
     const listToken = makeSimpleToken();
     const listRes = await fetch(`${UPBIT_SERVER}/v1/withdraws/coin_addresses`, {
@@ -72,6 +87,11 @@ export async function POST(request) {
     const listData = await listRes.json().catch(() => []);
     if (!listRes.ok) {
       const message = listData?.error?.message || listData?.error?.name || '출금 주소 검증 실패';
+      console.error(`[short1x][upbit-withdraw][${reqId}] coin_addresses failed`, {
+        status: listRes.status,
+        message,
+        body: listData,
+      });
       return Response.json({ error: message }, { status: 502 });
     }
 
@@ -86,6 +106,12 @@ export async function POST(request) {
       : null;
 
     if (!matched) {
+      console.error(`[short1x][upbit-withdraw][${reqId}] address not allowlisted`, {
+        currency: 'XRP',
+        netType,
+        address: maskAddress(address),
+        secondaryAddress: secondaryAddress ? '(present)' : '(empty)',
+      });
       return Response.json({ error: '등록된 XRP 출금 허용 주소가 아닙니다.' }, { status: 400 });
     }
 
@@ -112,8 +138,19 @@ export async function POST(request) {
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
       const message = data?.error?.message || data?.error?.name || '업비트 XRP 출금 실패';
+      console.error(`[short1x][upbit-withdraw][${reqId}] withdraw failed`, {
+        status: res.status,
+        message,
+        body: data,
+      });
       return Response.json({ error: message }, { status: 502 });
     }
+
+    console.log(`[short1x][upbit-withdraw][${reqId}] withdraw accepted`, {
+      uuid: data.uuid,
+      state: data.state,
+      amount: data.amount,
+    });
 
     return Response.json({
       success: true,
@@ -123,6 +160,10 @@ export async function POST(request) {
       amount: data.amount,
     });
   } catch (error) {
+    console.error(`[short1x][upbit-withdraw][${reqId}] unexpected error`, {
+      message: error?.message,
+      stack: error?.stack,
+    });
     return Response.json(
       { error: error.message || '업비트 XRP 출금 실패' },
       { status: 502 }
