@@ -46,6 +46,11 @@ export default function Short1xPage() {
   const [withdrawAmount, setWithdrawAmount] = useState('');
   const [withdrawAddressesError, setWithdrawAddressesError] = useState(null);
   const [withdrawLoading, setWithdrawLoading] = useState(false);
+  const [bybitWithdrawAmount, setBybitWithdrawAmount] = useState('');
+  const [bybitWithdrawLoading, setBybitWithdrawLoading] = useState(false);
+  const [upbitDepositAddresses, setUpbitDepositAddresses] = useState([]); // 업비트 XRP 입금 주소 (Bybit→업비트 출금용)
+  const [upbitDepositAddressesError, setUpbitDepositAddressesError] = useState(null);
+  const [bybitWithdrawDepositValue, setBybitWithdrawDepositValue] = useState(''); // 선택한 입금 주소 "address||tag"
   const [lastOrderId, setLastOrderId] = useState(null); // 마지막 주문 ID (상태 확인용)
   const [orderStatusLoading, setOrderStatusLoading] = useState(false);
   const [remainderQty, setRemainderQty] = useState(null); // 부분 체결 시 미체결 수량 (나머지로 주문용)
@@ -158,6 +163,33 @@ export default function Short1xPage() {
       .catch(() => {
         setWithdrawAddresses([]);
         setWithdrawAddressesError('출금 주소를 불러오지 못했습니다.');
+      });
+
+    fetch('/api/short1x/upbit-deposit-addresses', {
+      headers: { Authorization: 'Bearer ' + token }
+    })
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.error) {
+          setUpbitDepositAddresses([]);
+          setUpbitDepositAddressesError(data.error);
+          setBybitWithdrawDepositValue('');
+          return;
+        }
+        setUpbitDepositAddressesError(null);
+        const list = Array.isArray(data.addresses) ? data.addresses : [];
+        setUpbitDepositAddresses(list);
+        if (list.length > 0) {
+          const first = `${list[0].deposit_address}||${list[0].secondary_address || ''}`;
+          setBybitWithdrawDepositValue(first);
+        } else {
+          setBybitWithdrawDepositValue('');
+        }
+      })
+      .catch(() => {
+        setUpbitDepositAddresses([]);
+        setUpbitDepositAddressesError('입금 주소 조회 실패');
+        setBybitWithdrawDepositValue('');
       });
   }, [loginArea]);
 
@@ -293,6 +325,51 @@ export default function Short1xPage() {
       alert(errMsg);
     } finally {
       setWithdrawLoading(false);
+    }
+  }
+
+  async function bybitWithdraw(e) {
+    e.preventDefault();
+    const amount = Number(String(bybitWithdrawAmount).replace(/,/g, ''));
+    if (!bybitWithdrawDepositValue) {
+      setMessage({ type: 'error', text: '업비트 XRP 입금 주소를 선택해주세요.' });
+      return;
+    }
+    const [address, tag] = bybitWithdrawDepositValue.split('||');
+    if (!address || !address.trim()) {
+      setMessage({ type: 'error', text: '출금 주소를 선택해주세요.' });
+      return;
+    }
+    if (!Number.isFinite(amount) || amount <= 0) {
+      setMessage({ type: 'error', text: '출금 수량(XRP)을 입력해주세요.' });
+      return;
+    }
+    setBybitWithdrawLoading(true);
+    setMessage(null);
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch('/api/short1x/bybit-withdraw', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+        body: JSON.stringify({ amount, address: address.trim(), tag: (tag || '').trim() || undefined, chain: 'XRP' }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        const errMsg = data.error || 'Bybit XRP 출금 실패';
+        setMessage({ type: 'error', text: errMsg });
+        alert(errMsg);
+        return;
+      }
+      const successMsg = data.message || 'Bybit XRP 출금 요청이 접수되었습니다.';
+      setMessage({ type: 'success', text: successMsg });
+      alert(successMsg);
+      setBybitWithdrawAmount('');
+    } catch (err) {
+      const errMsg = err.message || 'Bybit XRP 출금 실패';
+      setMessage({ type: 'error', text: errMsg });
+      alert(errMsg);
+    } finally {
+      setBybitWithdrawLoading(false);
     }
   }
 
@@ -938,6 +1015,71 @@ export default function Short1xPage() {
               {loading ? '주문 중...' : '숏 포지션 청산 (Buy, Post-Only)'}
             </button>
           </div>
+        </div>
+        <div style={{ marginTop: 16, paddingTop: 12, borderTop: '1px solid rgba(0,0,0,0.08)' }}>
+          <p style={{ margin: '0 0 8px 0', fontWeight: 'bold' }}>Bybit → 업비트 XRP 출금</p>
+          <p style={{ margin: '0 0 8px 0', fontSize: 12, color: '#666' }}>
+            Bybit 주소록에 등록된 주소만 출금 가능합니다. 업비트 XRP 입금 주소를 API로 불러와 선택합니다.
+          </p>
+          {upbitDepositAddressesError && (
+            <p style={{ color: '#c62828', margin: '0 0 8px 0' }}>{upbitDepositAddressesError}</p>
+          )}
+          <form onSubmit={bybitWithdraw} style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'flex-end' }}>
+            <label style={{ display: 'flex', flexDirection: 'column', gap: 4, minWidth: 240 }}>
+              <span style={{ fontSize: 12, color: '#555' }}>업비트 XRP 입금 주소 선택</span>
+              <select
+                value={bybitWithdrawDepositValue}
+                onChange={(e) => setBybitWithdrawDepositValue(e.target.value)}
+                style={{ padding: '8px 10px' }}
+              >
+                {upbitDepositAddresses.length === 0 && (
+                  <option value="">업비트에 등록된 XRP 입금 주소 없음</option>
+                )}
+                {upbitDepositAddresses.map((item, idx) => {
+                  const value = `${item.deposit_address}||${item.secondary_address || ''}`;
+                  const label = `${item.net_type}${item.secondary_address ? ` / 태그 ${item.secondary_address}` : ''}`;
+                  return (
+                    <option key={idx} value={value}>
+                      {label}
+                    </option>
+                  );
+                })}
+              </select>
+            </label>
+            <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              <span style={{ fontSize: 12, color: '#555' }}>
+                출금 수량 (XRP)
+                {xrpBalance && xrpBalance !== '로딩중' && xrpBalance.xrp != null && (
+                  <span style={{ marginLeft: 8, color: '#1976d2' }}>
+                    출금 가능: {Number(xrpBalance.xrp).toLocaleString(undefined, { maximumFractionDigits: 4 })} XRP
+                  </span>
+                )}
+              </span>
+              <input
+                type="text"
+                inputMode="decimal"
+                placeholder="예: 100"
+                value={bybitWithdrawAmount}
+                onChange={(e) => setBybitWithdrawAmount(formatNumberInput(e.target.value))}
+                style={{ width: 120, padding: '8px 10px' }}
+              />
+            </label>
+            <button
+              type="submit"
+              disabled={bybitWithdrawLoading || upbitDepositAddresses.length === 0 || !bybitWithdrawDepositValue}
+              style={{
+                padding: '8px 14px',
+                backgroundColor: bybitWithdrawLoading || upbitDepositAddresses.length === 0 || !bybitWithdrawDepositValue ? '#999' : '#1976d2',
+                color: 'white',
+                border: 'none',
+                borderRadius: 6,
+                cursor: bybitWithdrawLoading || upbitDepositAddresses.length === 0 || !bybitWithdrawDepositValue ? 'not-allowed' : 'pointer',
+                fontWeight: 'bold',
+              }}
+            >
+              {bybitWithdrawLoading ? '출금 중...' : 'Bybit → 업비트 출금'}
+            </button>
+          </form>
         </div>
       </div>
       {message && (
