@@ -32,6 +32,7 @@ export default function Short1xPage() {
   const [loginArea, setLoginArea] = useState(true);
   const [qty, setQty] = useState('');
   const [shortPrice, setShortPrice] = useState(''); // Bybit 지정가 (USDT)
+  const [shortPct, setShortPct] = useState(100);    // Bybit 사용 비율 (0~100%)
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState(null); // { type: 'success'|'error', text }
   const [xrpBalance, setXrpBalance] = useState(null); // '로딩중' | { xrp, xrpEquity } | null
@@ -45,6 +46,9 @@ export default function Short1xPage() {
   const [withdrawAmount, setWithdrawAmount] = useState('');
   const [withdrawAddressesError, setWithdrawAddressesError] = useState(null);
   const [withdrawLoading, setWithdrawLoading] = useState(false);
+  const [lastOrderId, setLastOrderId] = useState(null); // 마지막 주문 ID (상태 확인용)
+  const [orderStatusLoading, setOrderStatusLoading] = useState(false);
+  const [remainderQty, setRemainderQty] = useState(null); // 부분 체결 시 미체결 수량 (나머지로 주문용)
 
   useEffect(() => {
     const token = localStorage.getItem('token');
@@ -73,7 +77,16 @@ export default function Short1xPage() {
         .then((data) => {
           if (cancelled) return;
           if (data.error) setXrpBalance(null);
-          else setXrpBalance({ xrp: data.xrp, xrpEquity: data.xrpEquity });
+          else
+            setXrpBalance({
+              xrp: data.xrp,
+              xrpEquity: data.xrpEquity,
+              xrpTotal: data.xrpTotal,
+              usdAvailable: data.usdAvailable,
+              usdMarginBalance: data.usdMarginBalance,
+              totalWalletBalance: data.totalWalletBalance,
+              totalInitialMargin: data.totalInitialMargin,
+            });
         })
         .catch(() => {
           if (!cancelled) setXrpBalance(null);
@@ -147,6 +160,12 @@ export default function Short1xPage() {
         setWithdrawAddressesError('출금 주소를 불러오지 못했습니다.');
       });
   }, [loginArea]);
+
+  // 슬라이더(shortPct)만 바뀔 때 마진 기준으로 XRP 수량 재계산. 지정가(shortPrice) 변경 시에는 사용자가 입력한 수량을 덮어쓰지 않음.
+  useEffect(() => {
+    if (loginArea || !xrpBalance || xrpBalance === '로딩중') return;
+    recomputeQtyFromPct(shortPct);
+  }, [shortPct]);
 
   async function login(e) {
     e.preventDefault();
@@ -278,6 +297,7 @@ export default function Short1xPage() {
   }
 
   async function placeShortOrder(side) {
+    console.warn('[short1x][placeShortOrder] 호출됨', { side, qty, shortPrice });
     const trimQty = (qty || '').trim();
     const trimPrice = (shortPrice || '').trim();
 
@@ -289,6 +309,22 @@ export default function Short1xPage() {
       setMessage({ type: 'error', text: '지정가 가격(USDT)을 올바르게 입력해주세요.' });
       return;
     }
+    const notionalUsd = Number(trimQty) * Number(trimPrice);
+    if (notionalUsd < 5) {
+      setMessage({
+        type: 'error',
+        text: `주문 금액(수량×지정가)이 최소 5 USD 이상이어야 합니다. (현재 약 ${notionalUsd.toFixed(2)} USD)`,
+      });
+      return;
+    }
+
+    const payload = { qty: trimQty, price: trimPrice, side };
+    console.warn('[short1x][placeShortOrder] 요청 파라미터', {
+      url: '/api/short1x/order',
+      method: 'POST',
+      body: payload,
+      notionalUsd: notionalUsd.toFixed(2),
+    });
 
     setLoading(true);
     setMessage(null);
@@ -300,20 +336,30 @@ export default function Short1xPage() {
           'Content-Type': 'application/json',
           'Authorization': 'Bearer ' + token
         },
-        body: JSON.stringify({ qty: trimQty, price: trimPrice, side })
+        body: JSON.stringify(payload)
       });
       const data = await res.json().catch(() => ({}));
+      console.warn('[short1x][placeShortOrder] 응답', {
+        ok: res.ok,
+        status: res.status,
+        data,
+      });
       if (!res.ok) {
         const errMsg = data.error || '주문 실패';
-        setMessage({ type: 'error', text: errMsg });
-        alert(errMsg);
+        const detail = data.errorDetail || data.retCode != null ? `${errMsg} (retCode: ${data.retCode})` : errMsg;
+        setMessage({ type: 'error', text: detail });
+        alert(detail);
         return;
       }
-      const successMsg = data.message + (data.orderId ? ` (주문 ID: ${data.orderId})` : '');
+      const successMsg =
+        data.message +
+        (data.orderId ? ` (주문 ID: ${data.orderId})` : '') +
+        ' 미체결 시 거래소에서 자동 취소될 수 있습니다.';
       setMessage({
         type: 'success',
         text: successMsg
       });
+      setLastOrderId(data.orderId || null);
       alert(successMsg);
     } catch (err) {
       const errMsg = err.message || '주문 요청 실패';
@@ -321,6 +367,108 @@ export default function Short1xPage() {
       alert(errMsg);
     } finally {
       setLoading(false);
+    }
+  }
+
+  function recomputeQtyFromPct(pct) {
+    if (!xrpBalance || xrpBalance === '로딩중') return;
+    const ratio = Math.max(0, Math.min(100, pct)) / 100;
+
+    // 거래소와 동일: 마진 잔고(USD) ÷ 지정가 = 주문 가능 XRP 수량.
+    // USD는 소숫점 이하를 모두 절삭해서(정수 USD) 사용해, 패널 숫자(예: 63 USD)에 맞춥니다.
+    const price = Number(shortPrice);
+    const usdAvailableRaw = Number(xrpBalance.usdAvailable);
+    const usdAvailable =
+      Number.isFinite(usdAvailableRaw) && usdAvailableRaw > 0
+        ? Math.floor(usdAvailableRaw)
+        : NaN;
+
+    let baseQty = NaN;
+    if (Number.isFinite(price) && price > 0 && Number.isFinite(usdAvailable) && usdAvailable > 0) {
+      baseQty = usdAvailable / price;
+    } else {
+      const availableXrp = Number(xrpBalance.xrp);
+      if (Number.isFinite(availableXrp) && availableXrp > 0) {
+        baseQty = availableXrp;
+      }
+    }
+    if (!Number.isFinite(baseQty) || baseQty <= 0) {
+      setQty('');
+      return;
+    }
+
+    const safe = baseQty * ratio * 0.999; // 수수료/라운딩 버퍼
+    const rounded = Math.floor(safe * 100) / 100; // 소수 둘째 자리까지
+    if (rounded > 0) {
+      setQty(rounded.toFixed(2));
+    } else {
+      setQty('');
+    }
+  }
+
+  function fillMaxShortQty() {
+    setShortPct(100);
+    recomputeQtyFromPct(100);
+  }
+
+  async function checkOrderStatus() {
+    if (!lastOrderId) return;
+    setOrderStatusLoading(true);
+    setMessage(null);
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(
+        `/api/short1x/order-status?orderId=${encodeURIComponent(lastOrderId)}`,
+        { headers: { Authorization: 'Bearer ' + token } }
+      );
+      const data = await res.json().catch(() => ({}));
+      if (data.error) {
+        setMessage({ type: 'error', text: data.error });
+        return;
+      }
+      if (!data.found) {
+        setMessage({ type: 'error', text: data.message || '주문을 찾을 수 없습니다.' });
+        return;
+      }
+      const status = data.orderStatus;
+      const statusKo =
+        status === 'Filled'
+          ? '체결됨'
+          : status === 'Cancelled'
+            ? '취소됨'
+            : status === 'Rejected'
+              ? '거절됨'
+              : status === 'PartiallyFilled'
+                ? '부분 체결'
+                : status === 'New'
+                  ? '대기 중'
+                  : status || '알 수 없음';
+      let text = `주문 상태: ${statusKo}`;
+      if (status === 'Cancelled' && data.rejectReason) {
+        const reason = data.rejectReason;
+        const reasonKo =
+          reason === 'EC_PostOnlyWillTakeLiquidity'
+            ? 'Post-Only 주문이 유동성을 가져가서 취소됨 (지정가를 시장가보다 유리하게 조정 후 다시 주문하세요)'
+            : reason;
+        text += ` (사유: ${reasonKo})`;
+      }
+      if (status === 'Rejected' && data.rejectReason) {
+        text += ` (사유: ${data.rejectReason})`;
+      }
+      if (status === 'Filled' && data.cumExecQty) {
+        text += ` · 체결 수량: ${data.cumExecQty}`;
+      }
+      if (status === 'PartiallyFilled' && data.leavesQty != null && Number(data.leavesQty) > 0) {
+        text += ` · 미체결 수량: ${data.leavesQty}`;
+        setRemainderQty(String(data.leavesQty));
+      } else {
+        setRemainderQty(null);
+      }
+      setMessage({ type: status === 'Filled' ? 'success' : 'error', text });
+    } catch (err) {
+      setMessage({ type: 'error', text: err.message || '상태 조회 실패' });
+    } finally {
+      setOrderStatusLoading(false);
     }
   }
 
@@ -547,6 +695,9 @@ export default function Short1xPage() {
           Bybit <strong>XRPUSD</strong> 퍼페추얼(역선물)에 <strong>1배 레버리지</strong>로 숏 포지션을 엽니다. 시장가가 아닌{' '}
           <strong>Post-Only</strong> 리밋 주문으로 수수료를 최소화합니다.
         </p>
+        <p style={{ margin: '0 0 8px 0', fontSize: 12, color: '#888' }}>
+          최소 주문 금액: 5 USD (수량 × 지정가가 5 USD 이상이어야 합니다)
+        </p>
         <p style={{ margin: '0 0 8px 0' }}>
           <strong>현재 Bybit XRPUSD(선물):</strong>{' '}
           {upbitInfo && upbitInfo !== '로딩중' && upbitInfo.bybitXrpUsdPrice != null
@@ -558,12 +709,69 @@ export default function Short1xPage() {
                 : '')
             : '알 수 없음'}
         </p>
+        <p style={{ margin: '0 0 8px 0', fontSize: 12, color: '#555' }}>
+          {xrpBalance &&
+          xrpBalance !== '로딩중' &&
+          upbitInfo &&
+          upbitInfo !== '로딩중' &&
+          upbitInfo.bybitXrpUsdPrice != null &&
+          upbitInfo.usdtKrwPrice != null
+            ? (() => {
+                const xrpAmount = Number(xrpBalance.xrp);
+                const krw =
+                  xrpAmount *
+                  Number(upbitInfo.bybitXrpUsdPrice) *
+                  Number(upbitInfo.usdtKrwPrice);
+                return `현재 Bybit 보유 XRP: ${xrpAmount.toLocaleString(undefined, {
+                  maximumFractionDigits: 4,
+                })} XRP (한국 USDT 가격 기준 약 ${Math.round(krw).toLocaleString()}원)`;
+              })()
+            : '현재 Bybit XRP 보유 수량 또는 환율 정보를 불러오는 중입니다.'}
+        </p>
         {xrpBalance === '로딩중' && <p style={{ color: '#666', marginBottom: 8 }}>Bybit 보유 XRP 조회 중...</p>}
         {xrpBalance && xrpBalance !== '로딩중' && (
-          <p style={{ marginBottom: 16, padding: '8px 12px', backgroundColor: '#fff', borderRadius: 6 }}>
-            <strong>보유 XRP (Bybit UNIFIED):</strong>{' '}
-            {Number(xrpBalance.xrp).toLocaleString(undefined, { maximumFractionDigits: 4 })} XRP
-          </p>
+          <div style={{ marginBottom: 16, padding: '8px 12px', backgroundColor: '#fff', borderRadius: 6 }}>
+            {xrpBalance.totalWalletBalance != null && (
+              <p style={{ margin: '0 0 4px 0' }}>
+                <strong>지갑 잔고 (Wallet, USD):</strong>{' '}
+                {Number(xrpBalance.totalWalletBalance).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD
+              </p>
+            )}
+            <p style={{ margin: '0 0 4px 0' }}>
+              <strong>마진 사용가능 (Available, USD):</strong>{' '}
+              {xrpBalance.usdAvailable != null
+                ? `${Number(xrpBalance.usdAvailable).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD`
+                : '—'}
+              {xrpBalance.totalWalletBalance != null && xrpBalance.usdAvailable != null && Number(xrpBalance.totalInitialMargin) > 0 && (
+                <span style={{ fontSize: 12, color: '#666' }}>
+                  {' '}(포지션/주문 마진 {Number(xrpBalance.totalInitialMargin).toFixed(2)} USD 사용 중)
+                </span>
+              )}
+            </p>
+            {xrpBalance.usdMarginBalance != null && (
+              <p style={{ margin: '0 0 4px 0' }}>
+                <strong>마진 잔고 (Margin Balance, USD):</strong>{' '}
+                {Number(xrpBalance.usdMarginBalance).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD
+              </p>
+            )}
+            {upbitInfo && upbitInfo !== '로딩중' && upbitInfo.bybitXrpUsdPrice != null && xrpBalance.usdAvailable != null && Number(xrpBalance.usdAvailable) > 0 && (
+              <p style={{ margin: 0, fontSize: 12, color: '#555' }}>
+                사용 가능 마진 (XRP 환산): 약{' '}
+                {(Number(xrpBalance.usdAvailable) / Number(upbitInfo.bybitXrpUsdPrice)).toLocaleString(undefined, { maximumFractionDigits: 4 })} XRP
+                {' '}(현재가 기준)
+              </p>
+            )}
+            <p style={{ margin: '4px 0 0 0', fontSize: 12, color: '#777' }}>
+              지갑 XRP: {Number(xrpBalance.xrp).toLocaleString(undefined, { maximumFractionDigits: 4 })} XRP
+              {xrpBalance.xrpTotal != null && ` (총 ${Number(xrpBalance.xrpTotal).toLocaleString(undefined, { maximumFractionDigits: 4 })} XRP)`}
+            </p>
+            {upbitInfo && upbitInfo !== '로딩중' && upbitInfo.bybitXrpUsdPrice != null && (
+              <p style={{ margin: '2px 0 0 0', fontSize: 12, color: '#666' }}>
+                실시간 USD 환산 (보유 XRP × 현재가):{' '}
+                {(Number(xrpBalance.xrp) * Number(upbitInfo.bybitXrpUsdPrice)).toFixed(2)} USD
+              </p>
+            )}
+          </div>
         )}
         {bybitPosition === '로딩중' && (
           <p style={{ color: '#666', marginBottom: 8 }}>XRPUSD 포지션 조회 중...</p>
@@ -595,7 +803,25 @@ export default function Short1xPage() {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             <label style={{ fontWeight: 'bold' }}>
-              XRP 수량
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span>XRP 수량</span>
+                {xrpBalance && xrpBalance !== '로딩중' && (
+                  <button
+                    type="button"
+                    onClick={fillMaxShortQty}
+                    style={{
+                      border: 'none',
+                      background: 'transparent',
+                      color: '#1976d2',
+                      cursor: 'pointer',
+                      fontSize: 12,
+                      padding: 0,
+                    }}
+                  >
+                    100%
+                  </button>
+                )}
+              </div>
               <input
                 type="text"
                 inputMode="decimal"
@@ -606,7 +832,45 @@ export default function Short1xPage() {
               />
             </label>
             <label style={{ fontWeight: 'bold' }}>
-              지정가 (USDT)
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span>지정가 (USDT)</span>
+                <button
+                  type="button"
+                  style={{
+                    fontSize: 12,
+                    padding: '4px 10px',
+                    borderRadius: 4,
+                    border: 'none',
+                    backgroundColor:
+                      upbitInfo && upbitInfo !== '로딩중' && upbitInfo.bybitXrpUsdPrice != null
+                        ? '#1976d2'
+                        : '#90a4ae',
+                    color: '#fff',
+                    cursor:
+                      upbitInfo && upbitInfo !== '로딩중' && upbitInfo.bybitXrpUsdPrice != null
+                        ? 'pointer'
+                        : 'not-allowed'
+                  }}
+                  disabled={
+                    !(
+                      upbitInfo &&
+                      upbitInfo !== '로딩중' &&
+                      upbitInfo.bybitXrpUsdPrice != null
+                    )
+                  }
+                  onClick={() => {
+                    if (
+                      upbitInfo &&
+                      upbitInfo !== '로딩중' &&
+                      upbitInfo.bybitXrpUsdPrice != null
+                    ) {
+                      setShortPrice(Number(upbitInfo.bybitXrpUsdPrice).toFixed(4));
+                    }
+                  }}
+                >
+                  현재가
+                </button>
+              </div>
               <input
                 type="text"
                 inputMode="decimal"
@@ -620,6 +884,25 @@ export default function Short1xPage() {
                 style={{ display: 'block', marginTop: 6, padding: 10, fontSize: 16, width: '100%', boxSizing: 'border-box' }}
               />
             </label>
+            <div style={{ marginTop: 4 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: '#555', marginBottom: 4 }}>
+                <span>포지션 크기 비율</span>
+                <span>{shortPct}%</span>
+              </div>
+              <input
+                type="range"
+                min={0}
+                max={100}
+                step={5}
+                value={shortPct}
+                onChange={(e) => {
+                  const v = Number(e.target.value);
+                  setShortPct(v);
+                  recomputeQtyFromPct(v);
+                }}
+                style={{ width: '100%' }}
+              />
+            </div>
           </div>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             <button
@@ -664,6 +947,49 @@ export default function Short1xPage() {
       {message && (
         <p style={{ color: message.type === 'error' ? '#c62828' : '#2e7d32', marginTop: 16 }}>
           {message.text}
+        </p>
+      )}
+      {lastOrderId && (
+        <p style={{ marginTop: 8 }}>
+          <button
+            type="button"
+            disabled={orderStatusLoading}
+            onClick={checkOrderStatus}
+            style={{
+              padding: '8px 12px',
+              fontSize: 13,
+              backgroundColor: orderStatusLoading ? '#999' : '#1976d2',
+              color: 'white',
+              border: 'none',
+              borderRadius: 6,
+              cursor: orderStatusLoading ? 'not-allowed' : 'pointer',
+            }}
+          >
+            {orderStatusLoading ? '조회 중...' : '주문 상태 확인'}
+          </button>
+          {remainderQty != null && remainderQty !== '' && (
+            <>
+              {' '}
+              <button
+                type="button"
+                onClick={() => {
+                  setQty(remainderQty);
+                  setRemainderQty(null);
+                }}
+                style={{
+                  padding: '8px 12px',
+                  fontSize: 13,
+                  backgroundColor: '#2e7d32',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: 6,
+                  cursor: 'pointer',
+                }}
+              >
+                나머지 수량({remainderQty})으로 주문
+              </button>
+            </>
+          )}
         </p>
       )}
       <p style={{ marginTop: 32 }}>

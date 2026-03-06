@@ -53,6 +53,8 @@ export async function bybitSignedRequest(method, path, body = null) {
     err.retCode = data.retCode;
     err.retMsg = data.retMsg;
     err.result = data.result;
+    err.retExtInfo = data.retExtInfo;
+    err.rawResponse = data;
     throw err;
   }
   return data;

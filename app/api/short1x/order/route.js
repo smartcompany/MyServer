@@ -9,6 +9,7 @@ const CATEGORY = 'inverse';
 /**
  * POST: XRPUSD 1배 숏 주문/청산 (Post-Only 리밋, inverse)
  * body: { qty: number | string, price: number | string, side?: 'Sell' | 'Buy' }
+ *  - qty: 사용자 입력 XRP 수량. Bybit에는 qty 파라미터로 USD(노션) = qty * price 를 보냄.
  *  - side 생략 시 기본값은 'Sell' (숏 진입)
  */
 export async function POST(request) {
@@ -36,6 +37,8 @@ export async function POST(request) {
   let side;
   try {
     const body = await request.json();
+    console.error(`[short1x][order][${reqId}] request body (raw)`, JSON.stringify(body));
+
     qty = body?.qty;
     price = body?.price;
     side = body?.side === 'Buy' ? 'Buy' : 'Sell';
@@ -55,9 +58,33 @@ export async function POST(request) {
     if (Number(price) <= 0 || !Number.isFinite(Number(price))) {
       return Response.json({ error: '유효한 지정가 가격(USDT)을 입력해주세요.' }, { status: 400 });
     }
+
+    const notionalUsd = Number(qty) * Number(price);
+    if (notionalUsd < 5) {
+      return Response.json(
+        {
+          error: '주문 금액(수량×지정가)이 최소 5 USD 이상이어야 합니다.',
+          retCode: 110094,
+          notionalUsd,
+          minOrderValueUsd: 5,
+        },
+        { status: 400 }
+      );
+    }
+
+    console.error(`[short1x][order][${reqId}] 파라미터 검증 후`, {
+      qty,
+      price,
+      side,
+      notionalUsd,
+    });
   } catch {
     return Response.json({ error: '요청 본문이 올바르지 않습니다.' }, { status: 400 });
   }
+
+  // Bybit qty 파라미터 = USD(노션). 사용자 입력 XRP → qtyUsd = qtyXrp * price 로 전송.
+  const qtyUsd = Number(qty) * Number(price);
+  qty = String(Math.round(qtyUsd)); // 반올림해서 마진 전액(예: 63 USD)이 나눠 떨어지지 않아도 잘 쓰이도록 함
 
   try {
     console.error(`[short1x][order][${reqId}] start`, {
@@ -93,7 +120,22 @@ export async function POST(request) {
       }
     }
 
-    // 2) Post-Only 리밋 주문 (1배 숏 진입/청산)
+    // 2) qty는 USD로 보냄. lotSizeFilter는 XRP 기준이므로 보정하지 않음.
+    try {
+      const infoRes = await bybitPublicGet(
+        `/v5/market/instruments-info?category=${CATEGORY}&symbol=${SYMBOL}`
+      );
+      const list = infoRes?.result?.list || [];
+      const instrument = list[0];
+      const lotFilter = instrument?.lotSizeFilter;
+      console.error(`[short1x][order][${reqId}] lotSizeFilter`, lotFilter, 'qty(USD) 전송:', qty);
+    } catch (e) {
+      console.error(`[short1x][order][${reqId}] instruments-info failed`, e?.message || e);
+    }
+
+    console.error(`[short1x][order][${reqId}] Bybit 주문 직전 최종 파라미터`, { qty, price, side });
+
+    // 3) Post-Only 리밋 주문 (1배 숏 진입/청산)
     const orderBody = {
       category: CATEGORY,
       symbol: SYMBOL,
@@ -104,7 +146,7 @@ export async function POST(request) {
       timeInForce: 'PostOnly',
       positionIdx: 0  // one-way mode
     };
-    console.error(`[short1x][order][${reqId}] create order request`, orderBody);
+    console.error(`[short1x][order][${reqId}] create order request (Bybit 전송 body)`, orderBody);
 
     const orderRes = await bybitSignedRequest('POST', '/v5/order/create', orderBody);
     const orderId = orderRes?.result?.orderId;
@@ -132,13 +174,32 @@ export async function POST(request) {
   } catch (err) {
     const msg = err.retMsg || err.message || '주문 처리 중 오류가 발생했습니다.';
     const code = err.retCode;
+    const extInfo = err.retExtInfo;
+    const result = err.result;
+
     console.error(`[short1x][order][${reqId}] Bybit 주문 오류`, {
-      message: msg,
       retCode: code,
-      raw: err,
+      retMsg: msg,
+      retExtInfo: extInfo,
+      result,
+      fullError: err,
     });
+
+    const detail =
+      code != null
+        ? extInfo != null && typeof extInfo === 'object'
+          ? `${msg} (retCode: ${code}, retExtInfo: ${JSON.stringify(extInfo)})`
+          : `${msg} (retCode: ${code})`
+        : msg;
+
     return Response.json(
-      { error: msg, retCode: code },
+      {
+        error: msg,
+        errorDetail: detail,
+        retCode: code,
+        retExtInfo: extInfo,
+        result,
+      },
       { status: code === 10001 ? 401 : 502 }
     );
   }
