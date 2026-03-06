@@ -68,13 +68,30 @@ export async function POST(request) {
       side,
     });
 
-    // 1) 레버리지 1배 설정
-    await bybitSignedRequest('POST', '/v5/position/set-leverage', {
-      category: CATEGORY,
-      symbol: SYMBOL,
-      buyLeverage: '1',
-      sellLeverage: '1'
-    });
+    // 1) 레버리지 1배 설정 (이미 1배인 경우 Bybit가 'leverage not modified' 에러를 줄 수 있음)
+    try {
+      await bybitSignedRequest('POST', '/v5/position/set-leverage', {
+        category: CATEGORY,
+        symbol: SYMBOL,
+        buyLeverage: '1',
+        sellLeverage: '1'
+      });
+    } catch (e) {
+      const code = e?.retCode;
+      const msg = e?.retMsg || e?.message || '';
+      if (
+        code === 110043 ||
+        (typeof msg === 'string' && msg.toLowerCase().includes('leverage not modified'))
+      ) {
+        // 이미 레버리지가 1배로 설정된 경우이므로 무시하고 계속 진행
+        console.error(`[short1x][order][${reqId}] set leverage not modified`, {
+          message: msg,
+          retCode: code,
+        });
+      } else {
+        throw e;
+      }
+    }
 
     // 2) Post-Only 리밋 주문 (1배 숏 진입/청산)
     const orderBody = {
