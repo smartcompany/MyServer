@@ -124,7 +124,11 @@ export default function TradePage() {
         localStorage.setItem('token', data.token);
         showMain();
       } else {
-        alert('로그인 실패!');
+        const data = await res.json().catch(() => ({}));
+        const msg = res.status === 429
+          ? (data.error || '로그인 시도 횟수 초과. 15분 후 다시 시도해주세요.')
+          : (data.error || '로그인 실패');
+        alert(msg);
       }
     } catch (error) {
       console.error('로그인 실패:', error);

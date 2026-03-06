@@ -225,7 +225,11 @@ export default function Short1xPage() {
         setLoginArea(false);
         setMessage(null);
       } else {
-        setMessage({ type: 'error', text: '로그인 실패' });
+        const data = await res.json().catch(() => ({}));
+        const msg = res.status === 429
+          ? (data.error || '로그인 시도 횟수 초과. 15분 후 다시 시도해주세요.')
+          : (data.error || '로그인 실패');
+        setMessage({ type: 'error', text: msg });
       }
     } catch (err) {
       setMessage({ type: 'error', text: '로그인 실패' });
