@@ -2,12 +2,14 @@ import { verifyToken } from '../../trade/middleware';
 import { bybitSignedRequest, bybitPublicGet, getBybitConfig } from '../bybit';
 import { v4 as uuidv4 } from 'uuid';
 
-const SYMBOL = 'XRPUSDT';
-const CATEGORY = 'linear';
+// XRPUSD inverse perpetual (XRP를 담보로 하는 1배 숏 헤지용)
+const SYMBOL = 'XRPUSD';
+const CATEGORY = 'inverse';
 
 /**
- * POST: XRPUSDT 1배 숏 주문 (Post-Only 리밋 매도)
- * body: { qty: number | string } - XRP 수량
+ * POST: XRPUSD 1배 숏 주문/청산 (Post-Only 리밋, inverse)
+ * body: { qty: number | string, price: number | string, side?: 'Sell' | 'Buy' }
+ *  - side 생략 시 기본값은 'Sell' (숏 진입)
  */
 export async function POST(request) {
   const reqId = uuidv4();
@@ -30,15 +32,28 @@ export async function POST(request) {
   }
 
   let qty;
+  let price;
+  let side;
   try {
     const body = await request.json();
     qty = body?.qty;
+    price = body?.price;
+    side = body?.side === 'Buy' ? 'Buy' : 'Sell';
     if (qty == null || qty === '') {
       return Response.json({ error: '수량(qty)을 입력해주세요.' }, { status: 400 });
     }
+    if (price == null || price === '') {
+      return Response.json({ error: '지정가 가격(price)을 입력해주세요.' }, { status: 400 });
+    }
+
     qty = String(Number(qty));
+    price = String(Number(price));
+
     if (Number(qty) <= 0 || !Number.isFinite(Number(qty))) {
       return Response.json({ error: '유효한 XRP 수량을 입력해주세요.' }, { status: 400 });
+    }
+    if (Number(price) <= 0 || !Number.isFinite(Number(price))) {
+      return Response.json({ error: '유효한 지정가 가격(USDT)을 입력해주세요.' }, { status: 400 });
     }
   } catch {
     return Response.json({ error: '요청 본문이 올바르지 않습니다.' }, { status: 400 });
@@ -49,6 +64,8 @@ export async function POST(request) {
       symbol: SYMBOL,
       category: CATEGORY,
       qty,
+      price,
+      side,
     });
 
     // 1) 레버리지 1배 설정
@@ -59,27 +76,14 @@ export async function POST(request) {
       sellLeverage: '1'
     });
 
-    // 2) 호가창에서 매도 1호가(ask1) 가격 조회 (Post-Only 매도는 이 가격에 걸어야 메이커)
-    const ob = await bybitPublicGet(`/v5/market/orderbook?category=${CATEGORY}&symbol=${SYMBOL}&limit=1`);
-    const asks = ob?.result?.a; // [ ["price", "size"], ... ]
-    const bestAsk = asks?.[0]?.[0];
-    console.error(`[short1x][order][${reqId}] orderbook`, {
-      bestAsk,
-      raw: Array.isArray(asks) ? asks[0] : asks,
-    });
-
-    if (!bestAsk) {
-      return Response.json({ error: '호가창 조회 실패. 시장이 열려 있는지 확인해주세요.' }, { status: 502 });
-    }
-
-    // 3) Post-Only 리밋 매도 주문 (1배 숏 = 매도 포지션 오픈)
+    // 2) Post-Only 리밋 주문 (1배 숏 진입/청산)
     const orderBody = {
       category: CATEGORY,
       symbol: SYMBOL,
-      side: 'Sell',
+      side,
       orderType: 'Limit',
       qty,
-      price: bestAsk,
+      price,
       timeInForce: 'PostOnly',
       positionIdx: 0  // one-way mode
     };
@@ -97,12 +101,15 @@ export async function POST(request) {
 
     return Response.json({
       success: true,
-      message: 'Post-Only 1x Short 주문이 접수되었습니다.',
+      message:
+        side === 'Buy'
+          ? 'Post-Only 1x Short 청산 주문이 접수되었습니다.'
+          : 'Post-Only 1x Short 진입 주문이 접수되었습니다.',
       orderId,
       orderLinkId,
       symbol: SYMBOL,
       qty,
-      price: bestAsk,
+      price,
       timeInForce: 'PostOnly'
     });
   } catch (err) {

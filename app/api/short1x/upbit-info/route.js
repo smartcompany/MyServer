@@ -147,16 +147,16 @@ export async function GET(request) {
       // 환율이 없어도 나머지는 동작 가능
     }
 
-    // 6) Bybit XRPUSDT 가격 (USD 기준)
+    // 6) Bybit XRPUSD 퍼페추얼 가격 (USD 기준, 1x 숏 헤지 기준)
     try {
-      const bybitRes = await bybitPublicGet('/v5/market/tickers?category=linear&symbol=XRPUSDT');
+      const bybitRes = await bybitPublicGet('/v5/market/tickers?category=inverse&symbol=XRPUSD');
       const list = bybitRes?.result?.list || bybitRes?.result || [];
       const item = Array.isArray(list) ? list[0] : null;
       const lastPrice = item?.lastPrice || item?.last_price || item?.markPrice;
       if (lastPrice != null) {
         result.bybitXrpUsdPrice = Number(lastPrice);
       } else {
-        result.kimchiError = 'Bybit XRPUSDT 가격 데이터를 찾을 수 없습니다.';
+        result.kimchiError = 'Bybit XRPUSD 가격 데이터를 찾을 수 없습니다.';
       }
     } catch (e) {
       result.bybitXrpUsdPrice = null;
@@ -176,7 +176,7 @@ export async function GET(request) {
         } else if (result.usdKrwRate == null) {
           result.kimchiError = 'USD/KRW 환율이 없어 김치 프리미엄을 계산할 수 없습니다.';
         } else if (result.bybitXrpUsdPrice == null) {
-          result.kimchiError = 'Bybit XRPUSDT 가격이 없어 김치 프리미엄을 계산할 수 없습니다.';
+          result.kimchiError = 'Bybit XRPUSD 가격이 없어 김치 프리미엄을 계산할 수 없습니다.';
         }
       }
     }

@@ -31,9 +31,11 @@ function mapUpbitInfo(data) {
 export default function Short1xPage() {
   const [loginArea, setLoginArea] = useState(true);
   const [qty, setQty] = useState('');
+  const [shortPrice, setShortPrice] = useState(''); // Bybit 지정가 (USDT)
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState(null); // { type: 'success'|'error', text }
   const [xrpBalance, setXrpBalance] = useState(null); // '로딩중' | { xrp, xrpEquity } | null
+  const [bybitPosition, setBybitPosition] = useState(null); // '로딩중' | { size, side, avgPrice, positionMargin } | null
   const [upbitInfo, setUpbitInfo] = useState(null);   // '로딩중' | { upbitXrpBalance, upbitXrpBuyOrderKrw } | null
   const [upbitPrice, setUpbitPrice] = useState('');
   const [upbitVolume, setUpbitVolume] = useState('');
@@ -58,6 +60,7 @@ export default function Short1xPage() {
 
     setXrpBalance('로딩중');
     setUpbitInfo('로딩중');
+    setBybitPosition('로딩중');
 
     let cancelled = false;
 
@@ -88,6 +91,20 @@ export default function Short1xPage() {
         })
         .catch(() => {
           if (!cancelled) setUpbitInfo({ accountError: '업비트 정보 조회 실패' });
+        });
+
+      fetch('/api/short1x/bybit-position', { headers: { Authorization: 'Bearer ' + token } })
+        .then((res) => res.json())
+        .then((data) => {
+          if (cancelled) return;
+          if (data.error) {
+            setBybitPosition(null);
+          } else {
+            setBybitPosition(data);
+          }
+        })
+        .catch(() => {
+          if (!cancelled) setBybitPosition(null);
         });
     };
 
@@ -260,13 +277,19 @@ export default function Short1xPage() {
     }
   }
 
-  async function placeShortOrder(e) {
-    e.preventDefault();
+  async function placeShortOrder(side) {
     const trimQty = (qty || '').trim();
-    if (!trimQty || Number(trimQty) <= 0) {
-      setMessage({ type: 'error', text: 'XRP 수량을 입력해주세요.' });
+    const trimPrice = (shortPrice || '').trim();
+
+    if (!trimQty || Number(trimQty) <= 0 || !Number.isFinite(Number(trimQty))) {
+      setMessage({ type: 'error', text: 'XRP 수량을 올바르게 입력해주세요.' });
       return;
     }
+    if (!trimPrice || Number(trimPrice) <= 0 || !Number.isFinite(Number(trimPrice))) {
+      setMessage({ type: 'error', text: '지정가 가격(USDT)을 올바르게 입력해주세요.' });
+      return;
+    }
+
     setLoading(true);
     setMessage(null);
     try {
@@ -277,7 +300,7 @@ export default function Short1xPage() {
           'Content-Type': 'application/json',
           'Authorization': 'Bearer ' + token
         },
-        body: JSON.stringify({ qty: trimQty })
+        body: JSON.stringify({ qty: trimQty, price: trimPrice, side })
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
@@ -515,11 +538,11 @@ export default function Short1xPage() {
       <div style={{ marginBottom: 24, padding: '12px 16px', backgroundColor: '#f5f5f5', borderRadius: 8 }}>
         <h2 style={{ margin: '0 0 8px 0', fontSize: 16, fontWeight: 'bold' }}>Bybit 영역</h2>
         <p style={{ color: '#666', marginBottom: 16 }}>
-          XRPUSDT 선물에 <strong>1배 레버리지</strong>로 숏 포지션을 엽니다. 시장가가 아닌 <strong>Post-Only</strong>{' '}
-          리밋 주문으로 수수료를 최소화합니다.
+          Bybit <strong>XRPUSD</strong> 퍼페추얼(역선물)에 <strong>1배 레버리지</strong>로 숏 포지션을 엽니다. 시장가가 아닌{' '}
+          <strong>Post-Only</strong> 리밋 주문으로 수수료를 최소화합니다.
         </p>
         <p style={{ margin: '0 0 8px 0' }}>
-          <strong>현재 Bybit XRPUSDT:</strong>{' '}
+          <strong>현재 Bybit XRPUSD(선물):</strong>{' '}
           {upbitInfo && upbitInfo !== '로딩중' && upbitInfo.bybitXrpUsdPrice != null
             ? `${Number(upbitInfo.bybitXrpUsdPrice).toFixed(4)} USDT` +
               (upbitInfo.usdtKrwPrice != null
@@ -529,42 +552,108 @@ export default function Short1xPage() {
                 : '')
             : '알 수 없음'}
         </p>
-        {xrpBalance === '로딩중' && <p style={{ color: '#666', marginBottom: 16 }}>Bybit 보유 XRP 조회 중...</p>}
+        {xrpBalance === '로딩중' && <p style={{ color: '#666', marginBottom: 8 }}>Bybit 보유 XRP 조회 중...</p>}
         {xrpBalance && xrpBalance !== '로딩중' && (
           <p style={{ marginBottom: 16, padding: '8px 12px', backgroundColor: '#fff', borderRadius: 6 }}>
             <strong>보유 XRP (Bybit UNIFIED):</strong>{' '}
             {Number(xrpBalance.xrp).toLocaleString(undefined, { maximumFractionDigits: 4 })} XRP
           </p>
         )}
-        <form onSubmit={placeShortOrder} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-          <label style={{ fontWeight: 'bold' }}>
-            XRP 수량
-            <input
-              type="text"
-              inputMode="decimal"
-              placeholder="예: 100"
-              value={qty}
-              onChange={(e) => setQty(e.target.value)}
-              style={{ display: 'block', marginTop: 6, padding: 12, fontSize: 18, width: '100%', boxSizing: 'border-box' }}
-            />
-          </label>
-          <button
-            type="submit"
-            disabled={loading}
-            style={{
-              padding: 14,
-              backgroundColor: loading ? '#999' : '#f44336',
-              color: 'white',
-              border: 'none',
-              borderRadius: 8,
-              cursor: loading ? 'not-allowed' : 'pointer',
-              fontSize: 16,
-              fontWeight: 'bold'
-            }}
-          >
-            {loading ? '주문 중...' : '1x Short 주문 (Post-Only)'}
-          </button>
-        </form>
+        {bybitPosition === '로딩중' && (
+          <p style={{ color: '#666', marginBottom: 8 }}>XRPUSD 포지션 조회 중...</p>
+        )}
+        {bybitPosition && bybitPosition !== '로딩중' && !bybitPosition.size && (
+          <p style={{ marginBottom: 8 }}>현재 열린 XRPUSD 포지션이 없습니다.</p>
+        )}
+        {bybitPosition && bybitPosition !== '로딩중' && bybitPosition.size && Number(bybitPosition.size) !== 0 && (
+          <div style={{ marginBottom: 16, padding: '8px 12px', backgroundColor: '#fff', borderRadius: 6 }}>
+            <p style={{ margin: '0 0 4px 0' }}>
+              <strong>현재 XRPUSD 포지션:</strong>{' '}
+              {bybitPosition.side || (Number(bybitPosition.size) > 0 ? 'Sell' : 'Buy')} {' '}
+              {Number(bybitPosition.size).toLocaleString(undefined, { maximumFractionDigits: 4 })} XRP
+              {bybitPosition.avgPrice && (
+                <>
+                  {' @ '}
+                  {Number(bybitPosition.avgPrice).toFixed(4)} USDT
+                </>
+              )}
+            </p>
+            {bybitPosition.positionMargin && (
+              <p style={{ margin: 0 }}>
+                <strong>포지션 증거금:</strong>{' '}
+                {Number(bybitPosition.positionMargin).toLocaleString(undefined, { maximumFractionDigits: 4 })} (Bybit positionIM)
+              </p>
+            )}
+          </div>
+        )}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <label style={{ fontWeight: 'bold' }}>
+              XRP 수량
+              <input
+                type="text"
+                inputMode="decimal"
+                placeholder="예: 100"
+                value={qty}
+                onChange={(e) => setQty(e.target.value)}
+                style={{ display: 'block', marginTop: 6, padding: 10, fontSize: 16, width: '100%', boxSizing: 'border-box' }}
+              />
+            </label>
+            <label style={{ fontWeight: 'bold' }}>
+              지정가 (USDT)
+              <input
+                type="text"
+                inputMode="decimal"
+                placeholder={
+                  upbitInfo && upbitInfo !== '로딩중' && upbitInfo.bybitXrpUsdPrice != null
+                    ? `예: ${Number(upbitInfo.bybitXrpUsdPrice).toFixed(4)}`
+                    : '예: 0.5000'
+                }
+                value={shortPrice}
+                onChange={(e) => setShortPrice(e.target.value)}
+                style={{ display: 'block', marginTop: 6, padding: 10, fontSize: 16, width: '100%', boxSizing: 'border-box' }}
+              />
+            </label>
+          </div>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <button
+              type="button"
+              disabled={loading}
+              onClick={() => placeShortOrder('Sell')}
+              style={{
+                flex: 1,
+                padding: 12,
+                backgroundColor: loading ? '#999' : '#f44336',
+                color: 'white',
+                border: 'none',
+                borderRadius: 8,
+                cursor: loading ? 'not-allowed' : 'pointer',
+                fontSize: 14,
+                fontWeight: 'bold'
+              }}
+            >
+              {loading ? '주문 중...' : '1x Short 진입 (Sell, Post-Only)'}
+            </button>
+            <button
+              type="button"
+              disabled={loading}
+              onClick={() => placeShortOrder('Buy')}
+              style={{
+                flex: 1,
+                padding: 12,
+                backgroundColor: loading ? '#999' : '#388e3c',
+                color: 'white',
+                border: 'none',
+                borderRadius: 8,
+                cursor: loading ? 'not-allowed' : 'pointer',
+                fontSize: 14,
+                fontWeight: 'bold'
+              }}
+            >
+              {loading ? '주문 중...' : '숏 포지션 청산 (Buy, Post-Only)'}
+            </button>
+          </div>
+        </div>
       </div>
       {message && (
         <p style={{ color: message.type === 'error' ? '#c62828' : '#2e7d32', marginTop: 16 }}>
