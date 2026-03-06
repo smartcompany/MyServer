@@ -38,6 +38,12 @@ function makeSimpleToken() {
   return jwt.sign({ access_key: UPBIT_ACC_KEY, nonce: uuidv4() }, UPBIT_SEC_KEY);
 }
 
+function toNumberOrNaN(value) {
+  if (typeof value === 'number') return value;
+  if (typeof value === 'string') return Number(value);
+  return Number.NaN;
+}
+
 export async function POST(request) {
   const reqId = uuidv4();
   console.error(`[short1x][upbit-withdraw][${reqId}] POST entered`);
@@ -117,6 +123,76 @@ export async function POST(request) {
         secondaryAddress: secondaryAddress ? '(present)' : '(empty)',
       });
       return Response.json({ error: '등록된 XRP 출금 허용 주소가 아닙니다.' }, { status: 400 });
+    }
+
+    // 출금 가능 정보 조회: balance/locked, withdraw_fee, 최소 출금액 등을 확인
+    const chanceParams = { currency: 'XRP', net_type: netType };
+    const chanceToken = makeQueryToken(chanceParams);
+    const chanceRes = await fetch(
+      `${UPBIT_SERVER}/v1/withdraws/chance?${querystring.encode(chanceParams)}`,
+      {
+        headers: {
+          Authorization: `Bearer ${chanceToken}`,
+          Accept: 'application/json',
+        },
+      }
+    );
+    const chanceData = await chanceRes.json().catch(() => ({}));
+    if (!chanceRes.ok) {
+      const message =
+        chanceData?.error?.message || chanceData?.error?.name || '출금 가능 정보 조회 실패';
+      console.error(`[short1x][upbit-withdraw][${reqId}] withdraw chance failed`, {
+        status: chanceRes.status,
+        message,
+        body: chanceData,
+      });
+      return Response.json({ error: message }, { status: 502 });
+    }
+
+    const balance = toNumberOrNaN(chanceData?.account?.balance);
+    const locked = toNumberOrNaN(chanceData?.account?.locked);
+    const fee = toNumberOrNaN(chanceData?.currency?.withdraw_fee);
+    const minimum = toNumberOrNaN(chanceData?.withdraw_limit?.minimum);
+    const canWithdraw =
+      chanceData?.withdraw_limit?.can_withdraw === true ||
+      String(chanceData?.withdraw_limit?.can_withdraw).toLowerCase() === 'true';
+
+    const available = Number.isFinite(balance) && Number.isFinite(locked) ? balance - locked : NaN;
+
+    console.error(`[short1x][upbit-withdraw][${reqId}] withdraw chance`, {
+      balance,
+      locked,
+      available,
+      fee,
+      minimum,
+      canWithdraw,
+    });
+
+    if (canWithdraw === false) {
+      return Response.json(
+        { error: '현재 업비트에서 XRP 출금이 불가능한 상태입니다(출금 제한/지갑 상태 확인).' },
+        { status: 400 }
+      );
+    }
+
+    if (Number.isFinite(minimum) && amount < minimum) {
+      return Response.json(
+        { error: `최소 출금 수량은 ${minimum} XRP 입니다.` },
+        { status: 400 }
+      );
+    }
+
+    // 업비트는 보통 출금 수수료가 별도로 차감됩니다: amount + fee <= available 이어야 함
+    if (Number.isFinite(available) && Number.isFinite(fee) && amount + fee > available) {
+      const maxSendable = Math.max(0, available - fee);
+      return Response.json(
+        {
+          error:
+            `출금 금액이 부족합니다. (사용 가능: ${available} XRP, 수수료: ${fee} XRP)` +
+            ` 최대 출금 가능(수수료 제외): ${maxSendable} XRP`,
+        },
+        { status: 400 }
+      );
     }
 
     const params = {
