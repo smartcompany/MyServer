@@ -245,7 +245,11 @@ export default function Short1xPage() {
         alert(errMsg);
         return;
       }
-      setMessage({ type: 'success', text: data.message || '업비트 XRP 출금 요청이 접수되었습니다.' });
+      const successMsg =
+        data.message ||
+        `업비트 XRP 출금 요청이 접수되었습니다.${amount ? ` (출금 수량: ${amount.toLocaleString()} XRP)` : ''}`;
+      setMessage({ type: 'success', text: successMsg });
+      alert(successMsg);
       setWithdrawAmount('');
     } catch (err) {
       const errMsg = err.message || '업비트 XRP 출금 실패';

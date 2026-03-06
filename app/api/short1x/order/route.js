@@ -1,5 +1,6 @@
 import { verifyToken } from '../../trade/middleware';
 import { bybitSignedRequest, bybitPublicGet, getBybitConfig } from '../bybit';
+import { v4 as uuidv4 } from 'uuid';
 
 const SYMBOL = 'XRPUSDT';
 const CATEGORY = 'linear';
@@ -9,14 +10,19 @@ const CATEGORY = 'linear';
  * body: { qty: number | string } - XRP 수량
  */
 export async function POST(request) {
+  const reqId = uuidv4();
+  console.error(`[short1x][order][${reqId}] POST entered`);
+
   const auth = verifyToken(request);
   if (auth.error) {
+    console.error(`[short1x][order][${reqId}] auth failed`, auth.error);
     return Response.json({ error: auth.error }, { status: auth.status });
   }
 
   try {
     getBybitConfig(); // 환경 변수 확인
   } catch (e) {
+    console.error(`[short1x][order][${reqId}] bybit config error`, e?.message || e);
     return Response.json(
       { error: 'Bybit API 키가 설정되지 않았습니다. .env.local에 BYBIT_API_KEY, BYBIT_API_SECRET을 넣어주세요.' },
       { status: 500 }
@@ -39,6 +45,12 @@ export async function POST(request) {
   }
 
   try {
+    console.error(`[short1x][order][${reqId}] start`, {
+      symbol: SYMBOL,
+      category: CATEGORY,
+      qty,
+    });
+
     // 1) 레버리지 1배 설정
     await bybitSignedRequest('POST', '/v5/position/set-leverage', {
       category: CATEGORY,
@@ -51,6 +63,11 @@ export async function POST(request) {
     const ob = await bybitPublicGet(`/v5/market/orderbook?category=${CATEGORY}&symbol=${SYMBOL}&limit=1`);
     const asks = ob?.result?.a; // [ ["price", "size"], ... ]
     const bestAsk = asks?.[0]?.[0];
+    console.error(`[short1x][order][${reqId}] orderbook`, {
+      bestAsk,
+      raw: Array.isArray(asks) ? asks[0] : asks,
+    });
+
     if (!bestAsk) {
       return Response.json({ error: '호가창 조회 실패. 시장이 열려 있는지 확인해주세요.' }, { status: 502 });
     }
@@ -66,9 +83,17 @@ export async function POST(request) {
       timeInForce: 'PostOnly',
       positionIdx: 0  // one-way mode
     };
+    console.error(`[short1x][order][${reqId}] create order request`, orderBody);
+
     const orderRes = await bybitSignedRequest('POST', '/v5/order/create', orderBody);
     const orderId = orderRes?.result?.orderId;
     const orderLinkId = orderRes?.result?.orderLinkId;
+
+    console.error(`[short1x][order][${reqId}] order created`, {
+      orderId,
+      orderLinkId,
+      result: orderRes?.result,
+    });
 
     return Response.json({
       success: true,
