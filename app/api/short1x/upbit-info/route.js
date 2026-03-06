@@ -1,10 +1,15 @@
 import { verifyToken } from '../../trade/middleware';
 import jwt from 'jsonwebtoken';
 import { v4 as uuidv4 } from 'uuid';
+import { bybitPublicGet } from '../bybit';
+import axios from 'axios';
+import * as cheerio from 'cheerio';
 
 const UPBIT_ACC_KEY = process.env.UPBIT_ACC_KEY;
 const UPBIT_SEC_KEY = process.env.UPBIT_SEC_KEY;
 const UPBIT_SERVER = 'https://api.upbit.com';
+const NAVER_EXCHANGE_RATE_URL =
+  'https://finance.naver.com/marketindex/exchangeDailyQuote.naver?marketindexCd=FX_USDKRW';
 
 function makeUpbitToken() {
   if (!UPBIT_ACC_KEY || !UPBIT_SEC_KEY) {
@@ -15,7 +20,7 @@ function makeUpbitToken() {
 }
 
 /**
- * GET: 업비트 보유 XRP, XRP 지정가 매수 주문 금액(KRW)
+ * GET: 업비트 보유 XRP, KRW 잔고, XRP 지정가 매수 주문 금액, 현재 XRP 가격
  */
 export async function GET(request) {
   const auth = verifyToken(request);
@@ -34,37 +39,146 @@ export async function GET(request) {
     const token = makeUpbitToken();
     const headers = { Authorization: `Bearer ${token}` };
 
+    const result = {
+      upbitXrpBalance: null,
+      upbitKrwBalance: null,
+      upbitXrpBuyOrderKrw: null,
+      xrpPrice: null,
+      usdKrwRate: null,
+      usdtKrwPrice: null,
+      bybitXrpUsdPrice: null,
+      kimchiPremium: null,
+      accountError: null,
+      ordersError: null,
+      priceError: null,
+      kimchiError: null,
+    };
+
     // 1) 계정 보유 현금/코인
-    const accountsRes = await fetch(`${UPBIT_SERVER}/v1/accounts`, { headers });
-    if (!accountsRes.ok) {
-      const errText = await accountsRes.text();
-      return Response.json(
-        { error: '업비트 계정 조회 실패', details: errText },
-        { status: 502 }
-      );
+    try {
+      const accountsRes = await fetch(`${UPBIT_SERVER}/v1/accounts`, { headers });
+      if (!accountsRes.ok) {
+        const errText = await accountsRes.text();
+        result.accountError = `업비트 계정 조회 실패: ${errText || accountsRes.status}`;
+      } else {
+        const accounts = await accountsRes.json();
+        const xrpAccount = Array.isArray(accounts) ? accounts.find((a) => a.currency === 'XRP') : null;
+        const krwAccount = Array.isArray(accounts) ? accounts.find((a) => a.currency === 'KRW') : null;
+        result.upbitXrpBalance = xrpAccount ? String(xrpAccount.balance ?? '0') : '0';
+        result.upbitKrwBalance = krwAccount ? String(krwAccount.balance ?? '0') : '0';
+      }
+    } catch (e) {
+      result.accountError = `업비트 계정 조회 실패: ${e?.message || '네트워크 오류'}`;
     }
-    const accounts = await accountsRes.json();
-    const xrpAccount = Array.isArray(accounts) ? accounts.find((a) => a.currency === 'XRP') : null;
-    const upbitXrpBalance = xrpAccount ? String(xrpAccount.balance ?? '0') : '0';
 
     // 2) KRW-XRP 체결 대기 주문 중 매수 주문 금액 합계
-    const ordersRes = await fetch(`${UPBIT_SERVER}/v1/orders?market=KRW-XRP&state=wait`, { headers });
-    let upbitXrpBuyOrderKrw = 0;
-    if (ordersRes.ok) {
-      const orders = await ordersRes.json();
-      if (Array.isArray(orders)) {
-        for (const o of orders) {
-          if (o.side === 'bid' && o.price != null && o.volume != null) {
-            upbitXrpBuyOrderKrw += Number(o.price) * Number(o.volume);
+    try {
+      const ordersRes = await fetch(`${UPBIT_SERVER}/v1/orders?market=KRW-XRP&state=wait`, { headers });
+      if (!ordersRes.ok) {
+        const errText = await ordersRes.text();
+        result.ordersError = `주문 정보 조회 실패: ${errText || ordersRes.status}`;
+      } else {
+        const orders = await ordersRes.json();
+        let sum = 0;
+        if (Array.isArray(orders)) {
+          for (const o of orders) {
+            if (o.side === 'bid' && o.price != null && o.volume != null) {
+              sum += Number(o.price) * Number(o.volume);
+            }
           }
+        }
+        result.upbitXrpBuyOrderKrw = Math.round(sum);
+      }
+    } catch (e) {
+      result.ordersError = `주문 정보 조회 실패: ${e?.message || '네트워크 오류'}`;
+    }
+
+    // 3) 현재 XRP 가격 (최근 체결가) - 공개 API, 로그인 없이도 가능
+    try {
+      const tickerRes = await fetch(`${UPBIT_SERVER}/v1/ticker?markets=KRW-XRP`);
+      if (!tickerRes.ok) {
+        const errText = await tickerRes.text();
+        result.priceError = `가격 조회 실패: ${errText || tickerRes.status}`;
+      } else {
+        const tickerData = await tickerRes.json();
+        if (Array.isArray(tickerData) && tickerData[0]?.trade_price != null) {
+          result.xrpPrice = Number(tickerData[0].trade_price);
+        } else {
+          result.priceError = '가격 데이터 없음';
+        }
+      }
+    } catch (e) {
+      result.priceError = `가격 조회 실패: ${e?.message || '네트워크 오류'}`;
+    }
+
+    // 4) 환율 (USD/KRW) - 네이버 환율 페이지 사용
+    try {
+      const response = await axios.get(`${NAVER_EXCHANGE_RATE_URL}&page=1`);
+      if (response.status === 200) {
+        const $ = cheerio.load(response.data);
+        const rows = $('table.tbl_exchange tbody tr');
+        if (rows.length > 0) {
+          const firstRow = rows.first();
+          const tds = firstRow.find('td');
+          const rateStr = $(tds[1]).text().trim().replace(/,/g, '');
+          const rate = parseFloat(rateStr);
+          if (!isNaN(rate)) {
+            result.usdKrwRate = rate;
+          }
+        }
+      }
+    } catch {
+      // 환율이 없어도 나머지는 동작 가능
+    }
+
+    // 5) USDT 가격 (USDT-KRW) - Upbit KRW-USDT 티커 사용
+    try {
+      const fxRes = await fetch(`${UPBIT_SERVER}/v1/ticker?markets=KRW-USDT`);
+      if (fxRes.ok) {
+        const fxData = await fxRes.json();
+        if (Array.isArray(fxData) && fxData[0]?.trade_price != null) {
+          result.usdtKrwPrice = Number(fxData[0].trade_price);
+        }
+      }
+    } catch {
+      // 환율이 없어도 나머지는 동작 가능
+    }
+
+    // 6) Bybit XRPUSDT 가격 (USD 기준)
+    try {
+      const bybitRes = await bybitPublicGet('/v5/market/tickers?category=linear&symbol=XRPUSDT');
+      const list = bybitRes?.result?.list || bybitRes?.result || [];
+      const item = Array.isArray(list) ? list[0] : null;
+      const lastPrice = item?.lastPrice || item?.last_price || item?.markPrice;
+      if (lastPrice != null) {
+        result.bybitXrpUsdPrice = Number(lastPrice);
+      } else {
+        result.kimchiError = 'Bybit XRPUSDT 가격 데이터를 찾을 수 없습니다.';
+      }
+    } catch (e) {
+      result.bybitXrpUsdPrice = null;
+      result.kimchiError = `Bybit 가격 조회 실패: ${e?.message || '네트워크 오류'}`;
+    }
+
+    // 7) 김치 프리미엄 계산 (Upbit KRW 가격 vs Bybit USD * 환율)
+    if (result.xrpPrice != null && result.usdKrwRate != null && result.bybitXrpUsdPrice != null) {
+      const globalKrw = result.bybitXrpUsdPrice * result.usdKrwRate;
+      if (globalKrw > 0) {
+        result.kimchiPremium = ((result.xrpPrice - globalKrw) / globalKrw) * 100;
+      }
+    } else {
+      if (result.kimchiError == null) {
+        if (result.xrpPrice == null) {
+          result.kimchiError = 'Upbit XRP 가격이 없어 김치 프리미엄을 계산할 수 없습니다.';
+        } else if (result.usdKrwRate == null) {
+          result.kimchiError = 'USD/KRW 환율이 없어 김치 프리미엄을 계산할 수 없습니다.';
+        } else if (result.bybitXrpUsdPrice == null) {
+          result.kimchiError = 'Bybit XRPUSDT 가격이 없어 김치 프리미엄을 계산할 수 없습니다.';
         }
       }
     }
 
-    return Response.json({
-      upbitXrpBalance,
-      upbitXrpBuyOrderKrw: Math.round(upbitXrpBuyOrderKrw),
-    });
+    return Response.json(result);
   } catch (err) {
     console.error('[short1x] 업비트 정보 조회 오류:', err.message);
     return Response.json(
