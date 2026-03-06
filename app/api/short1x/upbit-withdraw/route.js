@@ -10,7 +10,7 @@ const UPBIT_SERVER = 'https://api.upbit.com';
 
 function makeQueryToken(params) {
   if (!UPBIT_ACC_KEY || !UPBIT_SEC_KEY) {
-    throw new Error('UPBIT_ACC_KEY, UPBIT_SEC_KEY가 설정되지 않았습니다.');
+    throw new Error('UPBIT_ACC_KEY, UPBIT_SEC_KEY가 설정되지 않았어요');
   }
   const queryStr = querystring.encode(params);
   const queryHash = crypto.createHash('sha512').update(queryStr).digest('hex');
