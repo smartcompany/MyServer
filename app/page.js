@@ -26,6 +26,13 @@ export default function HomePage() {
           textDecoration: 'none',
           borderRadius: '4px'
         }}>거래 설정</a>
+        <a href="/short1x" style={{
+          padding: '12px 24px',
+          backgroundColor: '#9C27B0',
+          color: 'white',
+          textDecoration: 'none',
+          borderRadius: '4px'
+        }}>1x Short (XRP)</a>
       </nav>
     </div>
   );
