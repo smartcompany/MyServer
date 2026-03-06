@@ -11,6 +11,23 @@ function formatNumberInput(value) {
   return num.toLocaleString();
 }
 
+function mapUpbitInfo(data) {
+  return {
+    upbitXrpBalance: data.upbitXrpBalance,
+    upbitKrwBalance: data.upbitKrwBalance,
+    upbitXrpBuyOrderKrw: data.upbitXrpBuyOrderKrw,
+    xrpPrice: data.xrpPrice,
+    usdKrwRate: data.usdKrwRate,
+    usdtKrwPrice: data.usdtKrwPrice,
+    bybitXrpUsdPrice: data.bybitXrpUsdPrice,
+    kimchiPremium: data.kimchiPremium,
+    accountError: data.accountError,
+    ordersError: data.ordersError,
+    priceError: data.priceError,
+    kimchiError: data.kimchiError,
+  };
+}
+
 export default function Short1xPage() {
   const [loginArea, setLoginArea] = useState(true);
   const [qty, setQty] = useState('');
@@ -21,6 +38,11 @@ export default function Short1xPage() {
   const [upbitPrice, setUpbitPrice] = useState('');
   const [upbitVolume, setUpbitVolume] = useState('');
   const [upbitOrderLoading, setUpbitOrderLoading] = useState(false);
+  const [withdrawAddresses, setWithdrawAddresses] = useState([]);
+  const [withdrawAddressValue, setWithdrawAddressValue] = useState('');
+  const [withdrawAmount, setWithdrawAmount] = useState('');
+  const [withdrawAddressesError, setWithdrawAddressesError] = useState(null);
+  const [withdrawLoading, setWithdrawLoading] = useState(false);
 
   useEffect(() => {
     const token = localStorage.getItem('token');
@@ -61,20 +83,7 @@ export default function Short1xPage() {
           if (data.error) {
             setUpbitInfo({ accountError: data.error });
           } else {
-            setUpbitInfo({
-              upbitXrpBalance: data.upbitXrpBalance,
-              upbitKrwBalance: data.upbitKrwBalance,
-              upbitXrpBuyOrderKrw: data.upbitXrpBuyOrderKrw,
-              xrpPrice: data.xrpPrice,
-              usdKrwRate: data.usdKrwRate,
-              usdtKrwPrice: data.usdtKrwPrice,
-              bybitXrpUsdPrice: data.bybitXrpUsdPrice,
-              kimchiPremium: data.kimchiPremium,
-              accountError: data.accountError,
-              ordersError: data.ordersError,
-              priceError: data.priceError,
-              kimchiError: data.kimchiError,
-            });
+            setUpbitInfo(mapUpbitInfo(data));
           }
         })
         .catch(() => {
@@ -89,6 +98,37 @@ export default function Short1xPage() {
       cancelled = true;
       clearInterval(id);
     };
+  }, [loginArea]);
+
+  useEffect(() => {
+    if (loginArea) return;
+    const token = localStorage.getItem('token');
+    if (!token) return;
+
+    setWithdrawAddressesError(null);
+    fetch('/api/short1x/upbit-withdraw-addresses', {
+      headers: { Authorization: 'Bearer ' + token }
+    })
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.error) {
+          setWithdrawAddresses([]);
+          setWithdrawAddressesError(data.error);
+          return;
+        }
+        const list = Array.isArray(data.addresses) ? data.addresses : [];
+        setWithdrawAddresses(list);
+        if (list.length > 0) {
+          const defaultValue = `${list[0].withdraw_address}||${list[0].secondary_address || ''}||${list[0].net_type}`;
+          setWithdrawAddressValue(defaultValue);
+        } else {
+          setWithdrawAddressValue('');
+        }
+      })
+      .catch(() => {
+        setWithdrawAddresses([]);
+        setWithdrawAddressesError('출금 주소를 불러오지 못했습니다.');
+      });
   }, [loginArea]);
 
   async function login(e) {
@@ -121,6 +161,10 @@ export default function Short1xPage() {
     setMessage(null);
     setXrpBalance(null);
     setUpbitInfo(null);
+    setWithdrawAddresses([]);
+    setWithdrawAddressValue('');
+    setWithdrawAmount('');
+    setWithdrawAddressesError(null);
   }
 
   async function placeUpbitBuyOrder(e) {
@@ -156,14 +200,55 @@ export default function Short1xPage() {
       fetch('/api/short1x/upbit-info', { headers: { Authorization: 'Bearer ' + token } })
         .then((r) => r.json())
         .then((d) => {
-          if (d.error) setUpbitInfo({ error: d.error });
-          else setUpbitInfo({ upbitXrpBalance: d.upbitXrpBalance, upbitXrpBuyOrderKrw: d.upbitXrpBuyOrderKrw });
+          if (d.error) setUpbitInfo({ accountError: d.error });
+          else setUpbitInfo(mapUpbitInfo(d));
         })
-        .catch(() => setUpbitInfo({ error: '업비트 정보 조회 실패' }));
+        .catch(() => setUpbitInfo({ accountError: '업비트 정보 조회 실패' }));
     } catch (err) {
       setMessage({ type: 'error', text: err.message || '주문 요청 실패' });
     } finally {
       setUpbitOrderLoading(false);
+    }
+  }
+
+  async function withdrawUpbitXrp(e) {
+    e.preventDefault();
+    const amount = Number(String(withdrawAmount).replace(/,/g, ''));
+    if (!withdrawAddressValue) {
+      setMessage({ type: 'error', text: '출금 주소를 선택해주세요.' });
+      return;
+    }
+    if (!Number.isFinite(amount) || amount <= 0) {
+      setMessage({ type: 'error', text: '출금 수량(XRP)을 입력해주세요.' });
+      return;
+    }
+
+    const [address, secondaryAddress, netType] = withdrawAddressValue.split('||');
+    setWithdrawLoading(true);
+    setMessage(null);
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch('/api/short1x/upbit-withdraw', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+        body: JSON.stringify({
+          amount,
+          address,
+          secondaryAddress,
+          netType,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setMessage({ type: 'error', text: data.error || '업비트 XRP 출금 실패' });
+        return;
+      }
+      setMessage({ type: 'success', text: data.message || '업비트 XRP 출금 요청이 접수되었습니다.' });
+      setWithdrawAmount('');
+    } catch (err) {
+      setMessage({ type: 'error', text: err.message || '업비트 XRP 출금 실패' });
+    } finally {
+      setWithdrawLoading(false);
     }
   }
 
@@ -361,6 +446,61 @@ export default function Short1xPage() {
             {upbitOrderLoading ? '주문 중...' : '매수 주문'}
           </button>
         </form>
+        <div style={{ marginTop: 16, paddingTop: 12, borderTop: '1px solid rgba(0,0,0,0.08)' }}>
+          <p style={{ margin: '0 0 8px 0', fontWeight: 'bold' }}>XRP 출금</p>
+          {withdrawAddressesError && (
+            <p style={{ color: '#c62828', margin: '0 0 8px 0' }}>{withdrawAddressesError}</p>
+          )}
+          <form onSubmit={withdrawUpbitXrp} style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'flex-end' }}>
+            <label style={{ display: 'flex', flexDirection: 'column', gap: 4, minWidth: 240 }}>
+              <span style={{ fontSize: 12, color: '#555' }}>출금 주소 선택</span>
+              <select
+                value={withdrawAddressValue}
+                onChange={(e) => setWithdrawAddressValue(e.target.value)}
+                style={{ padding: '8px 10px' }}
+              >
+                {withdrawAddresses.length === 0 && (
+                  <option value="">등록된 XRP 출금 주소 없음</option>
+                )}
+                {withdrawAddresses.map((item) => {
+                  const value = `${item.withdraw_address}||${item.secondary_address || ''}||${item.net_type}`;
+                  const label = `${item.exchange_name || item.wallet_type || item.beneficiary_name || '등록 주소'} / ${item.net_type}${item.secondary_address ? ` / 태그 ${item.secondary_address}` : ''}`;
+                  return (
+                    <option key={value} value={value}>
+                      {label}
+                    </option>
+                  );
+                })}
+              </select>
+            </label>
+            <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              <span style={{ fontSize: 12, color: '#555' }}>출금 수량(XRP)</span>
+              <input
+                type="text"
+                inputMode="decimal"
+                placeholder="예: 100"
+                value={withdrawAmount}
+                onChange={(e) => setWithdrawAmount(formatNumberInput(e.target.value))}
+                style={{ width: 120, padding: '8px 10px' }}
+              />
+            </label>
+            <button
+              type="submit"
+              disabled={withdrawLoading || withdrawAddresses.length === 0}
+              style={{
+                padding: '8px 14px',
+                backgroundColor: withdrawLoading || withdrawAddresses.length === 0 ? '#999' : '#6a1b9a',
+                color: 'white',
+                border: 'none',
+                borderRadius: 6,
+                cursor: withdrawLoading || withdrawAddresses.length === 0 ? 'not-allowed' : 'pointer',
+                fontWeight: 'bold',
+              }}
+            >
+              {withdrawLoading ? '출금 중...' : 'XRP 출금'}
+            </button>
+          </form>
+        </div>
       </div>
 
       {/* Bybit 영역 */}
