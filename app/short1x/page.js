@@ -714,19 +714,15 @@ export default function Short1xPage() {
           xrpBalance !== '로딩중' &&
           upbitInfo &&
           upbitInfo !== '로딩중' &&
-          upbitInfo.bybitXrpUsdPrice != null &&
-          upbitInfo.usdtKrwPrice != null
+          upbitInfo.xrpPrice != null
             ? (() => {
                 const xrpAmount = Number(xrpBalance.xrp);
-                const krw =
-                  xrpAmount *
-                  Number(upbitInfo.bybitXrpUsdPrice) *
-                  Number(upbitInfo.usdtKrwPrice);
+                const krw = xrpAmount * Number(upbitInfo.xrpPrice);
                 return `현재 Bybit 보유 XRP: ${xrpAmount.toLocaleString(undefined, {
                   maximumFractionDigits: 4,
-                })} XRP (한국 USDT 가격 기준 약 ${Math.round(krw).toLocaleString()}원)`;
+                })} XRP (현재 XRP 가격 기준 약 ${Math.round(krw).toLocaleString()}원)`;
               })()
-            : '현재 Bybit XRP 보유 수량 또는 환율 정보를 불러오는 중입니다.'}
+            : '현재 Bybit XRP 보유 수량 또는 XRP 가격 정보를 불러오는 중입니다.'}
         </p>
         {xrpBalance === '로딩중' && <p style={{ color: '#666', marginBottom: 8 }}>Bybit 보유 XRP 조회 중...</p>}
         {xrpBalance && xrpBalance !== '로딩중' && (
