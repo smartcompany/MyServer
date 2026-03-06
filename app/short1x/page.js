@@ -240,13 +240,17 @@ export default function Short1xPage() {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        setMessage({ type: 'error', text: data.error || '업비트 XRP 출금 실패' });
+        const errMsg = data.error || '업비트 XRP 출금 실패';
+        setMessage({ type: 'error', text: errMsg });
+        alert(errMsg);
         return;
       }
       setMessage({ type: 'success', text: data.message || '업비트 XRP 출금 요청이 접수되었습니다.' });
       setWithdrawAmount('');
     } catch (err) {
-      setMessage({ type: 'error', text: err.message || '업비트 XRP 출금 실패' });
+      const errMsg = err.message || '업비트 XRP 출금 실패';
+      setMessage({ type: 'error', text: errMsg });
+      alert(errMsg);
     } finally {
       setWithdrawLoading(false);
     }

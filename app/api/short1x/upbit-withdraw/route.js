@@ -40,35 +40,39 @@ function makeSimpleToken() {
 
 export async function POST(request) {
   const reqId = uuidv4();
-  const auth = verifyToken(request);
-  if (auth.error) {
-    return Response.json({ error: auth.error }, { status: auth.status });
-  }
-
-  let amount;
-  let address;
-  let secondaryAddress;
-  let netType;
+  console.error(`[short1x][upbit-withdraw][${reqId}] POST entered`);
 
   try {
-    const body = await request.json();
-    amount = Number(body?.amount);
-    address = String(body?.address || '').trim();
-    secondaryAddress = String(body?.secondaryAddress || '').trim();
-    netType = String(body?.netType || '').trim();
-  } catch {
-    return Response.json({ error: '요청 본문이 올바르지 않습니다.' }, { status: 400 });
-  }
+    const auth = verifyToken(request);
+    if (auth.error) {
+      console.error(`[short1x][upbit-withdraw][${reqId}] auth failed`, auth.error);
+      return Response.json({ error: auth.error }, { status: auth.status });
+    }
 
-  if (!Number.isFinite(amount) || amount <= 0) {
-    return Response.json({ error: '출금 수량(XRP)을 올바르게 입력해주세요.' }, { status: 400 });
-  }
-  if (!address || !netType) {
-    return Response.json({ error: '출금 주소와 네트워크 타입이 필요합니다.' }, { status: 400 });
-  }
+    let amount;
+    let address;
+    let secondaryAddress;
+    let netType;
 
-  try {
-    console.log(`[short1x][upbit-withdraw][${reqId}] start`, {
+    try {
+      const body = await request.json();
+      amount = Number(body?.amount);
+      address = String(body?.address || '').trim();
+      secondaryAddress = String(body?.secondaryAddress || '').trim();
+      netType = String(body?.netType || '').trim();
+    } catch (parseErr) {
+      console.error(`[short1x][upbit-withdraw][${reqId}] body parse error`, parseErr?.message);
+      return Response.json({ error: '요청 본문이 올바르지 않습니다.' }, { status: 400 });
+    }
+
+    if (!Number.isFinite(amount) || amount <= 0) {
+      return Response.json({ error: '출금 수량(XRP)을 올바르게 입력해주세요.' }, { status: 400 });
+    }
+    if (!address || !netType) {
+      return Response.json({ error: '출금 주소와 네트워크 타입이 필요합니다.' }, { status: 400 });
+    }
+
+    console.error(`[short1x][upbit-withdraw][${reqId}] start`, {
       currency: 'XRP',
       netType,
       amount,
@@ -76,7 +80,7 @@ export async function POST(request) {
       hasSecondaryAddress: Boolean(secondaryAddress),
     });
 
-    // 등록된 출금 허용 주소인지 재확인
+    // 등록된 출금 허용 주소인지 재확인 (makeSimpleToken은 env 없으면 throw)
     const listToken = makeSimpleToken();
     const listRes = await fetch(`${UPBIT_SERVER}/v1/withdraws/coin_addresses`, {
       headers: {
