@@ -70,11 +70,13 @@ export async function GET(request) {
       result.accountError = `업비트 계정 조회 실패: ${e?.message || '네트워크 오류'}`;
     }
 
-    // 2) KRW-XRP 체결 대기 주문 중 매수 주문 금액 합계
+    // 2) 체결 대기 주문 중 매수 주문 금액 합계
     try {
+      // GET /v1/orders 에 쿼리스트링을 붙이면 query_hash 서명이 필요해서
+      // 여기서는 파라미터 없이 전체 wait 주문을 가져온 뒤 KRW-XRP만 필터링합니다.
       const token = makeUpbitToken();
       const headers = { Authorization: `Bearer ${token}` };
-      const ordersRes = await fetch(`${UPBIT_SERVER}/v1/orders?market=KRW-XRP&state=wait`, { headers });
+      const ordersRes = await fetch(`${UPBIT_SERVER}/v1/orders`, { headers });
       if (!ordersRes.ok) {
         const errText = await ordersRes.text();
         result.ordersError = `주문 정보 조회 실패: ${errText || ordersRes.status}`;
@@ -83,7 +85,7 @@ export async function GET(request) {
         let sum = 0;
         if (Array.isArray(orders)) {
           for (const o of orders) {
-            if (o.side === 'bid' && o.price != null && o.volume != null) {
+            if (o.market === 'KRW-XRP' && o.side === 'bid' && o.price != null && o.volume != null) {
               sum += Number(o.price) * Number(o.volume);
             }
           }
