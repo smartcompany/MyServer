@@ -1054,6 +1054,12 @@ export default function Short1xPage() {
                     출금 가능: {Number(xrpBalance.xrp).toLocaleString(undefined, { maximumFractionDigits: 4 })} XRP
                   </span>
                 )}
+                <span style={{ marginLeft: 8, color: '#666' }}>
+                  출금 수수료: 약 0.25 XRP
+                  {upbitInfo && upbitInfo !== '로딩중' && upbitInfo.xrpPrice != null && (
+                    <> (약 {Math.round(0.25 * Number(upbitInfo.xrpPrice)).toLocaleString()}원)</>
+                  )}
+                </span>
               </span>
               <input
                 type="text"
