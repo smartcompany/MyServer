@@ -724,7 +724,30 @@ export default function Short1xPage() {
         </p>
         <form onSubmit={placeUpbitBuyOrder} style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'flex-end' }}>
           <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-            <span style={{ fontSize: 12, color: '#555' }}>지정가(원)</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span style={{ fontSize: 12, color: '#555' }}>지정가(원)</span>
+              <button
+                type="button"
+                onClick={() => {
+                  if (upbitInfo && upbitInfo !== '로딩중' && upbitInfo.xrpPrice != null) {
+                    setUpbitPrice(formatNumberInput(String(Math.round(Number(upbitInfo.xrpPrice))))); 
+                  }
+                }}
+                disabled={!upbitInfo || upbitInfo === '로딩중' || upbitInfo.xrpPrice == null}
+                style={{
+                  padding: '4px 8px',
+                  fontSize: 11,
+                  backgroundColor: !upbitInfo || upbitInfo === '로딩중' || upbitInfo.xrpPrice == null ? '#ccc' : '#1976d2',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: 4,
+                  cursor: !upbitInfo || upbitInfo === '로딩중' || upbitInfo.xrpPrice == null ? 'not-allowed' : 'pointer',
+                  fontWeight: 'bold',
+                }}
+              >
+                현재가
+              </button>
+            </div>
             <input
               type="text"
               inputMode="numeric"
@@ -763,7 +786,30 @@ export default function Short1xPage() {
         </form>
         <form onSubmit={placeUpbitSellOrder} style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'flex-end', marginTop: 8 }}>
           <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-            <span style={{ fontSize: 12, color: '#555' }}>지정가(원)</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span style={{ fontSize: 12, color: '#555' }}>지정가(원)</span>
+              <button
+                type="button"
+                onClick={() => {
+                  if (upbitInfo && upbitInfo !== '로딩중' && upbitInfo.xrpPrice != null) {
+                    setUpbitSellPrice(formatNumberInput(String(Math.round(Number(upbitInfo.xrpPrice)))));
+                  }
+                }}
+                disabled={!upbitInfo || upbitInfo === '로딩중' || upbitInfo.xrpPrice == null}
+                style={{
+                  padding: '4px 8px',
+                  fontSize: 11,
+                  backgroundColor: !upbitInfo || upbitInfo === '로딩중' || upbitInfo.xrpPrice == null ? '#ccc' : '#c62828',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: 4,
+                  cursor: !upbitInfo || upbitInfo === '로딩중' || upbitInfo.xrpPrice == null ? 'not-allowed' : 'pointer',
+                  fontWeight: 'bold',
+                }}
+              >
+                현재가
+              </button>
+            </div>
             <input
               type="text"
               inputMode="numeric"
@@ -774,7 +820,31 @@ export default function Short1xPage() {
             />
           </label>
           <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-            <span style={{ fontSize: 12, color: '#555' }}>XRP 수량</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span style={{ fontSize: 12, color: '#555' }}>XRP 수량</span>
+              <button
+                type="button"
+                onClick={() => {
+                  if (upbitInfo && upbitInfo !== '로딩중' && upbitInfo.upbitXrpBalance != null) {
+                    const all = Number(upbitInfo.upbitXrpBalance);
+                    setUpbitSellVolume(all % 1 === 0 ? String(all) : all.toFixed(4));
+                  }
+                }}
+                disabled={!upbitInfo || upbitInfo === '로딩중' || upbitInfo.upbitXrpBalance == null || Number(upbitInfo.upbitXrpBalance) <= 0}
+                style={{
+                  padding: '4px 8px',
+                  fontSize: 11,
+                  backgroundColor: !upbitInfo || upbitInfo === '로딩중' || upbitInfo.upbitXrpBalance == null || Number(upbitInfo.upbitXrpBalance) <= 0 ? '#ccc' : '#c62828',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: 4,
+                  cursor: !upbitInfo || upbitInfo === '로딩중' || upbitInfo.upbitXrpBalance == null || Number(upbitInfo.upbitXrpBalance) <= 0 ? 'not-allowed' : 'pointer',
+                  fontWeight: 'bold',
+                }}
+              >
+                전부
+              </button>
+            </div>
             <input
               type="text"
               inputMode="decimal"
@@ -1149,36 +1219,104 @@ export default function Short1xPage() {
               <span style={{ fontSize: 12, color: '#555' }}>
                 출금 수량 (XRP)
                 {xrpBalance && xrpBalance !== '로딩중' && xrpBalance.xrp != null && (
-                  <span style={{ marginLeft: 8, color: '#1976d2' }}>
+                  <span
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => {
+                      const available = Number(xrpBalance.xrp);
+                      const fee = 0.25;
+                      const maxSend = Math.max(0, available - fee);
+                      setBybitWithdrawAmount(maxSend % 1 === 0 ? String(maxSend) : maxSend.toFixed(4));
+                    }}
+                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); const available = Number(xrpBalance.xrp); const fee = 0.25; const maxSend = Math.max(0, available - fee); setBybitWithdrawAmount(maxSend % 1 === 0 ? String(maxSend) : maxSend.toFixed(4)); } }}
+                    style={{ marginLeft: 8, color: '#1976d2', cursor: Number(xrpBalance.xrp) > 0.25 ? 'pointer' : 'default', textDecoration: Number(xrpBalance.xrp) > 0.25 ? 'underline' : 'none' }}
+                  >
                     출금 가능: {Number(xrpBalance.xrp).toLocaleString(undefined, { maximumFractionDigits: 4 })} XRP
                   </span>
                 )}
+                {(!xrpBalance || xrpBalance === '로딩중') && (
+                  <span style={{ marginLeft: 8, color: '#999' }}>
+                    출금 가능: {xrpBalance === '로딩중' ? '조회 중...' : '— (잔액 조회 후 표시)'}
+                  </span>
+                )}
+                {xrpBalance && xrpBalance !== '로딩중' && xrpBalance.xrp == null && (
+                  <span style={{ marginLeft: 8, color: '#999' }}>출금 가능: —</span>
+                )}
                 <span style={{ marginLeft: 8, color: '#666' }}>
-                  출금 수수료: 약 0.25 XRP
+                  출금 수수료: 0.25 XRP
                   {upbitInfo && upbitInfo !== '로딩중' && upbitInfo.xrpPrice != null && (
                     <> (약 {Math.round(0.25 * Number(upbitInfo.xrpPrice)).toLocaleString()}원)</>
                   )}
                 </span>
               </span>
-              <input
-                type="text"
-                inputMode="decimal"
-                placeholder="예: 100"
-                value={bybitWithdrawAmount}
-                onChange={(e) => setBybitWithdrawAmount(formatNumberInput(e.target.value))}
-                style={{ width: 120, padding: '8px 10px' }}
-              />
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  placeholder="예: 100"
+                  value={bybitWithdrawAmount}
+                  onChange={(e) => setBybitWithdrawAmount(formatDecimalInput(e.target.value))}
+                  style={{ width: 120, padding: '8px 10px' }}
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (xrpBalance && xrpBalance !== '로딩중' && xrpBalance.xrp != null) {
+                      const available = Number(xrpBalance.xrp);
+                      const fee = 0.25;
+                      const maxSend = Math.max(0, available - fee);
+                      setBybitWithdrawAmount(maxSend % 1 === 0 ? String(maxSend) : maxSend.toFixed(4));
+                    }
+                  }}
+                  disabled={!xrpBalance || xrpBalance === '로딩중' || xrpBalance.xrp == null || Number(xrpBalance.xrp) <= 0.25}
+                  style={{
+                    padding: '8px 12px',
+                    fontSize: 12,
+                    backgroundColor: !xrpBalance || xrpBalance === '로딩중' || xrpBalance.xrp == null || Number(xrpBalance.xrp) <= 0.25 ? '#ccc' : '#1976d2',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: 6,
+                    cursor: !xrpBalance || xrpBalance === '로딩중' || xrpBalance.xrp == null || Number(xrpBalance.xrp) <= 0.25 ? 'not-allowed' : 'pointer',
+                    fontWeight: 'bold',
+                  }}
+                >
+                  전부
+                </button>
+              </div>
             </label>
             <button
               type="submit"
-              disabled={bybitWithdrawLoading || upbitDepositAddresses.length === 0 || !bybitWithdrawDepositValue}
+              disabled={
+                bybitWithdrawLoading ||
+                upbitDepositAddresses.length === 0 ||
+                !bybitWithdrawDepositValue ||
+                !xrpBalance ||
+                xrpBalance === '로딩중' ||
+                xrpBalance.xrp == null
+              }
               style={{
                 padding: '8px 14px',
-                backgroundColor: bybitWithdrawLoading || upbitDepositAddresses.length === 0 || !bybitWithdrawDepositValue ? '#999' : '#1976d2',
+                backgroundColor:
+                  bybitWithdrawLoading ||
+                  upbitDepositAddresses.length === 0 ||
+                  !bybitWithdrawDepositValue ||
+                  !xrpBalance ||
+                  xrpBalance === '로딩중' ||
+                  xrpBalance.xrp == null
+                    ? '#999'
+                    : '#1976d2',
                 color: 'white',
                 border: 'none',
                 borderRadius: 6,
-                cursor: bybitWithdrawLoading || upbitDepositAddresses.length === 0 || !bybitWithdrawDepositValue ? 'not-allowed' : 'pointer',
+                cursor:
+                  bybitWithdrawLoading ||
+                  upbitDepositAddresses.length === 0 ||
+                  !bybitWithdrawDepositValue ||
+                  !xrpBalance ||
+                  xrpBalance === '로딩중' ||
+                  xrpBalance.xrp == null
+                    ? 'not-allowed'
+                    : 'pointer',
                 fontWeight: 'bold',
               }}
             >
