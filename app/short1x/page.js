@@ -902,13 +902,37 @@ export default function Short1xPage() {
               </select>
             </label>
             <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-              <span style={{ fontSize: 12, color: '#555' }}>출금 수량(XRP)</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span style={{ fontSize: 12, color: '#555' }}>출금 수량(XRP)</span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (upbitInfo && upbitInfo !== '로딩중' && upbitInfo.upbitXrpBalance != null) {
+                      const all = Number(upbitInfo.upbitXrpBalance);
+                      setWithdrawAmount(all % 1 === 0 ? String(all) : all.toFixed(4));
+                    }
+                  }}
+                  disabled={!upbitInfo || upbitInfo === '로딩중' || upbitInfo.upbitXrpBalance == null || Number(upbitInfo.upbitXrpBalance) <= 0}
+                  style={{
+                    padding: '4px 8px',
+                    fontSize: 11,
+                    backgroundColor: !upbitInfo || upbitInfo === '로딩중' || upbitInfo.upbitXrpBalance == null || Number(upbitInfo.upbitXrpBalance) <= 0 ? '#ccc' : '#6a1b9a',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: 4,
+                    cursor: !upbitInfo || upbitInfo === '로딩중' || upbitInfo.upbitXrpBalance == null || Number(upbitInfo.upbitXrpBalance) <= 0 ? 'not-allowed' : 'pointer',
+                    fontWeight: 'bold',
+                  }}
+                >
+                  전부
+                </button>
+              </div>
               <input
                 type="text"
                 inputMode="decimal"
                 placeholder="예: 100"
                 value={withdrawAmount}
-                onChange={(e) => setWithdrawAmount(formatNumberInput(e.target.value))}
+                onChange={(e) => setWithdrawAmount(formatDecimalInput(e.target.value))}
                 style={{ width: 120, padding: '8px 10px' }}
               />
             </label>
