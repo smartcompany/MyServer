@@ -56,3 +56,5 @@ next-env.d.ts
 *.swo
 DEPLOY-SECRETS.md
 deploy-secrets.sh
+data/upbit_usdt_hour.json
+data/usd_krw_hour.json

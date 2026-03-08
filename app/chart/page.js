@@ -179,8 +179,8 @@ export default function ChartPage() {
               {
                 label: 'USD/KRW',
                 data: usdPoints,
-                borderColor: '#a78bfa',
-                backgroundColor: 'rgba(167, 139, 250, 0.06)',
+                borderColor: '#22c55e',
+                backgroundColor: 'rgba(34, 197, 94, 0.08)',
                 borderWidth: 2,
                 fill: true,
                 tension: 0.1,
@@ -224,6 +224,11 @@ export default function ChartPage() {
                 labels: { color: '#a1a1aa', usePointStyle: true },
               },
               tooltip: {
+                backgroundColor: 'rgba(24, 24, 27, 0.88)',
+                titleColor: '#e4e4e7',
+                bodyColor: '#e4e4e7',
+                borderColor: 'rgba(39, 39, 42, 0.9)',
+                borderWidth: 1,
                 callbacks: {
                   title: (items) => {
                     if (!items.length || !items[0].raw) return '';
@@ -402,31 +407,168 @@ export default function ChartPage() {
         let panStartX = 0;
         let panStartMin = 0;
         let panStartMax = 0;
+        let isCrosshairVisible = false; // 점선이 켜져 있는지 (클릭으로 토글)
+        let leftMouseDown = false;
+        let dragMode = null; // null | 'pan' | 'crosshair'
+        let startX = 0;
+        let startY = 0;
+        let crosshairVisibleAtDown = false;
+        const DRAG_THRESHOLD_PX = 5;
+        let touchDragMode = null;
+        let touchStartX = 0;
+        let touchStartY = 0;
+        let crosshairVisibleAtTouchStart = false;
         const canvas = canvasRef.current;
         if (canvas) {
           canvas.onmousedown = (e) => {
             if (e.button === 0) {
-              // 왼쪽 버튼: 세로 점선(크로스헤어)
+              leftMouseDown = true;
+              dragMode = null;
+              startX = e.clientX;
+              startY = e.clientY;
+              crosshairVisibleAtDown = isCrosshairVisible;
+              panStartX = e.clientX;
+              panStartMin = visibleMin;
+              panStartMax = visibleMax;
+            } else if (e.button === 2) {
               isCrosshair = true;
               const rect = canvas.getBoundingClientRect();
               const x = e.clientX - rect.left;
               if (chart.options.plugins) chart.options.plugins.verticalCrosshair = { x };
               chart.update('none');
-            } else if (e.button === 2) {
-              isPanning = true;
-              panStartX = e.clientX;
-              panStartMin = visibleMin;
-              panStartMax = visibleMax;
             }
           };
           canvas.oncontextmenu = (e) => e.preventDefault();
+          // 터치: 탭=점선 토글, 드래그=점선 있을 때 점선 이동 / 없을 때 패닝 (데스크톱과 동일)
+          canvas.ontouchstart = (e) => {
+            if (e.touches.length === 0) return;
+            touchDragMode = null;
+            touchStartX = e.touches[0].clientX;
+            touchStartY = e.touches[0].clientY;
+            crosshairVisibleAtTouchStart = isCrosshairVisible;
+            panStartX = e.touches[0].clientX;
+            panStartMin = visibleMin;
+            panStartMax = visibleMax;
+            e.preventDefault();
+          };
         }
+        const onTouchMove = (e) => {
+          if (e.touches.length === 0) return;
+          const tx = e.touches[0].clientX;
+          const ty = e.touches[0].clientY;
+          if (touchDragMode === null && chart) {
+            const dx = tx - touchStartX;
+            const dy = ty - touchStartY;
+            if (dx * dx + dy * dy > DRAG_THRESHOLD_PX * DRAG_THRESHOLD_PX) {
+              if (crosshairVisibleAtTouchStart) {
+                touchDragMode = 'crosshair';
+                isCrosshair = true;
+                const rect = canvasRef.current?.getBoundingClientRect();
+                if (rect) {
+                  if (chart.options.plugins) chart.options.plugins.verticalCrosshair = { x: tx - rect.left };
+                  chart.update('none');
+                }
+              } else {
+                touchDragMode = 'pan';
+                isPanning = true;
+              }
+            }
+          }
+          if (touchDragMode === 'crosshair' && isCrosshair && chart) {
+            const rect = canvasRef.current?.getBoundingClientRect();
+            if (rect) {
+              if (chart.options.plugins) chart.options.plugins.verticalCrosshair = { x: tx - rect.left };
+              chart.update('none');
+            }
+            e.preventDefault();
+            return;
+          }
+          if (touchDragMode === 'pan' && isPanning && chart) {
+            const xScale = chart.scales.x;
+            if (xScale && xScale.width > 0) {
+              const deltaX = tx - panStartX;
+              const span = panStartMax - panStartMin;
+              const timeDelta = (deltaX / xScale.width) * span;
+              let newMin = panStartMin - timeDelta;
+              let newMax = panStartMax - timeDelta;
+              if (newMin < xMinFull) {
+                newMin = xMinFull;
+                newMax = Math.min(xMaxFull, newMin + span);
+              }
+              if (newMax > xMaxFull) {
+                newMax = xMaxFull;
+                newMin = Math.max(xMinFull, newMax - span);
+              }
+              visibleMin = newMin;
+              visibleMax = newMax;
+              chart.options.scales.x.min = visibleMin;
+              chart.options.scales.x.max = visibleMax;
+              chart.update('none');
+            }
+            e.preventDefault();
+          }
+        };
+        const onTouchEnd = (e) => {
+          if (e.touches.length === 0) {
+            if (touchDragMode === null && chart) {
+              const rect = canvasRef.current?.getBoundingClientRect();
+              if (rect && e.changedTouches?.[0]) {
+                const ct = e.changedTouches[0];
+                isCrosshairVisible = !isCrosshairVisible;
+                if (isCrosshairVisible) {
+                  const x = ct.clientX - rect.left;
+                  if (chart.options.plugins) chart.options.plugins.verticalCrosshair = { x };
+                  chart.update('none');
+                } else {
+                  if (chart.options.plugins) chart.options.plugins.verticalCrosshair = { x: null };
+                  chart.update('none');
+                }
+              }
+            }
+            touchDragMode = null;
+            isPanning = false;
+            isCrosshair = false;
+          }
+        };
+        const onTouchCancel = (e) => {
+          if (e.touches.length === 0) {
+            touchDragMode = null;
+            isPanning = false;
+            isCrosshair = false;
+          }
+        };
         const onMouseMove = (e) => {
           if (isCrosshair && chart) {
             const rect = canvasRef.current?.getBoundingClientRect();
             if (rect) {
               const x = e.clientX - rect.left;
               if (chart.options.plugins) chart.options.plugins.verticalCrosshair = { x };
+              chart.update('none');
+            }
+            return;
+          }
+          if (leftMouseDown && dragMode === null && chart) {
+            const dx = e.clientX - startX;
+            const dy = e.clientY - startY;
+            if (dx * dx + dy * dy > DRAG_THRESHOLD_PX * DRAG_THRESHOLD_PX) {
+              if (crosshairVisibleAtDown) {
+                dragMode = 'crosshair';
+                isCrosshair = true;
+                const rect = canvasRef.current?.getBoundingClientRect();
+                if (rect) {
+                  if (chart.options.plugins) chart.options.plugins.verticalCrosshair = { x: e.clientX - rect.left };
+                  chart.update('none');
+                }
+              } else {
+                dragMode = 'pan';
+                isPanning = true;
+              }
+            }
+          }
+          if (dragMode === 'crosshair' && isCrosshair && chart) {
+            const rect = canvasRef.current?.getBoundingClientRect();
+            if (rect) {
+              if (chart.options.plugins) chart.options.plugins.verticalCrosshair = { x: e.clientX - rect.left };
               chart.update('none');
             }
             return;
@@ -455,28 +597,76 @@ export default function ChartPage() {
         };
         const onMouseUp = (e) => {
           if (e?.button === 0) {
+            if (dragMode === null && leftMouseDown && chart) {
+              const rect = canvasRef.current?.getBoundingClientRect();
+              if (rect) {
+                isCrosshairVisible = !isCrosshairVisible;
+                if (isCrosshairVisible) {
+                  const x = e.clientX - rect.left;
+                  if (chart.options.plugins) chart.options.plugins.verticalCrosshair = { x };
+                  chart.update('none');
+                } else {
+                  if (chart.options.plugins) chart.options.plugins.verticalCrosshair = { x: null };
+                  chart.update('none');
+                }
+              }
+            }
+            leftMouseDown = false;
+            dragMode = null;
+            isPanning = false;
+            isCrosshair = false;
+          }
+          if (e?.button === 2) {
+            isCrosshair = false;
+            if (!isCrosshairVisible && chart?.options?.plugins) {
+              chart.options.plugins.verticalCrosshair = { x: null };
+              chart.update('none');
+            }
+          }
+          if (e?.button === undefined) {
+            leftMouseDown = false;
+            dragMode = null;
+            isPanning = false;
             isCrosshair = false;
             if (chart?.options?.plugins) chart.options.plugins.verticalCrosshair = { x: null };
             if (chart) chart.update('none');
           }
-          if (e?.button === 2 || e?.button === undefined) isPanning = false;
         };
         const onMouseLeave = () => {
-          if (isCrosshair && chart) {
-            isCrosshair = false;
+          leftMouseDown = false;
+          dragMode = null;
+          isPanning = false;
+          if (isCrosshair && chart && !isCrosshairVisible) {
             if (chart.options.plugins) chart.options.plugins.verticalCrosshair = { x: null };
             chart.update('none');
           }
-          isPanning = false;
+          isCrosshair = false;
         };
         window.addEventListener('mousemove', onMouseMove);
         window.addEventListener('mouseup', onMouseUp);
         window.addEventListener('mouseleave', onMouseLeave);
+        window.addEventListener('touchmove', onTouchMove, { passive: false });
+        window.addEventListener('touchend', onTouchEnd);
+        window.addEventListener('touchcancel', onTouchCancel);
+
+        const onResize = () => {
+          if (chart) chart.resize();
+        };
+        const onOrientationChange = () => {
+          setTimeout(onResize, 150);
+        };
+        window.addEventListener('resize', onResize);
+        window.addEventListener('orientationchange', onOrientationChange);
 
         return () => {
           window.removeEventListener('mousemove', onMouseMove);
           window.removeEventListener('mouseup', onMouseUp);
           window.removeEventListener('mouseleave', onMouseLeave);
+          window.removeEventListener('touchmove', onTouchMove);
+          window.removeEventListener('touchend', onTouchEnd);
+          window.removeEventListener('touchcancel', onTouchCancel);
+          window.removeEventListener('resize', onResize);
+          window.removeEventListener('orientationchange', onOrientationChange);
         };
       } catch (e) {
         setError('로드 실패: ' + (e.message || String(e)));
@@ -501,6 +691,8 @@ export default function ChartPage() {
         background: '#0f0f12',
         color: '#e4e4e7',
         minHeight: '100vh',
+        width: '100%',
+        boxSizing: 'border-box',
       }}
     >
       <h1 style={{ fontSize: '1.25rem', fontWeight: 600, margin: '0 0 0.5rem 0' }}>
@@ -513,7 +705,7 @@ export default function ChartPage() {
           marginBottom: '1rem',
         }}
       >
-        USD/KRW 라인 · USDT 봉차트 (상승 빨강 / 하락 파랑) · 왼쪽 버튼 누른 채 이동 시 세로 점선(일치 시점 비교) · 오른쪽 버튼 드래그로 좌우 이동 · +/− 줌
+        USD/KRW 라인 · USDT 봉차트 (상승 빨강 / 하락 파랑) · 클릭으로 점선 켜기/끄기 · 점선 있을 때 드래그=점선 이동, 없을 때 드래그=차트 좌우 이동 · +/− 줌
       </p>
       <div
         style={{
@@ -522,12 +714,17 @@ export default function ChartPage() {
           padding: '1rem',
           marginBottom: '1rem',
           border: '1px solid #27272a',
+          width: '100%',
+          maxWidth: '100vw',
+          boxSizing: 'border-box',
         }}
       >
         <div
           style={{
             position: 'relative',
             maxHeight: 420,
+            width: '100%',
+            minWidth: 0,
             overflow: 'hidden',
             borderRadius: 8,
           }}
@@ -538,53 +735,62 @@ export default function ChartPage() {
               width: '100%',
               maxHeight: 420,
               cursor: 'grab',
+              display: 'block',
             }}
           />
-        </div>
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '0.5rem',
-            marginTop: '0.75rem',
-          }}
-        >
-          <button
-            id="chartZoomOut"
-            type="button"
-            title="줌 아웃"
+          <div
             style={{
-              width: 36,
-              height: 36,
-              borderRadius: 8,
-              border: '1px solid #27272a',
-              background: '#27272a',
-              color: '#e4e4e7',
-              fontSize: '1.25rem',
-              lineHeight: 1,
-              cursor: 'pointer',
+              position: 'absolute',
+              left: '50%',
+              bottom: 12,
+              transform: 'translateX(-50%)',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+              padding: '6px 10px',
+              borderRadius: 10,
+              background: 'rgba(24, 24, 27, 0.75)',
+              border: '1px solid rgba(39, 39, 42, 0.8)',
+              boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
             }}
           >
-            −
-          </button>
-          <button
-            id="chartZoomIn"
-            type="button"
-            title="줌 인"
-            style={{
-              width: 36,
-              height: 36,
-              borderRadius: 8,
-              border: '1px solid #27272a',
-              background: '#27272a',
-              color: '#e4e4e7',
-              fontSize: '1.25rem',
-              lineHeight: 1,
-              cursor: 'pointer',
-            }}
-          >
-            +
-          </button>
+            <button
+              id="chartZoomOut"
+              type="button"
+              title="줌 아웃"
+              style={{
+                width: 36,
+                height: 36,
+                borderRadius: 8,
+                border: '1px solid rgba(39, 39, 42, 0.9)',
+                background: 'rgba(39, 39, 42, 0.7)',
+                color: '#e4e4e7',
+                fontSize: '1.25rem',
+                lineHeight: 1,
+                cursor: 'pointer',
+              }}
+            >
+              −
+            </button>
+            <button
+              id="chartZoomIn"
+              type="button"
+              title="줌 인"
+              style={{
+                width: 36,
+                height: 36,
+                borderRadius: 8,
+                border: '1px solid rgba(39, 39, 42, 0.9)',
+                background: 'rgba(39, 39, 42, 0.7)',
+                color: '#e4e4e7',
+                fontSize: '1.25rem',
+                lineHeight: 1,
+                cursor: 'pointer',
+              }}
+            >
+              +
+            </button>
+          </div>
         </div>
         <p
           style={{
