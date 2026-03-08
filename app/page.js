@@ -33,6 +33,21 @@ export default function HomePage() {
           textDecoration: 'none',
           borderRadius: '4px'
         }}>1x Short (XRP)</a>
+        <a href="/chart" style={{
+          padding: '12px 24px',
+          backgroundColor: '#FF9800',
+          color: 'white',
+          textDecoration: 'none',
+          borderRadius: '4px',
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: '8px'
+        }} title="환율·USDT 차트">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
+          </svg>
+          차트
+        </a>
       </nav>
     </div>
   );
