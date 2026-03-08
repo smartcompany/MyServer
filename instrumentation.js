@@ -40,8 +40,23 @@ export async function register() {
       } else {
         console.error('❌ upbit-trade.js 모듈에 start 함수가 없습니다.');
       }
+
+      startChartDataUpdate(projectRoot, nativeRequire, path, fs);
     } catch (error) {
       console.error('❌ instrumentation 등록 중 에러 발생:', error.message);
       console.error(error.stack);
-    }  
+    }
+}
+
+/**
+ * 환율·USDT 시간 데이터 주기 업데이트 시작
+ * - 기록 최종 시각 vs 현재 시각 비교 → 누락 시 API 호출 보강 → API에 현재 시각 없으면 마지막 값으로 채움
+ */
+function startChartDataUpdate(projectRoot, nativeRequire, path, fs) {
+  const chartUpdatePath = path.join(projectRoot, 'lib', 'chart-data-update.js');
+  if (!fs.existsSync(chartUpdatePath)) return;
+  const chartUpdate = nativeRequire(chartUpdatePath);
+  if (chartUpdate && typeof chartUpdate.startPeriodicChartDataUpdate === 'function') {
+    chartUpdate.startPeriodicChartDataUpdate(3 * 1000); // 3초 간격
+  }
 }
