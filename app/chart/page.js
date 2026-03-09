@@ -82,23 +82,32 @@ const chartAreaClipPlugin = {
 
 ChartJS.register(chartAreaClipPlugin);
 
-// 마우스 오른쪽 버튼 누른 채로 움직일 때 X(시간) 위치에 세로 점선 그리기 (환율·테더 일치 시점 비교용)
+// 마우스/터치로 선택한 위치에 세로·가로 점선(크로스헤어) 그리기
 const verticalCrosshairPlugin = {
   id: 'verticalCrosshair',
   afterDatasetsDraw(chart) {
-    const x = chart.options.plugins?.verticalCrosshair?.x;
-    if (x == null || typeof x !== 'number') return;
     const area = chart.chartArea;
-    if (!area || x < area.left || x > area.right) return;
+    if (!area) return;
+    const opts = chart.options.plugins?.verticalCrosshair || {};
+    const x = opts.x;
+    const y = opts.y;
     const ctx = chart.ctx;
     ctx.save();
     ctx.setLineDash([4, 4]);
     ctx.strokeStyle = 'rgba(161, 161, 170, 0.8)';
     ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.moveTo(x, area.top);
-    ctx.lineTo(x, area.bottom);
-    ctx.stroke();
+    if (typeof x === 'number' && x >= area.left && x <= area.right) {
+      ctx.beginPath();
+      ctx.moveTo(x, area.top);
+      ctx.lineTo(x, area.bottom);
+      ctx.stroke();
+    }
+    if (typeof y === 'number' && y >= area.top && y <= area.bottom) {
+      ctx.beginPath();
+      ctx.moveTo(area.left, y);
+      ctx.lineTo(area.right, y);
+      ctx.stroke();
+    }
     ctx.restore();
   },
 };
@@ -110,6 +119,9 @@ export default function ChartPage() {
   const chartRef = useRef(null);
   const [status, setStatus] = useState('로딩 중…');
   const [error, setError] = useState(null);
+  const [crosshairData, setCrosshairData] = useState(null); // { x, y, value, dateLabel }
+  const setCrosshairDataRef = useRef(setCrosshairData);
+  setCrosshairDataRef.current = setCrosshairData;
 
   useEffect(() => {
     let chart = chartRef.current;
@@ -365,6 +377,42 @@ export default function ChartPage() {
 
         chartRef.current = chart;
 
+        // 선택된 위치에 크로스헤어와 라벨 정보 설정
+        const updateCrosshair = (px, py) => {
+          if (!chart?.options?.plugins) return;
+          chart.options.plugins.verticalCrosshair = { x: px, y: py };
+          chart.update('none');
+          const yScale = chart.scales?.y1;
+          const xScale = chart.scales?.x;
+          let value = null;
+          let dateLabel = '';
+          if (yScale && typeof py === 'number') {
+            const v = yScale.getValueForPixel(py);
+            if (v != null && !Number.isNaN(v)) value = v;
+          }
+          if (xScale && typeof px === 'number') {
+            const v = xScale.getValueForPixel(px);
+            const d = v instanceof Date ? v : v != null ? new Date(v) : null;
+            if (d && !Number.isNaN(d.getTime())) {
+              dateLabel = d.toLocaleString('ko-KR', {
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit',
+                hour: '2-digit',
+              });
+            }
+          }
+          setCrosshairDataRef.current?.(
+            value == null && !dateLabel ? null : { x: px, y: py, value, dateLabel }
+          );
+        };
+
+        const clearCrosshair = () => {
+          if (chart?.options?.plugins) chart.options.plugins.verticalCrosshair = { x: null, y: null };
+          if (chart) chart.update('none');
+          setCrosshairDataRef.current?.(null);
+        };
+
         const applyZoom = () => {
           if (!chart) return;
           chart.options.scales.x.min = chart.options.scales.x.min;
@@ -433,13 +481,14 @@ export default function ChartPage() {
             } else if (e.button === 2) {
               isCrosshair = true;
               const rect = canvas.getBoundingClientRect();
-              const x = e.clientX - rect.left;
-              if (chart.options.plugins) chart.options.plugins.verticalCrosshair = { x };
-              chart.update('none');
+              const px = e.clientX - rect.left;
+              const py = e.clientY - rect.top;
+              isCrosshairVisible = true;
+              updateCrosshair(px, py);
             }
           };
           canvas.oncontextmenu = (e) => e.preventDefault();
-          // 터치: 탭=점선 토글, 드래그=점선 있을 때 점선 이동 / 없을 때 패닝 (데스크톱과 동일)
+          // 터치: 탭=점선 토글, 드래그=점선 있을 때 점선 이동 / 없을 때 패닝
           canvas.ontouchstart = (e) => {
             if (e.touches.length === 0) return;
             touchDragMode = null;
@@ -464,10 +513,7 @@ export default function ChartPage() {
                 touchDragMode = 'crosshair';
                 isCrosshair = true;
                 const rect = canvasRef.current?.getBoundingClientRect();
-                if (rect) {
-                  if (chart.options.plugins) chart.options.plugins.verticalCrosshair = { x: tx - rect.left };
-                  chart.update('none');
-                }
+                if (rect) updateCrosshair(tx - rect.left, ty - rect.top);
               } else {
                 touchDragMode = 'pan';
                 isPanning = true;
@@ -476,10 +522,7 @@ export default function ChartPage() {
           }
           if (touchDragMode === 'crosshair' && isCrosshair && chart) {
             const rect = canvasRef.current?.getBoundingClientRect();
-            if (rect) {
-              if (chart.options.plugins) chart.options.plugins.verticalCrosshair = { x: tx - rect.left };
-              chart.update('none');
-            }
+            if (rect) updateCrosshair(tx - rect.left, ty - rect.top);
             e.preventDefault();
             return;
           }
@@ -514,14 +557,15 @@ export default function ChartPage() {
               const rect = canvasRef.current?.getBoundingClientRect();
               if (rect && e.changedTouches?.[0]) {
                 const ct = e.changedTouches[0];
-                isCrosshairVisible = !isCrosshairVisible;
+                const px = ct.clientX - rect.left;
+                const py = ct.clientY - rect.top;
                 if (isCrosshairVisible) {
-                  const x = ct.clientX - rect.left;
-                  if (chart.options.plugins) chart.options.plugins.verticalCrosshair = { x };
-                  chart.update('none');
+                  // 이미 보이는 경우 → 토글로 숨김
+                  isCrosshairVisible = false;
+                  clearCrosshair();
                 } else {
-                  if (chart.options.plugins) chart.options.plugins.verticalCrosshair = { x: null };
-                  chart.update('none');
+                  isCrosshairVisible = true;
+                  updateCrosshair(px, py);
                 }
               }
             }
@@ -540,11 +584,7 @@ export default function ChartPage() {
         const onMouseMove = (e) => {
           if (isCrosshair && chart) {
             const rect = canvasRef.current?.getBoundingClientRect();
-            if (rect) {
-              const x = e.clientX - rect.left;
-              if (chart.options.plugins) chart.options.plugins.verticalCrosshair = { x };
-              chart.update('none');
-            }
+            if (rect) updateCrosshair(e.clientX - rect.left, e.clientY - rect.top);
             return;
           }
           if (leftMouseDown && dragMode === null && chart) {
@@ -555,10 +595,7 @@ export default function ChartPage() {
                 dragMode = 'crosshair';
                 isCrosshair = true;
                 const rect = canvasRef.current?.getBoundingClientRect();
-                if (rect) {
-                  if (chart.options.plugins) chart.options.plugins.verticalCrosshair = { x: e.clientX - rect.left };
-                  chart.update('none');
-                }
+                if (rect) updateCrosshair(e.clientX - rect.left, e.clientY - rect.top);
               } else {
                 dragMode = 'pan';
                 isPanning = true;
@@ -567,10 +604,7 @@ export default function ChartPage() {
           }
           if (dragMode === 'crosshair' && isCrosshair && chart) {
             const rect = canvasRef.current?.getBoundingClientRect();
-            if (rect) {
-              if (chart.options.plugins) chart.options.plugins.verticalCrosshair = { x: e.clientX - rect.left };
-              chart.update('none');
-            }
+            if (rect) updateCrosshair(e.clientX - rect.left, e.clientY - rect.top);
             return;
           }
           if (!isPanning || !chart) return;
@@ -600,14 +634,15 @@ export default function ChartPage() {
             if (dragMode === null && leftMouseDown && chart) {
               const rect = canvasRef.current?.getBoundingClientRect();
               if (rect) {
-                isCrosshairVisible = !isCrosshairVisible;
+                const px = e.clientX - rect.left;
+                const py = e.clientY - rect.top;
                 if (isCrosshairVisible) {
-                  const x = e.clientX - rect.left;
-                  if (chart.options.plugins) chart.options.plugins.verticalCrosshair = { x };
-                  chart.update('none');
+                  // 토글로 숨김
+                  isCrosshairVisible = false;
+                  clearCrosshair();
                 } else {
-                  if (chart.options.plugins) chart.options.plugins.verticalCrosshair = { x: null };
-                  chart.update('none');
+                  isCrosshairVisible = true;
+                  updateCrosshair(px, py);
                 }
               }
             }
@@ -618,9 +653,8 @@ export default function ChartPage() {
           }
           if (e?.button === 2) {
             isCrosshair = false;
-            if (!isCrosshairVisible && chart?.options?.plugins) {
-              chart.options.plugins.verticalCrosshair = { x: null };
-              chart.update('none');
+            if (!isCrosshairVisible) {
+              clearCrosshair();
             }
           }
           if (e?.button === undefined) {
@@ -628,17 +662,15 @@ export default function ChartPage() {
             dragMode = null;
             isPanning = false;
             isCrosshair = false;
-            if (chart?.options?.plugins) chart.options.plugins.verticalCrosshair = { x: null };
-            if (chart) chart.update('none');
+            clearCrosshair();
           }
         };
         const onMouseLeave = () => {
           leftMouseDown = false;
           dragMode = null;
           isPanning = false;
-          if (isCrosshair && chart && !isCrosshairVisible) {
-            if (chart.options.plugins) chart.options.plugins.verticalCrosshair = { x: null };
-            chart.update('none');
+          if (isCrosshair && !isCrosshairVisible) {
+            clearCrosshair();
           }
           isCrosshair = false;
         };
@@ -738,6 +770,50 @@ export default function ChartPage() {
               display: 'block',
             }}
           />
+          {crosshairData && (
+            <>
+              {/* 오른쪽 Y축 가격 라벨 */}
+              <div
+                style={{
+                  position: 'absolute',
+                  right: 6,
+                  top: crosshairData.y,
+                  transform: 'translateY(-50%)',
+                  padding: '2px 6px',
+                  background: 'rgba(24,24,27,0.9)',
+                  borderRadius: 4,
+                  border: '1px solid rgba(39,39,42,0.9)',
+                  fontSize: '0.8rem',
+                  fontWeight: 700,
+                  color: '#e4e4e7',
+                  pointerEvents: 'none',
+                }}
+              >
+                {crosshairData.value != null
+                  ? `${Number(crosshairData.value).toLocaleString('ko-KR')} 원`
+                  : '—'}
+              </div>
+              {/* 아래쪽 날짜/시간 라벨 */}
+              <div
+                style={{
+                  position: 'absolute',
+                  left: crosshairData.x,
+                  bottom: 4,
+                  transform: 'translateX(-50%)',
+                  padding: '2px 6px',
+                  background: 'rgba(24,24,27,0.9)',
+                  borderRadius: 4,
+                  border: '1px solid rgba(39,39,42,0.9)',
+                  fontSize: '0.75rem',
+                  color: '#a1a1aa',
+                  pointerEvents: 'none',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                {crosshairData.dateLabel || '—'}
+              </div>
+            </>
+          )}
           <div
             style={{
               position: 'absolute',
