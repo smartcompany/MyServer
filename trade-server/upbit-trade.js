@@ -328,6 +328,8 @@ async function cancelAndNewOrder(prevOrderUuid, params) {
       new_volume: params.new_volume != null ? params.new_volume : 'remain_only',
     };
 
+    console.log('[Upbit][cancelAndNewOrder] 요청 바디:', JSON.stringify(body));
+
     const token = makeEncryptToken(body);
     const headers = {
       Authorization: `Bearer ${token}`,
@@ -348,6 +350,9 @@ async function cancelAndNewOrder(prevOrderUuid, params) {
     const duration = Date.now() - start;
     const errorData = error.response?.data;
     console.error('❌ [Upbit][cancelAndNewOrder] 실패:', errorData || error.message, '⏱️ duration(ms)=', duration);
+    if (errorData) {
+      console.error('[Upbit][cancelAndNewOrder] 오류 응답 전체:', JSON.stringify(errorData));
+    }
     return null;
   }
 }
@@ -825,19 +830,24 @@ async function processSellOrder(order, orderState, rate) {
 
       // 가격 변동 체크 및 취소 필요 여부 확인 → 취소 없이 가격만 변경 (cancel_and_new)
       if (needToCancelOrder(orderedData, expactedBuyPrice, expactedSellPrice)) {
-        const newPrice = Math.round(expactedSellPrice);
-        const cancelNewResponse = await cancelAndNewOrder(order.uuid, {
-          new_ord_type: 'limit',
-          new_price: String(newPrice),
-          new_volume: 'remain_only',
-        });
-        if (cancelNewResponse && cancelNewResponse.new_order_uuid) {
-          console.log(`[주문 ${order.id}] 매도 가격 변동 반영 (cancel_and_new) → ${newPrice}원, 새 UUID: ${cancelNewResponse.new_order_uuid}`);
-          order.uuid = cancelNewResponse.new_order_uuid;
-          order.price = newPrice;
-          saveOrderState(orderState);
-        } else {
-          console.log(`[주문 ${order.id}] 매도 cancel_and_new 실패`);
+        try {
+          const newPrice = Math.round(expactedSellPrice);
+          console.log(`[주문 ${order.id}] 매도 가격 변경 시도 (cancel_and_new) → ${newPrice}원, 기존 UUID: ${order.uuid}`);
+          const cancelNewResponse = await cancelAndNewOrder(order.uuid, {
+            new_ord_type: 'limit',
+            new_price: String(newPrice),
+            new_volume: 'remain_only',
+          });
+          if (cancelNewResponse && cancelNewResponse.new_order_uuid) {
+            console.log(`[주문 ${order.id}] 매도 가격 변동 반영 (cancel_and_new) → ${newPrice}원, 새 UUID: ${cancelNewResponse.new_order_uuid}`);
+            order.uuid = cancelNewResponse.new_order_uuid;
+            order.price = newPrice;
+            saveOrderState(orderState);
+          } else {
+            console.log(`[주문 ${order.id}] 매도 cancel_and_new 실패 (응답 없음 또는 new_order_uuid 없음)`);
+          }
+        } catch (e) {
+          console.error(`[주문 ${order.id}] 매도 cancel_and_new 호출 중 예외 발생:`, e.message);
         }
       }
       break;
