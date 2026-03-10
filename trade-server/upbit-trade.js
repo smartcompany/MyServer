@@ -312,6 +312,46 @@ async function buyTether(price, volume) {
   }
 }
 
+/**
+ * 취소 후 재주문 API (가격/수량만 변경, 동일 주문 유지)
+ * @param {string} prevOrderUuid - 취소할 주문 UUID
+ * @param {{ new_ord_type: string, new_price: string, new_volume?: string }} params - new_ord_type, new_price 필수. new_volume 생략 시 'remain_only'
+ * @returns {Promise<{ uuid: string, new_order_uuid: string, ... } | null>} 성공 시 응답 객체, 실패 시 null
+ */
+async function cancelAndNewOrder(prevOrderUuid, params) {
+  const start = Date.now();
+  try {
+    const body = {
+      prev_order_uuid: prevOrderUuid,
+      new_ord_type: params.new_ord_type,
+      new_price: params.new_price,
+      new_volume: params.new_volume != null ? params.new_volume : 'remain_only',
+    };
+
+    const token = makeEncryptToken(body);
+    const headers = {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+    };
+
+    const response = await axios.post(`${SERVER_URL}/v1/orders/cancel_and_new`, body, { headers });
+    const duration = Date.now() - start;
+
+    if (response.status === 201) {
+      console.log('[Upbit][cancelAndNewOrder] 취소 후 재주문 성공:', response.data?.new_order_uuid, '⏱️ duration(ms)=', duration);
+      return response.data;
+    }
+    console.error(`❌ [Upbit][cancelAndNewOrder] 응답 에러: HTTP ${response.status}`, response.data, '⏱️ duration(ms)=', duration);
+    return null;
+  } catch (error) {
+    const duration = Date.now() - start;
+    const errorData = error.response?.data;
+    console.error('❌ [Upbit][cancelAndNewOrder] 실패:', errorData || error.message, '⏱️ duration(ms)=', duration);
+    return null;
+  }
+}
+
 function makeEncryptToken(orderData) {
   const queryStr = querystring.encode(orderData);
   const queryHash = crypto.createHash('sha512').update(queryStr).digest('hex');
@@ -700,15 +740,27 @@ async function processBuyOrder(order, orderState, rate) {
       saveOrderState(orderState);
       break;
     case 'wait':
-      // 가격 변동 체크 및 취소 필요 여부 확인
+      // 부분 체결 로그 (전량 체결 시에는 'done'으로 처리되므로 여기선 대기 중이거나 일부만 체결된 경우)
+      const buyExecuted = parseFloat(orderedData.executed_volume || 0);
+      if (buyExecuted > 0) {
+        console.log(`[주문 ${order.id}] 매수 부분 체결: ${buyExecuted}/${orderedData.volume} (대기 중)`);
+      }
+
+      // 가격 변동 체크 및 취소 필요 여부 확인 → 취소 없이 가격만 변경 (cancel_and_new)
       if (needToCancelOrder(orderedData, expactedBuyPrice, expactedSellPrice)) {
-        const cancelResponse = await cancelOrder(order.uuid);
-        if (cancelResponse) {
-          console.log(`[주문 ${order.id}] 주문 취소 성공 ${order.uuid}`);
-          setBuyPending(order, order.volume, expactedBuyPrice);
+        const newPrice = Math.round(expactedBuyPrice);
+        const cancelNewResponse = await cancelAndNewOrder(order.uuid, {
+          new_ord_type: 'limit',
+          new_price: String(newPrice),
+          new_volume: 'remain_only',
+        });
+        if (cancelNewResponse && cancelNewResponse.new_order_uuid) {
+          console.log(`[주문 ${order.id}] 가격 변동 반영 (cancel_and_new) → ${newPrice}원, 새 UUID: ${cancelNewResponse.new_order_uuid}`);
+          order.uuid = cancelNewResponse.new_order_uuid;
+          order.price = newPrice;
           saveOrderState(orderState);
         } else {
-          console.log(`[주문 ${order.id}] 주문 취소 실패`);
+          console.log(`[주문 ${order.id}] cancel_and_new 실패`);
         }
       }
       break;
@@ -737,6 +789,7 @@ async function processSellOrder(order, orderState, rate) {
     return false; // 처리 실패
   }
 
+  // 주문 상태: 'done' = 전량 체결 완료 시에만 매도 처리함. 부분 체결은 state가 'wait'으로 유지됨.
   switch (orderedData.state) {
     case 'done':
       // 매도 체결 → 완료 처리
@@ -764,17 +817,27 @@ async function processSellOrder(order, orderState, rate) {
       saveOrderState(orderState);
       break;
     case 'wait':
-      // 가격 변동 체크 및 취소 필요 여부 확인
+      // 부분 체결 로그 (전량 체결 시에는 'done'으로 처리되므로 여기선 대기 중이거나 일부만 체결된 경우)
+      const sellExecuted = parseFloat(orderedData.executed_volume || 0);
+      if (sellExecuted > 0) {
+        console.log(`[주문 ${order.id}] 매도 부분 체결: ${sellExecuted}/${orderedData.volume} (대기 중)`);
+      }
+
+      // 가격 변동 체크 및 취소 필요 여부 확인 → 취소 없이 가격만 변경 (cancel_and_new)
       if (needToCancelOrder(orderedData, expactedBuyPrice, expactedSellPrice)) {
-        const cancelResponse = await cancelOrder(order.uuid);
-        if (cancelResponse) {
-          console.log(`[주문 ${order.id}] 주문 취소 성공 ${order.uuid}`);
-          
-          // 매도 주문 취소 후 매수 주문으로 전환 (수량과 예상 매도 가격 전달)
-          setSellPending(order, order.volume, expactedSellPrice);
+        const newPrice = Math.round(expactedSellPrice);
+        const cancelNewResponse = await cancelAndNewOrder(order.uuid, {
+          new_ord_type: 'limit',
+          new_price: String(newPrice),
+          new_volume: 'remain_only',
+        });
+        if (cancelNewResponse && cancelNewResponse.new_order_uuid) {
+          console.log(`[주문 ${order.id}] 매도 가격 변동 반영 (cancel_and_new) → ${newPrice}원, 새 UUID: ${cancelNewResponse.new_order_uuid}`);
+          order.uuid = cancelNewResponse.new_order_uuid;
+          order.price = newPrice;
           saveOrderState(orderState);
         } else {
-          console.log(`[주문 ${order.id}] 주문 취소 실패`);
+          console.log(`[주문 ${order.id}] 매도 cancel_and_new 실패`);
         }
       }
       break;
