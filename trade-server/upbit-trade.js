@@ -340,7 +340,8 @@ async function cancelAndNewOrder(prevOrderUuid, params) {
     const response = await axios.post(`${SERVER_URL}/v1/orders/cancel_and_new`, body, { headers });
     const duration = Date.now() - start;
 
-    if (response.status === 201) {
+    // Upbit 문서에는 201로 표기되어 있지만, 실제로는 200도 반환될 수 있으므로 둘 다 성공으로 처리
+    if (response.status === 200 || response.status === 201) {
       console.log('[Upbit][cancelAndNewOrder] 취소 후 재주문 성공:', response.data?.new_order_uuid, '⏱️ duration(ms)=', duration);
       return response.data;
     }
