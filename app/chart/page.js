@@ -122,8 +122,6 @@ export default function ChartPage() {
   const [crosshairData, setCrosshairData] = useState(null); // { x, y, value, dateLabel }
   const setCrosshairDataRef = useRef(setCrosshairData);
   setCrosshairDataRef.current = setCrosshairData;
-  /** (px, py)는 캔버스 기준 좌표. 플롯 영역(chartArea) 안이면 true */
-  const isPointInChartAreaRef = useRef(() => false);
 
   useEffect(() => {
     let chart = chartRef.current;
@@ -181,6 +179,9 @@ export default function ChartPage() {
         if (!allDates.length) return;
         const xMinFull = Math.min(...allDates);
         const xMaxFull = Math.max(...allDates);
+        // 오른쪽에 빈 날짜 구간 추가 → 드래그 시 차트 끝이 화면 중앙까지 자연스럽게 이동
+        const dataSpan = xMaxFull - xMinFull;
+        const xMaxRight = xMaxFull + dataSpan * 0.5;
         let visibleMin = xMinFull;
         let visibleMax = xMaxFull;
 
@@ -415,13 +416,6 @@ export default function ChartPage() {
           setCrosshairDataRef.current?.(null);
         };
 
-        isPointInChartAreaRef.current = (px, py) => {
-          const ch = chartRef.current;
-          if (!ch?.chartArea) return false;
-          const a = ch.chartArea;
-          return px >= a.left && px <= a.right && py >= a.top && py <= a.bottom;
-        };
-
         const applyZoom = () => {
           if (!chart) return;
           chart.options.scales.x.min = chart.options.scales.x.min;
@@ -440,7 +434,7 @@ export default function ChartPage() {
               (xMaxFull - xMinFull) * 0.05
             );
             visibleMin = Math.max(xMinFull, center - newSpan / 2);
-            visibleMax = Math.min(xMaxFull, center + newSpan / 2);
+            visibleMax = Math.min(xMaxRight, center + newSpan / 2);
             chart.options.scales.x.min = visibleMin;
             chart.options.scales.x.max = visibleMax;
             chart.update('none');
@@ -450,9 +444,9 @@ export default function ChartPage() {
           zoomOutBtn.onclick = () => {
             const span = visibleMax - visibleMin;
             const center = visibleMin + span / 2;
-            const newSpan = Math.min(span / zoomFactor, xMaxFull - xMinFull);
+            const newSpan = Math.min(span / zoomFactor, xMaxRight - xMinFull);
             visibleMin = Math.max(xMinFull, center - newSpan / 2);
-            visibleMax = Math.min(xMaxFull, center + newSpan / 2);
+            visibleMax = Math.min(xMaxRight, center + newSpan / 2);
             chart.options.scales.x.min = visibleMin;
             chart.options.scales.x.max = visibleMax;
             chart.update('none');
@@ -466,7 +460,6 @@ export default function ChartPage() {
         let panStartMax = 0;
         let isCrosshairVisible = false; // 점선이 켜져 있는지 (클릭으로 토글)
         let leftMouseDown = false;
-        let mouseStartedInChartArea = false;
         let dragMode = null; // null | 'pan' | 'crosshair'
         let startX = 0;
         let startY = 0;
@@ -475,16 +468,11 @@ export default function ChartPage() {
         let touchDragMode = null;
         let touchStartX = 0;
         let touchStartY = 0;
-        let touchStartedOnChart = false;
         let crosshairVisibleAtTouchStart = false;
         const canvas = canvasRef.current;
         if (canvas) {
           canvas.onmousedown = (e) => {
             if (e.button === 0) {
-              const rect = canvas.getBoundingClientRect();
-              const px = e.clientX - rect.left;
-              const py = e.clientY - rect.top;
-              mouseStartedInChartArea = isPointInChartAreaRef.current(px, py);
               leftMouseDown = true;
               dragMode = null;
               startX = e.clientX;
@@ -494,25 +482,18 @@ export default function ChartPage() {
               panStartMin = visibleMin;
               panStartMax = visibleMax;
             } else if (e.button === 2) {
+              isCrosshair = true;
               const rect = canvas.getBoundingClientRect();
               const px = e.clientX - rect.left;
               const py = e.clientY - rect.top;
-              if (isPointInChartAreaRef.current(px, py)) {
-                isCrosshair = true;
-                isCrosshairVisible = true;
-                updateCrosshair(px, py);
-              }
+              isCrosshairVisible = true;
+              updateCrosshair(px, py);
             }
           };
           canvas.oncontextmenu = (e) => e.preventDefault();
           // 터치: 탭=점선 토글, 드래그=점선 있을 때 점선 이동 / 없을 때 패닝
           canvas.ontouchstart = (e) => {
             if (e.touches.length === 0) return;
-            if (e.touches.length >= 2) return;
-            const rect = canvas.getBoundingClientRect();
-            const px = e.touches[0].clientX - rect.left;
-            const py = e.touches[0].clientY - rect.top;
-            touchStartedOnChart = isPointInChartAreaRef.current(px, py);
             touchDragMode = null;
             touchStartX = e.touches[0].clientX;
             touchStartY = e.touches[0].clientY;
@@ -525,8 +506,6 @@ export default function ChartPage() {
         }
         const onTouchMove = (e) => {
           if (e.touches.length === 0) return;
-          if (e.touches.length >= 2) return;
-          if (!touchStartedOnChart) return;
           const tx = e.touches[0].clientX;
           const ty = e.touches[0].clientY;
           if (touchDragMode === null && chart) {
@@ -560,10 +539,10 @@ export default function ChartPage() {
               let newMax = panStartMax - timeDelta;
               if (newMin < xMinFull) {
                 newMin = xMinFull;
-                newMax = Math.min(xMaxFull, newMin + span);
+                newMax = Math.min(xMaxRight, newMin + span);
               }
-              if (newMax > xMaxFull) {
-                newMax = xMaxFull;
+              if (newMax > xMaxRight) {
+                newMax = xMaxRight;
                 newMin = Math.max(xMinFull, newMax - span);
               }
               visibleMin = newMin;
@@ -577,13 +556,14 @@ export default function ChartPage() {
         };
         const onTouchEnd = (e) => {
           if (e.touches.length === 0) {
-            if (touchDragMode === null && chart && touchStartedOnChart) {
+            if (touchDragMode === null && chart) {
               const rect = canvasRef.current?.getBoundingClientRect();
               if (rect && e.changedTouches?.[0]) {
                 const ct = e.changedTouches[0];
                 const px = ct.clientX - rect.left;
                 const py = ct.clientY - rect.top;
                 if (isCrosshairVisible) {
+                  // 이미 보이는 경우 → 토글로 숨김
                   isCrosshairVisible = false;
                   clearCrosshair();
                 } else {
@@ -595,7 +575,6 @@ export default function ChartPage() {
             touchDragMode = null;
             isPanning = false;
             isCrosshair = false;
-            touchStartedOnChart = false;
           }
         };
         const onTouchCancel = (e) => {
@@ -603,11 +582,9 @@ export default function ChartPage() {
             touchDragMode = null;
             isPanning = false;
             isCrosshair = false;
-            touchStartedOnChart = false;
           }
         };
         const onMouseMove = (e) => {
-          if (!mouseStartedInChartArea) return;
           if (isCrosshair && chart) {
             const rect = canvasRef.current?.getBoundingClientRect();
             if (rect) updateCrosshair(e.clientX - rect.left, e.clientY - rect.top);
@@ -643,10 +620,10 @@ export default function ChartPage() {
           let newMax = panStartMax - timeDelta;
           if (newMin < xMinFull) {
             newMin = xMinFull;
-            newMax = Math.min(xMaxFull, newMin + span);
+            newMax = Math.min(xMaxRight, newMin + span);
           }
-          if (newMax > xMaxFull) {
-            newMax = xMaxFull;
+          if (newMax > xMaxRight) {
+            newMax = xMaxRight;
             newMin = Math.max(xMinFull, newMax - span);
           }
           visibleMin = newMin;
@@ -657,7 +634,7 @@ export default function ChartPage() {
         };
         const onMouseUp = (e) => {
           if (e?.button === 0) {
-            if (dragMode === null && leftMouseDown && chart && mouseStartedInChartArea) {
+            if (dragMode === null && leftMouseDown && chart) {
               const rect = canvasRef.current?.getBoundingClientRect();
               if (rect) {
                 const px = e.clientX - rect.left;

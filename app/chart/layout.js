@@ -1,10 +1,11 @@
 /**
- * 차트 페이지: 모바일에서 일반 웹처럼 보이도록 device-width 사용, 핀치 줌 허용
+ * 차트 페이지만 PC와 동일한 너비로 렌더링 (폰에서도 PC처럼 보기)
+ * viewport width 1024 → 모바일에서도 1024px 기준 레이아웃, 브라우저가 화면에 맞춰 축소
  */
 export const viewport = {
-  width: 'device-width',
+  width: 1024,
   initialScale: 1,
-  maximumScale: 5,
+  maximumScale: 2,
 };
 
 export default function ChartLayout({ children }) {
