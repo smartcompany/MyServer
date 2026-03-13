@@ -22,6 +22,7 @@ function mapUpbitInfo(data) {
   return {
     upbitXrpBalance: data.upbitXrpBalance,
     upbitKrwBalance: data.upbitKrwBalance,
+    upbitUsdtBalance: data.upbitUsdtBalance,
     upbitXrpBuyOrderKrw: data.upbitXrpBuyOrderKrw,
     xrpPrice: data.xrpPrice,
     usdKrwRate: data.usdKrwRate,
