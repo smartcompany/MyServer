@@ -1,11 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import {
-  addMeeting,
-  appendLog,
-  readBotState,
-  toBotStateApiError,
-  writeBotState,
-} from "@/lib/botStore";
+import { appendLog, toBotStateApiError } from "@/lib/botStore";
 import meetingImagePoolJson from "./meeting-image-pool.json";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 import promptTemplateSource from "./prompt.txt";
@@ -154,7 +148,6 @@ async function generateMeetingCopyWithAI(params: {
 }
 
 export async function POST(request: NextRequest) {
-  let state: Awaited<ReturnType<typeof readBotState>> | null = null;
   const requestId = crypto.randomUUID().slice(0, 8);
   const log = async (level: "info" | "warn" | "error", message: string) => {
     try {
@@ -168,7 +161,6 @@ export async function POST(request: NextRequest) {
   };
 
   try {
-    state = await readBotState();
     await log("info", "요청 시작");
     const body = (await request.json()) as { uid?: string; email?: string };
     const uid = body.uid?.trim();
@@ -272,13 +264,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    state = addMeeting(state, {
-      id: meeting.id as string,
-      hostUid: meeting.host_id as string,
-      title: meeting.title as string,
-      createdAt: (meeting.created_at as string) ?? new Date().toISOString(),
-    });
-    await writeBotState(state);
     await log("info", `수동 모임 생성: host=${hostForLog}, meeting=${meeting.id}, title="${meeting.title}"`);
 
     return NextResponse.json({

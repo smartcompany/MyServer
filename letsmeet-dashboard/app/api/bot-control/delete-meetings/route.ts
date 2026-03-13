@@ -15,16 +15,12 @@ export async function POST(request: NextRequest) {
   };
 
   try {
-    state = await readBotState();
     const body = (await request.json().catch(() => ({}))) as { uids?: unknown };
     const requestedUids = Array.isArray(body.uids) ? body.uids.filter((v): v is string => typeof v === "string") : [];
-    const targetUids = requestedUids.length > 0 ? requestedUids : state.config.selectedBotUids;
-    const preservedSelectedUids =
-      requestedUids.length > 0 ? [...new Set(requestedUids)] : [...state.config.selectedBotUids];
+    const targetUids = requestedUids.length > 0 ? requestedUids : [];
 
     if (targetUids.length === 0) {
       await log("warn", "삭제 대상 봇이 없어 요청 거부");
-      await writeBotState(state);
       return NextResponse.json({ error: "삭제할 봇 계정을 선택하세요." }, { status: 400 });
     }
 
@@ -37,38 +33,20 @@ export async function POST(request: NextRequest) {
 
     if (deleteError) {
       await log("error", `DB 삭제 실패: ${deleteError.message}`);
-      await writeBotState(state);
       return NextResponse.json({ error: `모임 삭제 실패: ${deleteError.message}` }, { status: 500 });
     }
 
-    const before = state.botMeetings.length;
-    state.botMeetings = state.botMeetings.filter((meeting) => !targetUids.includes(meeting.hostUid));
-    const deletedInState = before - state.botMeetings.length;
-
-    for (const uid of targetUids) {
-      delete state.weeklyCounters[uid];
-    }
-
-    await log(
-      "warn",
-      `봇 모임 삭제 완료: bots=${targetUids.length}, deletedInDb=${deletedInDb ?? 0}, deletedInState=${deletedInState}`
-    );
-    // Keep current bot selection intact after deletion.
-    state.config.selectedBotUids = preservedSelectedUids;
-    state.config.updatedAt = new Date().toISOString();
-    await writeBotState(state);
+    await log("warn", `봇 모임 삭제 완료: bots=${targetUids.length}, deletedInDb=${deletedInDb ?? 0}`);
 
     return NextResponse.json({
       ok: true,
       deletedInDb: deletedInDb ?? 0,
-      deletedInState,
       bots: targetUids.length,
-      config: state.config,
+      config: null,
     });
   } catch (error) {
     const apiError = toBotStateApiError(error);
     await log("error", `봇 모임 삭제 예외: ${apiError.error}`);
-    if (state) await writeBotState(state);
     return NextResponse.json({ error: apiError.error }, { status: apiError.status });
   }
 }
