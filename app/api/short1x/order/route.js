@@ -40,7 +40,7 @@ export async function POST(request) {
   let category = DEFAULT_CATEGORY;
   try {
     const body = await request.json();
-    console.error(`[short1x][order][${reqId}] request body (raw)`, JSON.stringify(body));
+    console.log(`[short1x][order][${reqId}] request body (raw)`, JSON.stringify(body));
 
     qty = body?.qty;
     price = body?.price;
@@ -88,7 +88,7 @@ export async function POST(request) {
       );
     }
 
-    console.error(`[short1x][order][${reqId}] 파라미터 검증 후`, {
+    console.log(`[short1x][order][${reqId}] 파라미터 검증 후`, {
       qty,
       price,
       side,
@@ -105,9 +105,14 @@ export async function POST(request) {
     const qtyUsd = Number(qty) * Number(price);
     qty = String(Math.round(qtyUsd));
   } else {
-    const usdtValue = Number(qty);   // 사용자가 입력한 주문 금액(USDT)
-    const priceNum = Number(price);  // 지정가(USDT)
-    const xrpQty = priceNum > 0 ? usdtValue / priceNum : 0;
+    const usdtValueNum = Number(usdtValue);   // 사용자가 입력한 주문 금액(USDT)
+    const priceNum = Number(price);          // 지정가(USDT)
+    const xrpQty = priceNum > 0 ? usdtValueNum / priceNum : 0;
+    console.log(`[short1x][order][${reqId}] XRPUSDT computed qty`, {
+      usdtValue: usdtValueNum,
+      priceNum,
+      xrpQty,
+    });
     if (!Number.isFinite(xrpQty) || xrpQty <= 0) {
       return Response.json(
         { error: '주문 금액이 너무 작습니다. USDT 금액과 가격을 확인해주세요.' },
@@ -119,7 +124,7 @@ export async function POST(request) {
   }
 
   try {
-    console.error(`[short1x][order][${reqId}] start`, {
+    console.log(`[short1x][order][${reqId}] start`, {
       symbol,
       category,
       qty,
@@ -143,7 +148,7 @@ export async function POST(request) {
         (typeof msg === 'string' && msg.toLowerCase().includes('leverage not modified'))
       ) {
         // 이미 레버리지가 1배로 설정된 경우이므로 무시하고 계속 진행
-        console.error(`[short1x][order][${reqId}] set leverage not modified`, {
+        console.log(`[short1x][order][${reqId}] set leverage not modified`, {
           message: msg,
           retCode: code,
         });
@@ -160,12 +165,12 @@ export async function POST(request) {
       const list = infoRes?.result?.list || [];
       const instrument = list[0];
       const lotFilter = instrument?.lotSizeFilter;
-      console.error(`[short1x][order][${reqId}] lotSizeFilter`, lotFilter, 'qty(USD) 전송:', qty);
+      console.log(`[short1x][order][${reqId}] lotSizeFilter`, lotFilter, 'qty(USD) 전송:', qty);
     } catch (e) {
       console.error(`[short1x][order][${reqId}] instruments-info failed`, e?.message || e);
     }
 
-    console.error(`[short1x][order][${reqId}] Bybit 주문 직전 최종 파라미터`, { qty, price, side });
+    console.log(`[short1x][order][${reqId}] Bybit 주문 직전 최종 파라미터`, { qty, price, side });
 
     // 3) Post-Only 리밋 주문 (1배 숏 진입/청산)
     const orderBody = {

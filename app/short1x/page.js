@@ -1369,6 +1369,11 @@ export default function Short1xPage() {
                 onChange={(e) => setQty(e.target.value)}
                 style={{ display: 'block', marginTop: 6, padding: 10, fontSize: 16, width: '100%', boxSizing: 'border-box' }}
               />
+              {bybitSymbol === 'XRPUSDT' && qty && shortPrice && !isNaN(Number(qty)) && !isNaN(Number(shortPrice)) && (
+                <div style={{ marginTop: 4, fontSize: 12, color: '#555', textAlign: 'right' }}>
+                  ≈ {(Number(qty) / Number(shortPrice)).toFixed(4)} XRP
+                </div>
+              )}
             </label>
             <label style={{ fontWeight: 'bold' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
