@@ -66,7 +66,7 @@ export async function POST(request) {
       return Response.json({ error: '유효한 지정가 가격(USDT)을 입력해주세요.' }, { status: 400 });
     }
 
-    // XRPUSD: qty(XRP)×price → USD 노션, XRPUSDT: qty(USDT)가 노션
+    // XRPUSD: qty(XRP)×price → USD 노션, XRPUSDT: qty 자체가 USDT 노션
     const notionalUsd =
       symbol === 'XRPUSDT' ? Number(qty) : Number(qty) * Number(price);
     if (notionalUsd < 5) {
@@ -93,15 +93,12 @@ export async function POST(request) {
 
   // Bybit에 넘기는 qty:
   // - XRPUSD(inverse): qty = USD 노션(정수 USD)
-  // - XRPUSDT(linear): qty = XRP 수량 = (USDT 금액 / 가격)
+  // - XRPUSDT(linear): qty = 주문 금액(USDT) 그대로
   if (symbol === 'XRPUSD') {
     const qtyUsd = Number(qty) * Number(price);
     qty = String(Math.round(qtyUsd));
   } else {
-    const usdtValue = Number(qty);
-    const priceNum = Number(price);
-    const xrpQty = priceNum > 0 ? usdtValue / priceNum : 0;
-    qty = String(xrpQty);
+    qty = String(Number(qty));
   }
 
   try {
