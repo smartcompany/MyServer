@@ -32,7 +32,8 @@ export async function POST(request) {
     );
   }
 
-  let qty;          // 사용자가 보낸 qty (XRPUSD: XRP 수량, XRPUSDT: USDT 금액)
+  let qty;          // 검증/계산용 qty
+  let usdtValue;    // XRPUSDT에서 사용자가 보낸 주문 금액(USDT)
   let price;        // 지정가 (USDT)
   let side;
   let symbol = DEFAULT_SYMBOL;
@@ -55,7 +56,11 @@ export async function POST(request) {
       return Response.json({ error: '지정가 가격(price)을 입력해주세요.' }, { status: 400 });
     }
 
-    qty = String(Number(qty));
+    const qtyNum = Number(qty);
+    qty = String(qtyNum);
+    if (symbol === 'XRPUSDT') {
+      usdtValue = qtyNum; // XRPUSDT에서는 qty는 USDT 금액 의미
+    }
     price = String(Number(price));
 
     if (Number(qty) <= 0 || !Number.isFinite(Number(qty))) {
@@ -66,9 +71,11 @@ export async function POST(request) {
       return Response.json({ error: '유효한 지정가 가격(USDT)을 입력해주세요.' }, { status: 400 });
     }
 
-    // XRPUSD: qty(XRP)×price → USD 노션, XRPUSDT: qty 자체가 USDT 노션
+    // 최소 주문 금액 체크용 노션:
+    // - XRPUSD: qty(XRP)×price
+    // - XRPUSDT: 사용자가 입력한 주문 금액(USDT)
     const notionalUsd =
-      symbol === 'XRPUSDT' ? Number(qty) : Number(qty) * Number(price);
+      symbol === 'XRPUSDT' ? Number(usdtValue) : Number(qty) * Number(price);
     if (notionalUsd < 5) {
       return Response.json(
         {
@@ -93,12 +100,22 @@ export async function POST(request) {
 
   // Bybit에 넘기는 qty:
   // - XRPUSD(inverse): qty = USD 노션(정수 USD)
-  // - XRPUSDT(linear): qty = 주문 금액(USDT) 그대로
+  // - XRPUSDT(linear): qty = XRP 수량 = (주문 금액 USDT / 가격)
   if (symbol === 'XRPUSD') {
     const qtyUsd = Number(qty) * Number(price);
     qty = String(Math.round(qtyUsd));
   } else {
-    qty = String(Number(qty));
+    const usdtValue = Number(qty);   // 사용자가 입력한 주문 금액(USDT)
+    const priceNum = Number(price);  // 지정가(USDT)
+    const xrpQty = priceNum > 0 ? usdtValue / priceNum : 0;
+    if (!Number.isFinite(xrpQty) || xrpQty <= 0) {
+      return Response.json(
+        { error: '주문 금액이 너무 작습니다. USDT 금액과 가격을 확인해주세요.' },
+        { status: 400 }
+      );
+    }
+    // Bybit UI처럼 소수 한 자리까지 표시되는 걸 감안해서 소수 한 자리까지 전송
+    qty = String(Math.floor(xrpQty * 10) / 10);
   }
 
   try {
