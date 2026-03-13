@@ -1,8 +1,8 @@
 import { verifyToken } from '../../trade/middleware';
 import { bybitSignedRequest, getBybitConfig } from '../bybit';
 
-const SYMBOL = 'XRPUSD';
-const CATEGORY = 'inverse';
+const DEFAULT_SYMBOL = 'XRPUSD';
+const DEFAULT_CATEGORY = 'inverse';
 
 /**
  * GET: Bybit XRPUSD 포지션 정보 (수량, 방향, 평균가, 증거금 등)
@@ -11,6 +11,15 @@ export async function GET(request) {
   const auth = verifyToken(request);
   if (auth.error) {
     return Response.json({ error: auth.error }, { status: auth.status });
+  }
+
+  let symbol = DEFAULT_SYMBOL;
+  let category = DEFAULT_CATEGORY;
+  const url = new URL(request.url);
+  const symbolParam = url.searchParams.get('symbol');
+  if (symbolParam && symbolParam.toUpperCase() === 'XRPUSDT') {
+    symbol = 'XRPUSDT';
+    category = 'linear';
   }
 
   try {
@@ -25,7 +34,7 @@ export async function GET(request) {
   try {
     const res = await bybitSignedRequest(
       'GET',
-      `/v5/position/list?category=${CATEGORY}&symbol=${SYMBOL}`
+      `/v5/position/list?category=${category}&symbol=${symbol}`
     );
     const list = res?.result?.list || [];
     const pos = list[0] || {};
@@ -34,7 +43,7 @@ export async function GET(request) {
     const sizeNum = Number(sizeStr);
 
     return Response.json({
-      symbol: pos.symbol || SYMBOL,
+      symbol: pos.symbol || symbol,
       side: pos.side || (sizeNum > 0 ? 'Sell' : sizeNum < 0 ? 'Buy' : null),
       size: sizeStr,
       avgPrice: pos.avgPrice ?? null,

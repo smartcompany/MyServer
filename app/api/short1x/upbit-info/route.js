@@ -39,11 +39,13 @@ export async function GET(request) {
     const result = {
       upbitXrpBalance: null,
       upbitKrwBalance: null,
+      upbitUsdtBalance: null,
       upbitXrpBuyOrderKrw: null,
       xrpPrice: null,
       usdKrwRate: null,
       usdtKrwPrice: null,
       bybitXrpUsdPrice: null,
+      bybitXrpUsdtPrice: null,
       kimchiPremium: null,
       accountError: null,
       ordersError: null,
@@ -63,8 +65,10 @@ export async function GET(request) {
         const accounts = await accountsRes.json();
         const xrpAccount = Array.isArray(accounts) ? accounts.find((a) => a.currency === 'XRP') : null;
         const krwAccount = Array.isArray(accounts) ? accounts.find((a) => a.currency === 'KRW') : null;
+        const usdtAccount = Array.isArray(accounts) ? accounts.find((a) => a.currency === 'USDT') : null;
         result.upbitXrpBalance = xrpAccount ? String(xrpAccount.balance ?? '0') : '0';
         result.upbitKrwBalance = krwAccount ? String(krwAccount.balance ?? '0') : '0';
+        result.upbitUsdtBalance = usdtAccount ? String(usdtAccount.balance ?? '0') : '0';
       }
     } catch (e) {
       result.accountError = `업비트 계정 조회 실패: ${e?.message || '네트워크 오류'}`;
@@ -161,6 +165,19 @@ export async function GET(request) {
     } catch (e) {
       result.bybitXrpUsdPrice = null;
       result.kimchiError = `Bybit 가격 조회 실패: ${e?.message || '네트워크 오류'}`;
+    }
+
+    // 6-2) Bybit XRPUSDT 선물 가격 (원하면 이 심볼로 전환)
+    try {
+      const bybitRes = await bybitPublicGet('/v5/market/tickers?category=linear&symbol=XRPUSDT');
+      const list = bybitRes?.result?.list || bybitRes?.result || [];
+      const item = Array.isArray(list) ? list[0] : null;
+      const lastPrice = item?.lastPrice || item?.last_price || item?.markPrice;
+      if (lastPrice != null) {
+        result.bybitXrpUsdtPrice = Number(lastPrice);
+      }
+    } catch {
+      // optional
     }
 
     // 7) 김치 프리미엄 계산 (Upbit KRW 가격 vs Bybit USD * 환율)

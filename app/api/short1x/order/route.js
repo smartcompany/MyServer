@@ -2,9 +2,9 @@ import { verifyToken } from '../../trade/middleware';
 import { bybitSignedRequest, bybitPublicGet, getBybitConfig } from '../bybit';
 import { v4 as uuidv4 } from 'uuid';
 
-// XRPUSD inverse perpetual (XRP를 담보로 하는 1배 숏 헤지용)
-const SYMBOL = 'XRPUSD';
-const CATEGORY = 'inverse';
+// 기본값: XRPUSD inverse perpetual (XRP 담보 1배 숏)
+const DEFAULT_SYMBOL = 'XRPUSD';
+const DEFAULT_CATEGORY = 'inverse';
 
 /**
  * POST: XRPUSD 1배 숏 주문/청산 (Post-Only 리밋, inverse)
@@ -35,6 +35,8 @@ export async function POST(request) {
   let qty;
   let price;
   let side;
+  let symbol = DEFAULT_SYMBOL;
+  let category = DEFAULT_CATEGORY;
   try {
     const body = await request.json();
     console.error(`[short1x][order][${reqId}] request body (raw)`, JSON.stringify(body));
@@ -42,6 +44,10 @@ export async function POST(request) {
     qty = body?.qty;
     price = body?.price;
     side = body?.side === 'Buy' ? 'Buy' : 'Sell';
+    if (String(body?.symbol).toUpperCase() === 'XRPUSDT') {
+      symbol = 'XRPUSDT';
+      category = 'linear';
+    }
     if (qty == null || qty === '') {
       return Response.json({ error: '수량(qty)을 입력해주세요.' }, { status: 400 });
     }
@@ -82,14 +88,18 @@ export async function POST(request) {
     return Response.json({ error: '요청 본문이 올바르지 않습니다.' }, { status: 400 });
   }
 
-  // Bybit qty 파라미터 = USD(노션). 사용자 입력 XRP → qtyUsd = qtyXrp * price 로 전송.
-  const qtyUsd = Number(qty) * Number(price);
-  qty = String(Math.round(qtyUsd)); // 반올림해서 마진 전액(예: 63 USD)이 나눠 떨어지지 않아도 잘 쓰이도록 함
+  // XRPUSD(inverse)는 qty=USD 노션, XRPUSDT(linear)는 qty=XRP 수량.
+  if (symbol === 'XRPUSD') {
+    const qtyUsd = Number(qty) * Number(price);
+    qty = String(Math.round(qtyUsd));
+  } else {
+    qty = String(Number(qty));
+  }
 
   try {
     console.error(`[short1x][order][${reqId}] start`, {
-      symbol: SYMBOL,
-      category: CATEGORY,
+      symbol,
+      category,
       qty,
       price,
       side,
@@ -98,8 +108,8 @@ export async function POST(request) {
     // 1) 레버리지 1배 설정 (이미 1배인 경우 Bybit가 'leverage not modified' 에러를 줄 수 있음)
     try {
       await bybitSignedRequest('POST', '/v5/position/set-leverage', {
-        category: CATEGORY,
-        symbol: SYMBOL,
+        category,
+        symbol,
         buyLeverage: '1',
         sellLeverage: '1'
       });
@@ -123,7 +133,7 @@ export async function POST(request) {
     // 2) qty는 USD로 보냄. lotSizeFilter는 XRP 기준이므로 보정하지 않음.
     try {
       const infoRes = await bybitPublicGet(
-        `/v5/market/instruments-info?category=${CATEGORY}&symbol=${SYMBOL}`
+        `/v5/market/instruments-info?category=${category}&symbol=${symbol}`
       );
       const list = infoRes?.result?.list || [];
       const instrument = list[0];
@@ -137,8 +147,8 @@ export async function POST(request) {
 
     // 3) Post-Only 리밋 주문 (1배 숏 진입/청산)
     const orderBody = {
-      category: CATEGORY,
-      symbol: SYMBOL,
+      category,
+      symbol,
       side,
       orderType: 'Limit',
       qty,
@@ -166,7 +176,7 @@ export async function POST(request) {
           : 'Post-Only 1x Short 진입 주문이 접수되었습니다.',
       orderId,
       orderLinkId,
-      symbol: SYMBOL,
+      symbol,
       qty,
       price,
       timeInForce: 'PostOnly'

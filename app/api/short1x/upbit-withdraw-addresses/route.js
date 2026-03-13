@@ -34,18 +34,16 @@ export async function GET(request) {
     }
 
     const addresses = Array.isArray(data)
-      ? data
-          .filter((item) => item.currency === 'XRP')
-          .map((item) => ({
-            currency: item.currency,
-            net_type: item.net_type,
-            network_name: item.network_name,
-            withdraw_address: item.withdraw_address,
-            secondary_address: item.secondary_address || '',
-            exchange_name: item.exchange_name || '',
-            wallet_type: item.wallet_type || '',
-            beneficiary_name: item.beneficiary_name || '',
-          }))
+      ? data.map((item) => ({
+          currency: item.currency,
+          net_type: item.net_type,
+          network_name: item.network_name,
+          withdraw_address: item.withdraw_address,
+          secondary_address: item.secondary_address || '',
+          exchange_name: item.exchange_name || '',
+          wallet_type: item.wallet_type || '',
+          beneficiary_name: item.beneficiary_name || '',
+        }))
       : [];
 
     return Response.json({ addresses });

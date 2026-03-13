@@ -59,6 +59,7 @@ export async function POST(request) {
     let address;
     let secondaryAddress;
     let netType;
+    let asset;
 
     try {
       const body = await request.json();
@@ -66,20 +67,21 @@ export async function POST(request) {
       address = String(body?.address || '').trim();
       secondaryAddress = String(body?.secondaryAddress || '').trim();
       netType = String(body?.netType || '').trim();
+      asset = String(body?.asset || 'XRP').toUpperCase() === 'USDT' ? 'USDT' : 'XRP';
     } catch (parseErr) {
       console.error(`[short1x][upbit-withdraw][${reqId}] body parse error`, parseErr?.message);
       return Response.json({ error: '요청 본문이 올바르지 않습니다.' }, { status: 400 });
     }
 
     if (!Number.isFinite(amount) || amount <= 0) {
-      return Response.json({ error: '출금 수량(XRP)을 올바르게 입력해주세요.' }, { status: 400 });
+      return Response.json({ error: `출금 수량(${asset})을 올바르게 입력해주세요.` }, { status: 400 });
     }
     if (!address || !netType) {
       return Response.json({ error: '출금 주소와 네트워크 타입이 필요합니다.' }, { status: 400 });
     }
 
     console.error(`[short1x][upbit-withdraw][${reqId}] start`, {
-      currency: 'XRP',
+      currency: asset,
       netType,
       amount,
       address: maskAddress(address),
@@ -108,7 +110,7 @@ export async function POST(request) {
     const matched = Array.isArray(listData)
       ? listData.find(
           (item) =>
-            item.currency === 'XRP' &&
+            item.currency === asset &&
             item.withdraw_address === address &&
             item.net_type === netType &&
             String(item.secondary_address || '') === secondaryAddress
@@ -117,16 +119,16 @@ export async function POST(request) {
 
     if (!matched) {
       console.error(`[short1x][upbit-withdraw][${reqId}] address not allowlisted`, {
-        currency: 'XRP',
+        currency: asset,
         netType,
         address: maskAddress(address),
         secondaryAddress: secondaryAddress ? '(present)' : '(empty)',
       });
-      return Response.json({ error: '등록된 XRP 출금 허용 주소가 아닙니다.' }, { status: 400 });
+      return Response.json({ error: `등록된 ${asset} 출금 허용 주소가 아닙니다.` }, { status: 400 });
     }
 
     // 출금 가능 정보 조회: balance/locked, withdraw_fee, 최소 출금액 등을 확인
-    const chanceParams = { currency: 'XRP', net_type: netType };
+    const chanceParams = { currency: asset, net_type: netType };
     const chanceToken = makeQueryToken(chanceParams);
     const chanceRes = await fetch(
       `${UPBIT_SERVER}/v1/withdraws/chance?${querystring.encode(chanceParams)}`,
@@ -170,14 +172,14 @@ export async function POST(request) {
 
     if (canWithdraw === false) {
       return Response.json(
-        { error: '현재 업비트에서 XRP 출금이 불가능한 상태입니다(출금 제한/지갑 상태 확인).' },
+        { error: `현재 업비트에서 ${asset} 출금이 불가능한 상태입니다(출금 제한/지갑 상태 확인).` },
         { status: 400 }
       );
     }
 
     if (Number.isFinite(minimum) && amount < minimum) {
       return Response.json(
-        { error: `최소 출금 수량은 ${minimum} XRP 입니다.` },
+        { error: `최소 출금 수량은 ${minimum} ${asset} 입니다.` },
         { status: 400 }
       );
     }
@@ -188,15 +190,15 @@ export async function POST(request) {
       return Response.json(
         {
           error:
-            `출금 금액이 부족합니다. (사용 가능: ${available} XRP, 수수료: ${fee} XRP)` +
-            ` 최대 출금 가능(수수료 제외): ${maxSendable} XRP`,
+            `출금 금액이 부족합니다. (사용 가능: ${available} ${asset}, 수수료: ${fee} ${asset})` +
+            ` 최대 출금 가능(수수료 제외): ${maxSendable} ${asset}`,
         },
         { status: 400 }
       );
     }
 
     const params = {
-      currency: 'XRP',
+      currency: asset,
       net_type: netType,
       amount: String(amount),
       address,
@@ -217,7 +219,7 @@ export async function POST(request) {
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
-      const message = data?.error?.message || data?.error?.name || '업비트 XRP 출금 실패';
+      const message = data?.error?.message || data?.error?.name || `업비트 ${asset} 출금 실패`;
       console.error(`[short1x][upbit-withdraw][${reqId}] withdraw failed`, {
         status: res.status,
         message,
@@ -234,7 +236,7 @@ export async function POST(request) {
 
     return Response.json({
       success: true,
-      message: '업비트 XRP 출금 요청이 접수되었습니다.',
+      message: `업비트 ${asset} 출금 요청이 접수되었습니다.`,
       uuid: data.uuid,
       state: data.state,
       amount: data.amount,
@@ -245,7 +247,7 @@ export async function POST(request) {
       stack: error?.stack,
     });
     return Response.json(
-      { error: error.message || '업비트 XRP 출금 실패' },
+      { error: error.message || `업비트 ${asset || 'XRP'} 출금 실패` },
       { status: 502 }
     );
   }

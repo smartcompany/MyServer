@@ -51,18 +51,22 @@ export default function Short1xPage() {
   const [upbitSellPrice, setUpbitSellPrice] = useState('');
   const [upbitSellVolume, setUpbitSellVolume] = useState('');
   const [upbitSellOrderLoading, setUpbitSellOrderLoading] = useState(false);
+  const [upbitSpotAsset, setUpbitSpotAsset] = useState('XRP'); // 'XRP' | 'USDT'
   const [withdrawAddresses, setWithdrawAddresses] = useState([]);
   const [withdrawAddressValue, setWithdrawAddressValue] = useState('');
   const [withdrawAmount, setWithdrawAmount] = useState('');
   const [withdrawAddressesError, setWithdrawAddressesError] = useState(null);
   const [withdrawLoading, setWithdrawLoading] = useState(false);
+  const [withdrawAsset, setWithdrawAsset] = useState('XRP'); // 'XRP' | 'USDT'
   const [bybitWithdrawAmount, setBybitWithdrawAmount] = useState('');
   const [bybitWithdrawLoading, setBybitWithdrawLoading] = useState(false);
-  const [upbitDepositAddresses, setUpbitDepositAddresses] = useState([]); // 업비트 XRP 입금 주소 (Bybit→업비트 출금용)
+  const [upbitDepositAddresses, setUpbitDepositAddresses] = useState([]); // 업비트 입금 주소 (XRP/USDT)
   const [upbitDepositAddressesError, setUpbitDepositAddressesError] = useState(null);
+  const [bybitWithdrawAsset, setBybitWithdrawAsset] = useState('XRP'); // 'XRP' | 'USDT'
   const [bybitWithdrawDepositValue, setBybitWithdrawDepositValue] = useState(''); // 선택한 입금 주소 "address||tag"
   const [lastOrderId, setLastOrderId] = useState(null); // 마지막 주문 ID (상태 확인용)
   const [orderStatusLoading, setOrderStatusLoading] = useState(false);
+  const [bybitSymbol, setBybitSymbol] = useState('XRPUSD'); // 'XRPUSD' | 'XRPUSDT'
   const [remainderQty, setRemainderQty] = useState(null); // 부분 체결 시 미체결 수량 (나머지로 주문용)
 
   useEffect(() => {
@@ -163,8 +167,10 @@ export default function Short1xPage() {
         }
         const list = Array.isArray(data.addresses) ? data.addresses : [];
         setWithdrawAddresses(list);
-        if (list.length > 0) {
-          const defaultValue = `${list[0].withdraw_address}||${list[0].secondary_address || ''}||${list[0].net_type}`;
+        // 기본값: 현재 선택된 자산(XRP/USDT)에 맞는 첫 번째 주소
+        const firstForAsset = list.find((item) => item.currency === withdrawAsset);
+        if (firstForAsset) {
+          const defaultValue = `${firstForAsset.withdraw_address}||${firstForAsset.secondary_address || ''}||${firstForAsset.net_type}`;
           setWithdrawAddressValue(defaultValue);
         } else {
           setWithdrawAddressValue('');
@@ -269,7 +275,7 @@ export default function Short1xPage() {
       const res = await fetch('/api/short1x/upbit-order', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
-        body: JSON.stringify({ price, volume }),
+        body: JSON.stringify({ price, volume, asset: upbitSpotAsset }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
@@ -298,7 +304,10 @@ export default function Short1xPage() {
     const price = Number(String(upbitSellPrice).replace(/,/g, ''));
     const volume = Number(String(upbitSellVolume).replace(/,/g, ''));
     if (!Number.isFinite(price) || price <= 0 || !Number.isFinite(volume) || volume <= 0) {
-      setMessage({ type: 'error', text: '지정가(원)와 XRP 수량을 올바르게 입력해주세요.' });
+      setMessage({
+        type: 'error',
+        text: `지정가(원)와 ${upbitSpotAsset} 수량을 올바르게 입력해주세요.`,
+      });
       return;
     }
     setUpbitSellOrderLoading(true);
@@ -308,7 +317,7 @@ export default function Short1xPage() {
       const res = await fetch('/api/short1x/upbit-order', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
-        body: JSON.stringify({ price, volume, side: 'ask' }),
+        body: JSON.stringify({ price, volume, side: 'ask', asset: upbitSpotAsset }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
@@ -340,7 +349,10 @@ export default function Short1xPage() {
       return;
     }
     if (!Number.isFinite(amount) || amount <= 0) {
-      setMessage({ type: 'error', text: '출금 수량(XRP)을 입력해주세요.' });
+      setMessage({
+        type: 'error',
+        text: `출금 수량(${withdrawAsset})을 입력해주세요.`,
+      });
       return;
     }
 
@@ -357,6 +369,7 @@ export default function Short1xPage() {
           address,
           secondaryAddress,
           netType,
+          asset: withdrawAsset,
         }),
       });
       const data = await res.json().catch(() => ({}));
@@ -368,12 +381,14 @@ export default function Short1xPage() {
       }
       const successMsg =
         data.message ||
-        `업비트 XRP 출금 요청이 접수되었습니다.${amount ? ` (출금 수량: ${amount.toLocaleString()} XRP)` : ''}`;
+        `업비트 ${withdrawAsset} 출금 요청이 접수되었습니다.${
+          amount ? ` (출금 수량: ${amount.toLocaleString()} ${withdrawAsset})` : ''
+        }`;
       setMessage({ type: 'success', text: successMsg });
       alert(successMsg);
       setWithdrawAmount('');
     } catch (err) {
-      const errMsg = err.message || '업비트 XRP 출금 실패';
+      const errMsg = err.message || `업비트 ${withdrawAsset} 출금 실패`;
       setMessage({ type: 'error', text: errMsg });
       alert(errMsg);
     } finally {
@@ -385,7 +400,7 @@ export default function Short1xPage() {
     e.preventDefault();
     const amount = Number(String(bybitWithdrawAmount).replace(/,/g, ''));
     if (!bybitWithdrawDepositValue) {
-      setMessage({ type: 'error', text: '업비트 XRP 입금 주소를 선택해주세요.' });
+      setMessage({ type: 'error', text: `업비트 ${bybitWithdrawAsset} 입금 주소를 선택해주세요.` });
       return;
     }
     const [address, tag] = bybitWithdrawDepositValue.split('||');
@@ -394,7 +409,7 @@ export default function Short1xPage() {
       return;
     }
     if (!Number.isFinite(amount) || amount <= 0) {
-      setMessage({ type: 'error', text: '출금 수량(XRP)을 입력해주세요.' });
+      setMessage({ type: 'error', text: `출금 수량(${bybitWithdrawAsset})을 입력해주세요.` });
       return;
     }
     setBybitWithdrawLoading(true);
@@ -404,16 +419,23 @@ export default function Short1xPage() {
       const res = await fetch('/api/short1x/bybit-withdraw', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
-        body: JSON.stringify({ amount, address: address.trim(), tag: (tag || '').trim() || undefined, chain: 'XRP' }),
+        body: JSON.stringify({
+          amount,
+          address: address.trim(),
+          tag: (tag || '').trim() || undefined,
+          asset: bybitWithdrawAsset,
+          chain: bybitWithdrawAsset === 'USDT' ? 'TRX' : 'XRP',
+        }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        const errMsg = data.error || 'Bybit XRP 출금 실패';
+        const errMsg = data.error || `Bybit ${bybitWithdrawAsset} 출금 실패`;
         setMessage({ type: 'error', text: errMsg });
         alert(errMsg);
         return;
       }
-      const successMsg = data.message || 'Bybit XRP 출금 요청이 접수되었습니다.';
+      const successMsg =
+        data.message || `Bybit ${bybitWithdrawAsset} 출금 요청이 접수되었습니다.`;
       setMessage({ type: 'success', text: successMsg });
       alert(successMsg);
       setBybitWithdrawAmount('');
@@ -448,7 +470,7 @@ export default function Short1xPage() {
       return;
     }
 
-    const payload = { qty: trimQty, price: trimPrice, side };
+    const payload = { qty: trimQty, price: trimPrice, side, symbol: bybitSymbol };
     console.warn('[short1x][placeShortOrder] 요청 파라미터', {
       url: '/api/short1x/order',
       method: 'POST',
@@ -687,9 +709,25 @@ export default function Short1xPage() {
         </p>
         <p style={{ margin: '0 0 4px 0' }}>
           <strong>업비트 보유 XRP:</strong>{' '}
-          {upbitInfo && upbitInfo !== '로딩중' && upbitInfo.upbitXrpBalance != null
-            ? `${Number(upbitInfo.upbitXrpBalance).toLocaleString(undefined, { maximumFractionDigits: 4 })} XRP`
-            : '알 수 없음'}
+          {upbitInfo && upbitInfo !== '로딩중' && upbitInfo.upbitXrpBalance != null ? (
+            <>
+              {Number(upbitInfo.upbitXrpBalance).toLocaleString(undefined, {
+                maximumFractionDigits: 4,
+              })}{' '}
+              XRP
+              {upbitInfo.xrpPrice != null && (
+                <span style={{ marginLeft: 6, color: '#666' }}>
+                  (
+                  {(
+                    Number(upbitInfo.upbitXrpBalance) * Number(upbitInfo.xrpPrice)
+                  ).toLocaleString()}
+                  원)
+                </span>
+              )}
+            </>
+          ) : (
+            '알 수 없음'
+          )}
         </p>
         <p style={{ margin: '0 0 4px 0' }}>
           <strong>현재 XRP 가격:</strong>{' '}
@@ -722,6 +760,21 @@ export default function Short1xPage() {
             ? `${upbitInfo.kimchiPremium.toFixed(2)}%`
             : '알 수 없음'}
         </p>
+
+        <div style={{ margin: '0 0 8px 0' }}>
+          <label style={{ fontSize: 13, color: '#555', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+            거래 대상:
+            <select
+              value={upbitSpotAsset}
+              onChange={(e) => setUpbitSpotAsset(e.target.value === 'USDT' ? 'USDT' : 'XRP')}
+              style={{ padding: '4px 6px', borderRadius: 4, border: '1px solid #ccc', fontSize: 13 }}
+            >
+              <option value="XRP">XRP</option>
+              <option value="USDT">USDT</option>
+            </select>
+          </label>
+        </div>
+
         <form onSubmit={placeUpbitBuyOrder} style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'flex-end' }}>
           <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -729,19 +782,45 @@ export default function Short1xPage() {
               <button
                 type="button"
                 onClick={() => {
-                  if (upbitInfo && upbitInfo !== '로딩중' && upbitInfo.xrpPrice != null) {
-                    setUpbitPrice(formatNumberInput(String(Math.round(Number(upbitInfo.xrpPrice))))); 
-                  }
+                  if (!upbitInfo || upbitInfo === '로딩중') return;
+                  const priceSrc =
+                    upbitSpotAsset === 'USDT'
+                      ? upbitInfo.usdtKrwPrice
+                      : upbitInfo.xrpPrice;
+                  if (priceSrc == null) return;
+                  setUpbitPrice(
+                    formatNumberInput(String(Math.round(Number(priceSrc))))
+                  );
                 }}
-                disabled={!upbitInfo || upbitInfo === '로딩중' || upbitInfo.xrpPrice == null}
+                disabled={
+                  !upbitInfo ||
+                  upbitInfo === '로딩중' ||
+                  (upbitSpotAsset === 'USDT'
+                    ? upbitInfo.usdtKrwPrice == null
+                    : upbitInfo.xrpPrice == null)
+                }
                 style={{
                   padding: '4px 8px',
                   fontSize: 11,
-                  backgroundColor: !upbitInfo || upbitInfo === '로딩중' || upbitInfo.xrpPrice == null ? '#ccc' : '#1976d2',
+                  backgroundColor:
+                    !upbitInfo ||
+                    upbitInfo === '로딩중' ||
+                    (upbitSpotAsset === 'USDT'
+                      ? upbitInfo.usdtKrwPrice == null
+                      : upbitInfo.xrpPrice == null)
+                      ? '#ccc'
+                      : '#1976d2',
                   color: 'white',
                   border: 'none',
                   borderRadius: 4,
-                  cursor: !upbitInfo || upbitInfo === '로딩중' || upbitInfo.xrpPrice == null ? 'not-allowed' : 'pointer',
+                  cursor:
+                    !upbitInfo ||
+                    upbitInfo === '로딩중' ||
+                    (upbitSpotAsset === 'USDT'
+                      ? upbitInfo.usdtKrwPrice == null
+                      : upbitInfo.xrpPrice == null)
+                      ? 'not-allowed'
+                      : 'pointer',
                   fontWeight: 'bold',
                 }}
               >
@@ -791,19 +870,45 @@ export default function Short1xPage() {
               <button
                 type="button"
                 onClick={() => {
-                  if (upbitInfo && upbitInfo !== '로딩중' && upbitInfo.xrpPrice != null) {
-                    setUpbitSellPrice(formatNumberInput(String(Math.round(Number(upbitInfo.xrpPrice)))));
-                  }
+                  if (!upbitInfo || upbitInfo === '로딩중') return;
+                  const priceSrc =
+                    upbitSpotAsset === 'USDT'
+                      ? upbitInfo.usdtKrwPrice
+                      : upbitInfo.xrpPrice;
+                  if (priceSrc == null) return;
+                  setUpbitSellPrice(
+                    formatNumberInput(String(Math.round(Number(priceSrc))))
+                  );
                 }}
-                disabled={!upbitInfo || upbitInfo === '로딩중' || upbitInfo.xrpPrice == null}
+                disabled={
+                  !upbitInfo ||
+                  upbitInfo === '로딩중' ||
+                  (upbitSpotAsset === 'USDT'
+                    ? upbitInfo.usdtKrwPrice == null
+                    : upbitInfo.xrpPrice == null)
+                }
                 style={{
                   padding: '4px 8px',
                   fontSize: 11,
-                  backgroundColor: !upbitInfo || upbitInfo === '로딩중' || upbitInfo.xrpPrice == null ? '#ccc' : '#c62828',
+                  backgroundColor:
+                    !upbitInfo ||
+                    upbitInfo === '로딩중' ||
+                    (upbitSpotAsset === 'USDT'
+                      ? upbitInfo.usdtKrwPrice == null
+                      : upbitInfo.xrpPrice == null)
+                      ? '#ccc'
+                      : '#c62828',
                   color: 'white',
                   border: 'none',
                   borderRadius: 4,
-                  cursor: !upbitInfo || upbitInfo === '로딩중' || upbitInfo.xrpPrice == null ? 'not-allowed' : 'pointer',
+                  cursor:
+                    !upbitInfo ||
+                    upbitInfo === '로딩중' ||
+                    (upbitSpotAsset === 'USDT'
+                      ? upbitInfo.usdtKrwPrice == null
+                      : upbitInfo.xrpPrice == null)
+                      ? 'not-allowed'
+                      : 'pointer',
                   fontWeight: 'bold',
                 }}
               >
@@ -821,24 +926,51 @@ export default function Short1xPage() {
           </label>
           <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              <span style={{ fontSize: 12, color: '#555' }}>XRP 수량</span>
+              <span style={{ fontSize: 12, color: '#555' }}>
+                {upbitSpotAsset === 'USDT' ? 'USDT 수량' : 'XRP 수량'}
+              </span>
               <button
                 type="button"
                 onClick={() => {
-                  if (upbitInfo && upbitInfo !== '로딩중' && upbitInfo.upbitXrpBalance != null) {
+                  if (
+                    upbitSpotAsset === 'XRP' &&
+                    upbitInfo &&
+                    upbitInfo !== '로딩중' &&
+                    upbitInfo.upbitXrpBalance != null
+                  ) {
                     const all = Number(upbitInfo.upbitXrpBalance);
                     setUpbitSellVolume(all % 1 === 0 ? String(all) : all.toFixed(4));
                   }
                 }}
-                disabled={!upbitInfo || upbitInfo === '로딩중' || upbitInfo.upbitXrpBalance == null || Number(upbitInfo.upbitXrpBalance) <= 0}
+                disabled={
+                  upbitSpotAsset === 'USDT' ||
+                  !upbitInfo ||
+                  upbitInfo === '로딩중' ||
+                  upbitInfo.upbitXrpBalance == null ||
+                  Number(upbitInfo.upbitXrpBalance) <= 0
+                }
                 style={{
                   padding: '4px 8px',
                   fontSize: 11,
-                  backgroundColor: !upbitInfo || upbitInfo === '로딩중' || upbitInfo.upbitXrpBalance == null || Number(upbitInfo.upbitXrpBalance) <= 0 ? '#ccc' : '#c62828',
+                  backgroundColor:
+                    upbitSpotAsset === 'USDT' ||
+                    !upbitInfo ||
+                    upbitInfo === '로딩중' ||
+                    upbitInfo.upbitXrpBalance == null ||
+                    Number(upbitInfo.upbitXrpBalance) <= 0
+                      ? '#ccc'
+                      : '#c62828',
                   color: 'white',
                   border: 'none',
                   borderRadius: 4,
-                  cursor: !upbitInfo || upbitInfo === '로딩중' || upbitInfo.upbitXrpBalance == null || Number(upbitInfo.upbitXrpBalance) <= 0 ? 'not-allowed' : 'pointer',
+                  cursor:
+                    upbitSpotAsset === 'USDT' ||
+                    !upbitInfo ||
+                    upbitInfo === '로딩중' ||
+                    upbitInfo.upbitXrpBalance == null ||
+                    Number(upbitInfo.upbitXrpBalance) <= 0
+                      ? 'not-allowed'
+                      : 'pointer',
                   fontWeight: 'bold',
                 }}
               >
@@ -871,7 +1003,32 @@ export default function Short1xPage() {
           </button>
         </form>
         <div style={{ marginTop: 16, paddingTop: 12, borderTop: '1px solid rgba(0,0,0,0.08)' }}>
-          <p style={{ margin: '0 0 8px 0', fontWeight: 'bold' }}>XRP 출금</p>
+          <p style={{ margin: '0 0 8px 0', fontWeight: 'bold' }}>업비트 출금</p>
+          <div style={{ margin: '0 0 8px 0' }}>
+            <label style={{ fontSize: 13, color: '#555', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+              출금 자산:
+              <select
+                value={withdrawAsset}
+                onChange={(e) => {
+                  const next = e.target.value === 'USDT' ? 'USDT' : 'XRP';
+                  setWithdrawAsset(next);
+                  // 자산 변경 시 해당 자산의 첫 주소를 기본값으로 재선택
+                  const firstForAsset =
+                    withdrawAddresses.find((item) => item.currency === next) || null;
+                  if (firstForAsset) {
+                    const value = `${firstForAsset.withdraw_address}||${firstForAsset.secondary_address || ''}||${firstForAsset.net_type}`;
+                    setWithdrawAddressValue(value);
+                  } else {
+                    setWithdrawAddressValue('');
+                  }
+                }}
+                style={{ padding: '4px 6px', borderRadius: 4, border: '1px solid #ccc', fontSize: 13 }}
+              >
+                <option value="XRP">XRP</option>
+                <option value="USDT">USDT</option>
+              </select>
+            </label>
+          </div>
           {withdrawAddressesError && (
             <p style={{ color: '#c62828', margin: '0 0 8px 0' }}>{withdrawAddressesError}</p>
           )}
@@ -883,10 +1040,12 @@ export default function Short1xPage() {
                 onChange={(e) => setWithdrawAddressValue(e.target.value)}
                 style={{ padding: '8px 10px' }}
               >
-                {withdrawAddresses.length === 0 && (
-                  <option value="">등록된 XRP 출금 주소 없음</option>
+                {withdrawAddresses.filter((item) => item.currency === withdrawAsset).length === 0 && (
+                  <option value="">{`등록된 ${withdrawAsset} 출금 주소 없음`}</option>
                 )}
-                {withdrawAddresses.map((item) => {
+                {withdrawAddresses
+                  .filter((item) => item.currency === withdrawAsset)
+                  .map((item) => {
                   const value = `${item.withdraw_address}||${item.secondary_address || ''}||${item.net_type}`;
                   const label = [
                     item.withdraw_address,
@@ -903,24 +1062,50 @@ export default function Short1xPage() {
             </label>
             <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                <span style={{ fontSize: 12, color: '#555' }}>출금 수량(XRP)</span>
+                <span style={{ fontSize: 12, color: '#555' }}>
+                  출금 수량({withdrawAsset})
+                </span>
                 <button
                   type="button"
                   onClick={() => {
-                    if (upbitInfo && upbitInfo !== '로딩중' && upbitInfo.upbitXrpBalance != null) {
+                    if (!upbitInfo || upbitInfo === '로딩중') return;
+                    if (withdrawAsset === 'XRP' && upbitInfo.upbitXrpBalance != null) {
                       const all = Number(upbitInfo.upbitXrpBalance);
+                      setWithdrawAmount(all % 1 === 0 ? String(all) : all.toFixed(4));
+                    } else if (withdrawAsset === 'USDT' && upbitInfo.upbitUsdtBalance != null) {
+                      const all = Number(upbitInfo.upbitUsdtBalance);
                       setWithdrawAmount(all % 1 === 0 ? String(all) : all.toFixed(4));
                     }
                   }}
-                  disabled={!upbitInfo || upbitInfo === '로딩중' || upbitInfo.upbitXrpBalance == null || Number(upbitInfo.upbitXrpBalance) <= 0}
+                  disabled={
+                    !upbitInfo ||
+                    upbitInfo === '로딩중' ||
+                    (withdrawAsset === 'XRP'
+                      ? upbitInfo.upbitXrpBalance == null || Number(upbitInfo.upbitXrpBalance) <= 0
+                      : upbitInfo.upbitUsdtBalance == null || Number(upbitInfo.upbitUsdtBalance) <= 0)
+                  }
                   style={{
                     padding: '4px 8px',
                     fontSize: 11,
-                    backgroundColor: !upbitInfo || upbitInfo === '로딩중' || upbitInfo.upbitXrpBalance == null || Number(upbitInfo.upbitXrpBalance) <= 0 ? '#ccc' : '#6a1b9a',
+                    backgroundColor:
+                      !upbitInfo ||
+                      upbitInfo === '로딩중' ||
+                      (withdrawAsset === 'XRP'
+                        ? upbitInfo.upbitXrpBalance == null || Number(upbitInfo.upbitXrpBalance) <= 0
+                        : upbitInfo.upbitUsdtBalance == null || Number(upbitInfo.upbitUsdtBalance) <= 0)
+                        ? '#ccc'
+                        : '#6a1b9a',
                     color: 'white',
                     border: 'none',
                     borderRadius: 4,
-                    cursor: !upbitInfo || upbitInfo === '로딩중' || upbitInfo.upbitXrpBalance == null || Number(upbitInfo.upbitXrpBalance) <= 0 ? 'not-allowed' : 'pointer',
+                    cursor:
+                      !upbitInfo ||
+                      upbitInfo === '로딩중' ||
+                      (withdrawAsset === 'XRP'
+                        ? upbitInfo.upbitXrpBalance == null || Number(upbitInfo.upbitXrpBalance) <= 0
+                        : upbitInfo.upbitUsdtBalance == null || Number(upbitInfo.upbitUsdtBalance) <= 0)
+                        ? 'not-allowed'
+                        : 'pointer',
                     fontWeight: 'bold',
                   }}
                 >
@@ -938,7 +1123,10 @@ export default function Short1xPage() {
             </label>
             <button
               type="submit"
-              disabled={withdrawLoading || withdrawAddresses.length === 0}
+              disabled={
+                withdrawLoading ||
+                withdrawAddresses.filter((item) => item.currency === withdrawAsset).length === 0
+              }
               style={{
                 padding: '8px 14px',
                 backgroundColor: withdrawLoading || withdrawAddresses.length === 0 ? '#999' : '#6a1b9a',
@@ -948,8 +1136,8 @@ export default function Short1xPage() {
                 cursor: withdrawLoading || withdrawAddresses.length === 0 ? 'not-allowed' : 'pointer',
                 fontWeight: 'bold',
               }}
-            >
-              {withdrawLoading ? '출금 중...' : 'XRP 출금'}
+              >
+              {withdrawLoading ? '출금 중...' : `${withdrawAsset} 출금`}
             </button>
           </form>
         </div>
@@ -958,23 +1146,46 @@ export default function Short1xPage() {
       {/* Bybit 영역 */}
       <div style={{ marginBottom: 24, padding: '12px 16px', backgroundColor: '#f5f5f5', borderRadius: 8 }}>
         <h2 style={{ margin: '0 0 8px 0', fontSize: 16, fontWeight: 'bold' }}>Bybit 영역</h2>
+        <div style={{ margin: '0 0 8px 0' }}>
+          <label style={{ fontSize: 13, color: '#555', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+            선물 심볼:
+            <select
+              value={bybitSymbol}
+              onChange={(e) => setBybitSymbol(e.target.value === 'XRPUSDT' ? 'XRPUSDT' : 'XRPUSD')}
+              style={{ padding: '4px 6px', borderRadius: 4, border: '1px solid #ccc', fontSize: 13 }}
+            >
+              <option value="XRPUSD">XRPUSD (inverse)</option>
+              <option value="XRPUSDT">XRPUSDT (linear)</option>
+            </select>
+          </label>
+        </div>
         <p style={{ color: '#666', marginBottom: 16 }}>
-          Bybit <strong>XRPUSD</strong> 퍼페추얼(역선물)에 <strong>1배 레버리지</strong>로 숏 포지션을 엽니다. 시장가가 아닌{' '}
+          Bybit <strong>{bybitSymbol}</strong> 퍼페추얼에 <strong>1배 레버리지</strong>로 숏 포지션을 엽니다. 시장가가 아닌{' '}
           <strong>Post-Only</strong> 리밋 주문으로 수수료를 최소화합니다.
         </p>
         <p style={{ margin: '0 0 8px 0', fontSize: 12, color: '#888' }}>
           최소 주문 금액: 5 USD (수량 × 지정가가 5 USD 이상이어야 합니다)
         </p>
         <p style={{ margin: '0 0 8px 0' }}>
-          <strong>현재 Bybit XRPUSD(선물):</strong>{' '}
-          {upbitInfo && upbitInfo !== '로딩중' && upbitInfo.bybitXrpUsdPrice != null
-            ? `${Number(upbitInfo.bybitXrpUsdPrice).toFixed(4)} USDT` +
-              (upbitInfo.usdtKrwPrice != null
-                ? ` (~${Math.round(
-                    Number(upbitInfo.bybitXrpUsdPrice) * Number(upbitInfo.usdtKrwPrice)
-                  ).toLocaleString()}원)`
-                : '')
-            : '알 수 없음'}
+          <strong>현재 Bybit {bybitSymbol}(선물):</strong>{' '}
+          {(() => {
+            if (!upbitInfo || upbitInfo === '로딩중') return '알 수 없음';
+            let price =
+              bybitSymbol === 'XRPUSDT'
+                ? upbitInfo.bybitXrpUsdtPrice
+                : upbitInfo.bybitXrpUsdPrice;
+            // XRPUSDT 가격이 없으면 XRPUSD 가격으로라도 표시
+            if (price == null && bybitSymbol === 'XRPUSDT' && upbitInfo.bybitXrpUsdPrice != null) {
+              price = upbitInfo.bybitXrpUsdPrice;
+            }
+            if (price == null) return '알 수 없음';
+            const base = `${Number(price).toFixed(4)} USDT`;
+            if (upbitInfo.usdtKrwPrice != null) {
+              const krw = Number(price) * Number(upbitInfo.usdtKrwPrice);
+              return `${base} (~${Math.round(krw).toLocaleString()}원)`;
+            }
+            return base;
+          })()}
         </p>
         <p style={{ margin: '0 0 8px 0', fontSize: 12, color: '#555' }}>
           {xrpBalance &&
@@ -1037,15 +1248,15 @@ export default function Short1xPage() {
           </div>
         )}
         {bybitPosition === '로딩중' && (
-          <p style={{ color: '#666', marginBottom: 8 }}>XRPUSD 포지션 조회 중...</p>
+          <p style={{ color: '#666', marginBottom: 8 }}>{bybitSymbol} 포지션 조회 중...</p>
         )}
         {bybitPosition && bybitPosition !== '로딩중' && !bybitPosition.size && (
-          <p style={{ marginBottom: 8 }}>현재 열린 XRPUSD 포지션이 없습니다.</p>
+          <p style={{ marginBottom: 8 }}>현재 열린 {bybitSymbol} 포지션이 없습니다.</p>
         )}
         {bybitPosition && bybitPosition !== '로딩중' && bybitPosition.size && Number(bybitPosition.size) !== 0 && (
           <div style={{ marginBottom: 16, padding: '8px 12px', backgroundColor: '#fff', borderRadius: 6 }}>
             <p style={{ margin: '0 0 4px 0' }}>
-              <strong>현재 XRPUSD 포지션:</strong>{' '}
+              <strong>현재 {bybitPosition.symbol || bybitSymbol} 포지션:</strong>{' '}
               {bybitPosition.side || (Number(bybitPosition.size) > 0 ? 'Sell' : 'Buy')} {' '}
               {Number(bybitPosition.size).toLocaleString(undefined, { maximumFractionDigits: 4 })} XRP
               {bybitPosition.avgPrice && (
@@ -1207,42 +1418,67 @@ export default function Short1xPage() {
           </div>
         </div>
         <div style={{ marginTop: 16, paddingTop: 12, borderTop: '1px solid rgba(0,0,0,0.08)' }}>
-          <p style={{ margin: '0 0 8px 0', fontWeight: 'bold' }}>Bybit → 업비트 XRP 출금</p>
+          <p style={{ margin: '0 0 8px 0', fontWeight: 'bold' }}>Bybit → 업비트 출금</p>
+          <p style={{ margin: '0 0 8px 4px', fontSize: 12, color: '#555' }}>
+            출금 자산:
+            <select
+              value={bybitWithdrawAsset}
+              onChange={(e) => {
+                const v = e.target.value === 'USDT' ? 'USDT' : 'XRP';
+                setBybitWithdrawAsset(v);
+                setBybitWithdrawDepositValue('');
+                setBybitWithdrawAmount('');
+              }}
+              style={{ marginLeft: 8, padding: '2px 6px', fontSize: 12, borderRadius: 4, border: '1px solid #ccc' }}
+            >
+              <option value="XRP">XRP</option>
+              <option value="USDT">USDT</option>
+            </select>
+          </p>
           <p style={{ margin: '0 0 8px 0', fontSize: 12, color: '#666' }}>
-            Bybit 주소록에 등록된 주소만 출금 가능합니다. 업비트 XRP 입금 주소를 API로 불러와 선택합니다.
+            Bybit 주소록에 등록된 주소만 출금 가능합니다. 선택한 자산에 맞는 업비트 입금 주소를 API로 불러와 선택합니다.
           </p>
           {upbitDepositAddressesError && (
             <p style={{ color: '#c62828', margin: '0 0 8px 0' }}>{upbitDepositAddressesError}</p>
           )}
           <form onSubmit={bybitWithdraw} style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'flex-end' }}>
             <label style={{ display: 'flex', flexDirection: 'column', gap: 4, minWidth: 240 }}>
-              <span style={{ fontSize: 12, color: '#555' }}>업비트 XRP 입금 주소 선택</span>
+              <span style={{ fontSize: 12, color: '#555' }}>
+                업비트 {bybitWithdrawAsset} 입금 주소 선택
+              </span>
               <select
                 value={bybitWithdrawDepositValue}
                 onChange={(e) => setBybitWithdrawDepositValue(e.target.value)}
                 style={{ padding: '8px 10px' }}
               >
-                {upbitDepositAddresses.length === 0 && (
-                  <option value="">업비트에 등록된 XRP 입금 주소 없음</option>
+                {upbitDepositAddresses.filter((a) => a.currency === bybitWithdrawAsset).length === 0 && (
+                  <option value="">
+                    업비트에 등록된 {bybitWithdrawAsset} 입금 주소 없음
+                  </option>
                 )}
-                {upbitDepositAddresses.map((item, idx) => {
-                  const value = `${item.deposit_address}||${item.secondary_address || ''}`;
-                  const label = [
-                    item.deposit_address,
-                    item.secondary_address ? `태그 ${item.secondary_address}` : null,
-                  ].filter(Boolean).join(' / ');
-                  return (
-                    <option key={idx} value={value}>
-                      {label}
-                    </option>
-                  );
-                })}
+                {upbitDepositAddresses
+                  .filter((item) => item.currency === bybitWithdrawAsset)
+                  .map((item, idx) => {
+                    const value = `${item.withdraw_address}||${item.secondary_address || ''}`;
+                    const label = [
+                      item.exchange_name || '업비트',
+                      item.withdraw_address,
+                      item.secondary_address ? `태그 ${item.secondary_address}` : null,
+                    ]
+                      .filter(Boolean)
+                      .join(' / ');
+                    return (
+                      <option key={idx} value={value}>
+                        {label}
+                      </option>
+                    );
+                  })}
               </select>
             </label>
             <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
               <span style={{ fontSize: 12, color: '#555' }}>
-                출금 수량 (XRP)
-                {xrpBalance && xrpBalance !== '로딩중' && xrpBalance.xrp != null && (
+                출금 수량 ({bybitWithdrawAsset})
+                {bybitWithdrawAsset === 'XRP' && xrpBalance && xrpBalance !== '로딩중' && xrpBalance.xrp != null && (
                   <span
                     role="button"
                     tabIndex={0}
@@ -1258,20 +1494,27 @@ export default function Short1xPage() {
                     출금 가능: {Number(xrpBalance.xrp).toLocaleString(undefined, { maximumFractionDigits: 4 })} XRP
                   </span>
                 )}
-                {(!xrpBalance || xrpBalance === '로딩중') && (
+                {bybitWithdrawAsset === 'XRP' && (!xrpBalance || xrpBalance === '로딩중') && (
                   <span style={{ marginLeft: 8, color: '#999' }}>
                     출금 가능: {xrpBalance === '로딩중' ? '조회 중...' : '— (잔액 조회 후 표시)'}
                   </span>
                 )}
-                {xrpBalance && xrpBalance !== '로딩중' && xrpBalance.xrp == null && (
+                {bybitWithdrawAsset === 'XRP' && xrpBalance && xrpBalance !== '로딩중' && xrpBalance.xrp == null && (
                   <span style={{ marginLeft: 8, color: '#999' }}>출금 가능: —</span>
                 )}
-                <span style={{ marginLeft: 8, color: '#666' }}>
-                  출금 수수료: 0.25 XRP
-                  {upbitInfo && upbitInfo !== '로딩중' && upbitInfo.xrpPrice != null && (
-                    <> (약 {Math.round(0.25 * Number(upbitInfo.xrpPrice)).toLocaleString()}원)</>
-                  )}
-                </span>
+                {bybitWithdrawAsset === 'XRP' && (
+                  <span style={{ marginLeft: 8, color: '#666' }}>
+                    출금 수수료: 0.25 XRP
+                    {upbitInfo && upbitInfo !== '로딩중' && upbitInfo.xrpPrice != null && (
+                      <> (약 {Math.round(0.25 * Number(upbitInfo.xrpPrice)).toLocaleString()}원)</>
+                    )}
+                  </span>
+                )}
+                {bybitWithdrawAsset === 'USDT' && (
+                  <span style={{ marginLeft: 8, color: '#666' }}>
+                    출금 수수료: 네트워크/거래소 정책에 따름 (Bybit/업비트에서 확인 필요)
+                  </span>
+                )}
               </span>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <input
@@ -1285,22 +1528,74 @@ export default function Short1xPage() {
                 <button
                   type="button"
                   onClick={() => {
-                    if (xrpBalance && xrpBalance !== '로딩중' && xrpBalance.xrp != null) {
-                      const available = Number(xrpBalance.xrp);
-                      const fee = 0.25;
-                      const maxSend = Math.max(0, available - fee);
-                      setBybitWithdrawAmount(maxSend % 1 === 0 ? String(maxSend) : maxSend.toFixed(4));
+                    if (bybitWithdrawAsset === 'XRP') {
+                      if (xrpBalance && xrpBalance !== '로딩중' && xrpBalance.xrp != null) {
+                        const available = Number(xrpBalance.xrp);
+                        const fee = 0.25;
+                        const maxSend = Math.max(0, available - fee);
+                        setBybitWithdrawAmount(
+                          maxSend % 1 === 0 ? String(maxSend) : maxSend.toFixed(4)
+                        );
+                      }
+                    } else if (bybitWithdrawAsset === 'USDT') {
+                      if (
+                        xrpBalance &&
+                        xrpBalance !== '로딩중' &&
+                        xrpBalance.usdtAvailable != null
+                      ) {
+                        const available = Number(xrpBalance.usdtAvailable);
+                        const maxSend = Math.max(0, available);
+                        setBybitWithdrawAmount(
+                          maxSend % 1 === 0 ? String(maxSend) : maxSend.toFixed(4)
+                        );
+                      }
                     }
                   }}
-                  disabled={!xrpBalance || xrpBalance === '로딩중' || xrpBalance.xrp == null || Number(xrpBalance.xrp) <= 0.25}
+                  disabled={
+                    bybitWithdrawAsset === 'XRP'
+                      ? !xrpBalance ||
+                        xrpBalance === '로딩중' ||
+                        xrpBalance.xrp == null ||
+                        Number(xrpBalance.xrp) <= 0.25
+                      : !xrpBalance ||
+                        xrpBalance === '로딩중' ||
+                        xrpBalance.usdtAvailable == null ||
+                        Number(xrpBalance.usdtAvailable) <= 0
+                  }
                   style={{
                     padding: '8px 12px',
                     fontSize: 12,
-                    backgroundColor: !xrpBalance || xrpBalance === '로딩중' || xrpBalance.xrp == null || Number(xrpBalance.xrp) <= 0.25 ? '#ccc' : '#1976d2',
+                    backgroundColor:
+                      bybitWithdrawAsset === 'XRP'
+                        ? !xrpBalance ||
+                          xrpBalance === '로딩중' ||
+                          xrpBalance.xrp == null ||
+                          Number(xrpBalance.xrp) <= 0.25
+                          ? '#ccc'
+                          : '#1976d2'
+                        : !xrpBalance ||
+                          xrpBalance === '로딩중' ||
+                          xrpBalance.usdtAvailable == null ||
+                          Number(xrpBalance.usdtAvailable) <= 0
+                        ? '#ccc'
+                        : '#1976d2',
                     color: 'white',
                     border: 'none',
                     borderRadius: 6,
-                    cursor: !xrpBalance || xrpBalance === '로딩중' || xrpBalance.xrp == null || Number(xrpBalance.xrp) <= 0.25 ? 'not-allowed' : 'pointer',
+                    cursor:
+                      bybitWithdrawAsset === 'XRP'
+                        ? !xrpBalance ||
+                          xrpBalance === '로딩중' ||
+                          xrpBalance.xrp == null ||
+                          Number(xrpBalance.xrp) <= 0.25
+                          ? 'not-allowed'
+                          : 'pointer'
+                        : !xrpBalance ||
+                          xrpBalance === '로딩중' ||
+                          xrpBalance.usdtAvailable == null ||
+                          Number(xrpBalance.usdtAvailable) <= 0
+                        ? 'not-allowed'
+                        : 'pointer',
                     fontWeight: 'bold',
                   }}
                 >
@@ -1312,21 +1607,19 @@ export default function Short1xPage() {
               type="submit"
               disabled={
                 bybitWithdrawLoading ||
-                upbitDepositAddresses.length === 0 ||
+                upbitDepositAddresses.filter((a) => a.currency === bybitWithdrawAsset).length === 0 ||
                 !bybitWithdrawDepositValue ||
                 !xrpBalance ||
-                xrpBalance === '로딩중' ||
-                xrpBalance.xrp == null
+                xrpBalance === '로딩중'
               }
               style={{
                 padding: '8px 14px',
                 backgroundColor:
                   bybitWithdrawLoading ||
-                  upbitDepositAddresses.length === 0 ||
+                  upbitDepositAddresses.filter((a) => a.currency === bybitWithdrawAsset).length === 0 ||
                   !bybitWithdrawDepositValue ||
                   !xrpBalance ||
-                  xrpBalance === '로딩중' ||
-                  xrpBalance.xrp == null
+                  xrpBalance === '로딩중'
                     ? '#999'
                     : '#1976d2',
                 color: 'white',
@@ -1334,17 +1627,18 @@ export default function Short1xPage() {
                 borderRadius: 6,
                 cursor:
                   bybitWithdrawLoading ||
-                  upbitDepositAddresses.length === 0 ||
+                  upbitDepositAddresses.filter((a) => a.currency === bybitWithdrawAsset).length === 0 ||
                   !bybitWithdrawDepositValue ||
                   !xrpBalance ||
-                  xrpBalance === '로딩중' ||
-                  xrpBalance.xrp == null
+                  xrpBalance === '로딩중'
                     ? 'not-allowed'
                     : 'pointer',
                 fontWeight: 'bold',
               }}
             >
-              {bybitWithdrawLoading ? '출금 중...' : 'Bybit → 업비트 출금'}
+              {bybitWithdrawLoading
+                ? '출금 중...'
+                : `Bybit → 업비트 ${bybitWithdrawAsset} 출금`}
             </button>
           </form>
         </div>
