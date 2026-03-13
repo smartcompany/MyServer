@@ -32,8 +32,8 @@ export async function POST(request) {
     );
   }
 
-  let qty;
-  let price;
+  let qty;          // 사용자가 보낸 qty (XRPUSD: XRP 수량, XRPUSDT: USDT 금액)
+  let price;        // 지정가 (USDT)
   let side;
   let symbol = DEFAULT_SYMBOL;
   let category = DEFAULT_CATEGORY;
@@ -59,13 +59,16 @@ export async function POST(request) {
     price = String(Number(price));
 
     if (Number(qty) <= 0 || !Number.isFinite(Number(qty))) {
-      return Response.json({ error: '유효한 XRP 수량을 입력해주세요.' }, { status: 400 });
+      const what = symbol === 'XRPUSDT' ? 'USDT 금액' : 'XRP 수량';
+      return Response.json({ error: `유효한 ${what}을 입력해주세요.` }, { status: 400 });
     }
     if (Number(price) <= 0 || !Number.isFinite(Number(price))) {
       return Response.json({ error: '유효한 지정가 가격(USDT)을 입력해주세요.' }, { status: 400 });
     }
 
-    const notionalUsd = Number(qty) * Number(price);
+    // XRPUSD: qty(XRP)×price → USD 노션, XRPUSDT: qty(USDT)가 노션
+    const notionalUsd =
+      symbol === 'XRPUSDT' ? Number(qty) : Number(qty) * Number(price);
     if (notionalUsd < 5) {
       return Response.json(
         {
@@ -88,12 +91,17 @@ export async function POST(request) {
     return Response.json({ error: '요청 본문이 올바르지 않습니다.' }, { status: 400 });
   }
 
-  // XRPUSD(inverse)는 qty=USD 노션, XRPUSDT(linear)는 qty=XRP 수량.
+  // Bybit에 넘기는 qty:
+  // - XRPUSD(inverse): qty = USD 노션(정수 USD)
+  // - XRPUSDT(linear): qty = XRP 수량 = (USDT 금액 / 가격)
   if (symbol === 'XRPUSD') {
     const qtyUsd = Number(qty) * Number(price);
     qty = String(Math.round(qtyUsd));
   } else {
-    qty = String(Number(qty));
+    const usdtValue = Number(qty);
+    const priceNum = Number(price);
+    const xrpQty = priceNum > 0 ? usdtValue / priceNum : 0;
+    qty = String(xrpQty);
   }
 
   try {

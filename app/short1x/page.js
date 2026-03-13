@@ -526,35 +526,50 @@ export default function Short1xPage() {
     if (!xrpBalance || xrpBalance === '로딩중') return;
     const ratio = Math.max(0, Math.min(100, pct)) / 100;
 
-    // 거래소와 동일: 마진 잔고(USD) ÷ 지정가 = 주문 가능 XRP 수량.
-    // USD는 소숫점 이하를 모두 절삭해서(정수 USD) 사용해, 패널 숫자(예: 63 USD)에 맞춥니다.
-    const price = Number(shortPrice);
-    const usdAvailableRaw = Number(xrpBalance.usdAvailable);
-    const usdAvailable =
-      Number.isFinite(usdAvailableRaw) && usdAvailableRaw > 0
-        ? Math.floor(usdAvailableRaw)
-        : NaN;
-
-    let baseQty = NaN;
-    if (Number.isFinite(price) && price > 0 && Number.isFinite(usdAvailable) && usdAvailable > 0) {
-      baseQty = usdAvailable / price;
-    } else {
-      const availableXrp = Number(xrpBalance.xrp);
-      if (Number.isFinite(availableXrp) && availableXrp > 0) {
-        baseQty = availableXrp;
+    if (bybitSymbol === 'XRPUSDT') {
+      // XRPUSDT: 슬라이더는 보유 USDT (usdtAvailable)를 기준으로 주문 금액(USDT)을 정한다.
+      const usdtAvailRaw = Number(xrpBalance.usdtAvailable);
+      const usdtAvail =
+        Number.isFinite(usdtAvailRaw) && usdtAvailRaw > 0
+          ? Math.floor(usdtAvailRaw)
+          : NaN;
+      if (!Number.isFinite(usdtAvail) || usdtAvail <= 0) {
+        setQty('');
+        return;
       }
-    }
-    if (!Number.isFinite(baseQty) || baseQty <= 0) {
-      setQty('');
-      return;
-    }
-
-    const safe = baseQty * ratio * 0.999; // 수수료/라운딩 버퍼
-    const rounded = Math.floor(safe * 100) / 100; // 소수 둘째 자리까지
-    if (rounded > 0) {
-      setQty(rounded.toFixed(2));
+      const safeUsdt = usdtAvail * ratio * 0.999;
+      const roundedUsdt = Math.floor(safeUsdt * 100) / 100;
+      setQty(roundedUsdt > 0 ? roundedUsdt.toFixed(2) : '');
     } else {
-      setQty('');
+      // XRPUSD: 기존처럼 USD 마진/가격 → XRP 수량 기준
+      const price = Number(shortPrice);
+      const usdAvailableRaw = Number(xrpBalance.usdAvailable);
+      const usdAvailable =
+        Number.isFinite(usdAvailableRaw) && usdAvailableRaw > 0
+          ? Math.floor(usdAvailableRaw)
+          : NaN;
+
+      let baseQty = NaN;
+      if (Number.isFinite(price) && price > 0 && Number.isFinite(usdAvailable) && usdAvailable > 0) {
+        baseQty = usdAvailable / price;
+      } else {
+        const availableXrp = Number(xrpBalance.xrp);
+        if (Number.isFinite(availableXrp) && availableXrp > 0) {
+          baseQty = availableXrp;
+        }
+      }
+      if (!Number.isFinite(baseQty) || baseQty <= 0) {
+        setQty('');
+        return;
+      }
+
+      const safe = baseQty * ratio * 0.999; // 수수료/라운딩 버퍼
+      const rounded = Math.floor(safe * 100) / 100; // 소수 둘째 자리까지
+      if (rounded > 0) {
+        setQty(rounded.toFixed(2));
+      } else {
+        setQty('');
+      }
     }
   }
 
@@ -1188,19 +1203,36 @@ export default function Short1xPage() {
           })()}
         </p>
         <p style={{ margin: '0 0 8px 0', fontSize: 12, color: '#555' }}>
-          {xrpBalance &&
-          xrpBalance !== '로딩중' &&
-          upbitInfo &&
-          upbitInfo !== '로딩중' &&
-          upbitInfo.xrpPrice != null
+          {xrpBalance && xrpBalance !== '로딩중' && upbitInfo && upbitInfo !== '로딩중'
             ? (() => {
+                if (bybitSymbol === 'XRPUSDT') {
+                  const usdtAvail = Number(xrpBalance.usdtAvailable);
+                  if (!Number.isFinite(usdtAvail)) {
+                    return '현재 Bybit USDT 잔고 정보를 불러오는 중입니다.';
+                  }
+                  const krw =
+                    upbitInfo.usdtKrwPrice != null
+                      ? usdtAvail * Number(upbitInfo.usdtKrwPrice)
+                      : null;
+                  return `현재 Bybit 보유 USDT: ${usdtAvail.toLocaleString(undefined, {
+                    maximumFractionDigits: 2,
+                  })} USDT${
+                    krw != null
+                      ? ` (현재 USDT 가격 기준 약 ${Math.round(krw).toLocaleString()}원)`
+                      : ''
+                  }`;
+                }
+
+                if (upbitInfo.xrpPrice == null) {
+                  return '현재 Bybit XRP 보유 수량 또는 XRP 가격 정보를 불러오는 중입니다.';
+                }
                 const xrpAmount = Number(xrpBalance.xrp);
                 const krw = xrpAmount * Number(upbitInfo.xrpPrice);
                 return `현재 Bybit 보유 XRP: ${xrpAmount.toLocaleString(undefined, {
                   maximumFractionDigits: 4,
                 })} XRP (현재 XRP 가격 기준 약 ${Math.round(krw).toLocaleString()}원)`;
               })()
-            : '현재 Bybit XRP 보유 수량 또는 XRP 가격 정보를 불러오는 중입니다.'}
+            : '현재 Bybit XRP/USDT 보유 수량 정보를 불러오는 중입니다.'}
         </p>
         {xrpBalance === '로딩중' && <p style={{ color: '#666', marginBottom: 8 }}>Bybit 보유 XRP 조회 중...</p>}
         {xrpBalance && xrpBalance !== '로딩중' && (
@@ -1278,7 +1310,9 @@ export default function Short1xPage() {
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             <label style={{ fontWeight: 'bold' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span>XRP 수량</span>
+                <span>
+                  {bybitSymbol === 'XRPUSDT' ? '주문 금액 (USDT 기준)' : 'XRP 수량'}
+                </span>
                 {xrpBalance && xrpBalance !== '로딩중' && (
                   <button
                     type="button"
@@ -1299,7 +1333,7 @@ export default function Short1xPage() {
               <input
                 type="text"
                 inputMode="decimal"
-                placeholder="예: 100"
+                placeholder={bybitSymbol === 'XRPUSDT' ? '예: 100 (USDT)' : '예: 100 (XRP)'}
                 value={qty}
                 onChange={(e) => setQty(e.target.value)}
                 style={{ display: 'block', marginTop: 6, padding: 10, fontSize: 16, width: '100%', boxSizing: 'border-box' }}
