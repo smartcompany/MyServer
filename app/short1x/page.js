@@ -745,6 +745,28 @@ export default function Short1xPage() {
           )}
         </p>
         <p style={{ margin: '0 0 4px 0' }}>
+          <strong>업비트 보유 USDT:</strong>{' '}
+          {upbitInfo && upbitInfo !== '로딩중' && upbitInfo.upbitUsdtBalance != null ? (
+            <>
+              {Number(upbitInfo.upbitUsdtBalance).toLocaleString(undefined, {
+                maximumFractionDigits: 4,
+              })}{' '}
+              USDT
+              {upbitInfo.usdtKrwPrice != null && (
+                <span style={{ marginLeft: 6, color: '#666' }}>
+                  (
+                  {(
+                    Number(upbitInfo.upbitUsdtBalance) * Number(upbitInfo.usdtKrwPrice)
+                  ).toLocaleString()}
+                  원)
+                </span>
+              )}
+            </>
+          ) : (
+            '알 수 없음'
+          )}
+        </p>
+        <p style={{ margin: '0 0 4px 0' }}>
           <strong>현재 XRP 가격:</strong>{' '}
           {upbitInfo && upbitInfo !== '로딩중' && upbitInfo.xrpPrice != null
             ? `${Number(upbitInfo.xrpPrice).toLocaleString()}원`
