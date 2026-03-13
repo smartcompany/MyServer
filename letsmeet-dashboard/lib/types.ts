@@ -1,10 +1,12 @@
 export type DashboardUser = {
   uid: string;
   email: string | null;
+  loginProvider: string | null;
   firebaseDisplayName: string | null;
   profileName: string | null;
   trustScore: number | null;
   isActive: boolean | null;
+  isBot: boolean;
 };
 
 export type BotConfig = {

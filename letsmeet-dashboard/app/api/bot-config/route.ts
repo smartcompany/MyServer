@@ -1,12 +1,22 @@
 import { NextRequest, NextResponse } from "next/server";
 import { appendLog, readBotState, toBotStateApiError, writeBotState } from "@/lib/botStore";
+import { supabaseAdmin } from "@/lib/supabaseAdmin";
 
 export const runtime = "nodejs";
 
 export async function GET() {
   try {
     const state = await readBotState();
-    return NextResponse.json({ config: state.config });
+    const { data: botRows } = await supabaseAdmin
+      .from("letsmeet_users")
+      .select("user_id")
+      .eq("is_bot", true);
+    const selectedBotUids = (botRows ?? []).map((r) => r.user_id as string);
+    const config = {
+      ...state.config,
+      selectedBotUids,
+    };
+    return NextResponse.json({ config });
   } catch (error) {
     const apiError = toBotStateApiError(error);
     return NextResponse.json({ error: apiError.error }, { status: apiError.status });
@@ -18,9 +28,9 @@ export async function PUT(request: NextRequest) {
     const body = await request.json();
     const state = await readBotState();
 
+    // selectedBotUids는 letsmeet_users.is_bot으로만 관리. PUT에서는 변경하지 않음.
     state.config = {
       ...state.config,
-      selectedBotUids: Array.isArray(body.selectedBotUids) ? body.selectedBotUids : state.config.selectedBotUids,
       meetingsPerWeekPerBot:
         typeof body.meetingsPerWeekPerBot === "number"
           ? Math.max(0, Math.min(14, body.meetingsPerWeekPerBot))

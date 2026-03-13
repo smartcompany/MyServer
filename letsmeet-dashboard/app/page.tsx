@@ -83,8 +83,8 @@ export default function DashboardPage() {
   }, [simulating]);
 
   const selectedUsers = useMemo(
-    () => users.filter((u) => config.selectedBotUids.includes(u.uid)),
-    [users, config.selectedBotUids]
+    () => users.filter((u) => u.isBot),
+    [users]
   );
 
   const creatorPreviewCount = Math.max(
@@ -93,28 +93,26 @@ export default function DashboardPage() {
   );
 
   async function toggleBot(uid: string) {
-    const exists = config.selectedBotUids.includes(uid);
-    const nextSelectedBotUids = exists
-      ? config.selectedBotUids.filter((id) => id !== uid)
-      : [...config.selectedBotUids, uid];
-    const nextConfig = { ...config, selectedBotUids: nextSelectedBotUids };
-
-    setConfig(nextConfig);
+    const user = users.find((u) => u.uid === uid);
+    if (!user) return;
+    const nextIsBot = !user.isBot;
     setSaving(true);
     setError(null);
     try {
-      const res = await fetch(`${BASE}/api/bot-config`, {
-        method: "PUT",
+      const res = await fetch(`${BASE}/api/users/${encodeURIComponent(uid)}/bot`, {
+        method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(nextConfig),
+        body: JSON.stringify({ isBot: nextIsBot }),
       });
       if (!res.ok) {
         const body = (await res.json()) as { error?: string };
-        throw new Error(body.error ?? `봇 계정 선택 저장 실패: ${res.status}`);
+        throw new Error(body.error ?? `봇 선택 저장 실패: ${res.status}`);
       }
+      setUsers((prev) =>
+        prev.map((u) => (u.uid === uid ? { ...u, isBot: nextIsBot } : u))
+      );
     } catch (e) {
-      setError(e instanceof Error ? e.message : "봇 계정 선택 저장 오류");
-      await loadAll();
+      setError(e instanceof Error ? e.message : "봇 선택 저장 오류");
     } finally {
       setSaving(false);
     }
@@ -156,12 +154,21 @@ export default function DashboardPage() {
   }
 
   async function runSimulateOnce() {
+    const botUids = selectedUsers.map((u) => u.uid);
+    if (botUids.length === 0) {
+      setError("1회 실행할 봇 계정을 먼저 체크하세요.");
+      return;
+    }
     setSimulating(true);
     setSaving(true);
     setError(null);
     try {
       await refreshLogsOnly();
-      const res = await fetch(`${BASE}/api/bot-control/trigger`, { method: "POST" });
+      const res = await fetch(`${BASE}/api/bot-control/trigger`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ selectedBotUids: botUids }),
+      });
       if (!res.ok) {
         const body = (await res.json()) as { error?: string };
         throw new Error(body.error ?? `요청 실패: ${res.status}`);
@@ -229,12 +236,13 @@ export default function DashboardPage() {
   }
 
   async function deleteSelectedBotMeetings() {
-    if (config.selectedBotUids.length === 0) {
+    const botUids = selectedUsers.map((u) => u.uid);
+    if (botUids.length === 0) {
       setError("삭제할 봇 계정을 먼저 선택하세요.");
       return;
     }
 
-    const ok = window.confirm(`선택된 봇 ${config.selectedBotUids.length}명의 모임을 모두 삭제할까요?`);
+    const ok = window.confirm(`선택된 봇 ${botUids.length}명의 모임을 모두 삭제할까요?`);
     if (!ok) return;
 
     setDeletingMeetings(true);
@@ -244,7 +252,7 @@ export default function DashboardPage() {
       const res = await fetch(`${BASE}/api/bot-control/delete-meetings`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ uids: config.selectedBotUids }),
+        body: JSON.stringify({ uids: botUids }),
       });
       if (!res.ok) {
         const body = (await res.json()) as { error?: string };
@@ -308,7 +316,7 @@ export default function DashboardPage() {
           </div>
           <div style={{ color: "#374151", fontSize: 14 }}>
             <div>상태: {config.isRunning ? "RUNNING" : "STOPPED"}</div>
-            <div>선택된 봇 계정: {config.selectedBotUids.length}개</div>
+            <div>선택된 봇 계정: {selectedUsers.length}개</div>
             <div>시뮬레이션으로 생성된 봇 모임: {botMeetingsCount}개</div>
           </div>
         </div>
@@ -380,9 +388,9 @@ export default function DashboardPage() {
             <h2 style={{ margin: 0 }}>사용자 목록 (봇 계정 선택)</h2>
             <button
               onClick={deleteSelectedBotMeetings}
-              disabled={saving || loading || deletingMeetings || config.selectedBotUids.length === 0}
+              disabled={saving || loading || deletingMeetings || selectedUsers.length === 0}
               style={buttonGhost}
-              title={config.selectedBotUids.length === 0 ? "먼저 봇 계정을 체크하세요" : "선택된 봇의 모임 일괄 삭제"}
+              title={selectedUsers.length === 0 ? "먼저 봇 계정을 체크하세요" : "선택된 봇의 모임 일괄 삭제"}
             >
               {deletingMeetings ? "삭제 중..." : "봇 모임 삭제"}
             </button>
@@ -395,6 +403,7 @@ export default function DashboardPage() {
                 <thead>
                   <tr style={{ textAlign: "left", borderBottom: "1px solid #e5e7eb" }}>
                     <th style={thStyle}>선택</th>
+                    <th style={thStyle}>로그인 방식</th>
                     <th style={thStyle}>이메일</th>
                     <th style={thStyle}>UID</th>
                     <th style={thStyle}>프로필 이름</th>
@@ -405,7 +414,7 @@ export default function DashboardPage() {
                 </thead>
                 <tbody>
                   {users.map((u) => {
-                    const checked = config.selectedBotUids.includes(u.uid);
+                    const checked = u.isBot;
                     return (
                       <tr key={u.uid} style={{ borderBottom: "1px solid #f3f4f6" }}>
                         <td style={tdStyle}>
@@ -416,6 +425,7 @@ export default function DashboardPage() {
                             onChange={() => void toggleBot(u.uid)}
                           />
                         </td>
+                        <td style={tdStyle}>{u.loginProvider ?? "-"}</td>
                         <td style={tdStyle}>{u.email ?? "-"}</td>
                         <td style={{ ...tdStyle, fontFamily: "monospace" }}>{u.uid}</td>
                         <td style={tdStyle}>{u.profileName ?? u.firebaseDisplayName ?? "-"}</td>

@@ -8,49 +8,56 @@ export const runtime = "nodejs";
 export async function GET() {
   try {
     const { auth } = getFirebaseAdmin();
-    const firebaseUsers = await auth.listUsers(1000);
+    const { data, error } = await supabaseAdmin
+      .from("letsmeet_users")
+      .select("user_id, full_name, trust_score, is_active, is_bot");
 
-    const uids = firebaseUsers.users.map((u) => u.uid);
-    const userMap = new Map<
-      string,
-      { full_name: string | null; trust_score: number | null; is_active: boolean | null }
-    >();
-
-    if (uids.length > 0) {
-      const { data, error } = await supabaseAdmin
-        .from("letsmeet_users")
-        .select("user_id, full_name, trust_score, is_active")
-        .in("user_id", uids);
-
-      if (error) {
-        return NextResponse.json(
-          { error: `Supabase query failed: ${error.message}` },
-          { status: 500 }
-        );
-      }
-
-      for (const row of data ?? []) {
-        userMap.set(row.user_id as string, {
-          full_name: (row.full_name as string | null) ?? null,
-          trust_score: (row.trust_score as number | null) ?? null,
-          is_active: (row.is_active as boolean | null) ?? null,
-        });
-      }
+    if (error) {
+      return NextResponse.json(
+        { error: `Supabase query failed: ${error.message}` },
+        { status: 500 }
+      );
     }
 
-    const users: DashboardUser[] = firebaseUsers.users.map((u) => {
-      const profile = userMap.get(u.uid);
-      return {
-        uid: u.uid,
+    const profileRows = data ?? [];
+
+    // letsmeet_users 테이블을 기준으로 사용자 목록을 만들고,
+    // Firebase 쪽에는 있는 경우에만 이메일/표시 이름을 붙인다.
+    const firebaseUsers = await auth.listUsers(1000);
+    const firebaseMap = new Map<
+      string,
+      { email: string | null; displayName: string | null; provider: string | null }
+    >();
+    for (const u of firebaseUsers.users) {
+      const provider = u.providerData[0]?.providerId ?? null;
+      firebaseMap.set(u.uid, {
         email: u.email ?? null,
-        firebaseDisplayName: u.displayName ?? null,
-        profileName: profile?.full_name ?? null,
-        trustScore: profile?.trust_score ?? null,
-        isActive: profile?.is_active ?? null,
+        displayName: u.displayName ?? null,
+        provider,
+      });
+    }
+
+    const users: DashboardUser[] = profileRows.map((row) => {
+      const uid = row.user_id as string;
+      const firebase = firebaseMap.get(uid);
+      return {
+        uid,
+        email: firebase?.email ?? null,
+        loginProvider: firebase?.provider ?? null,
+        firebaseDisplayName: firebase?.displayName ?? null,
+        profileName: (row.full_name as string | null) ?? null,
+        trustScore: (row.trust_score as number | null) ?? null,
+        isActive: (row.is_active as boolean | null) ?? null,
+        isBot: (row.is_bot as boolean | null) ?? false,
       };
     });
 
-    users.sort((a, b) => (a.email ?? "").localeCompare(b.email ?? ""));
+    users.sort((a, b) => {
+      const aKey = (a.profileName || a.email || a.uid || "").toLowerCase();
+      const bKey = (b.profileName || b.email || b.uid || "").toLowerCase();
+      return aKey.localeCompare(bKey);
+    });
+
     return NextResponse.json({ users });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
