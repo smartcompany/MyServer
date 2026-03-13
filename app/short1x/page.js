@@ -1233,6 +1233,31 @@ export default function Short1xPage() {
             return base;
           })()}
         </p>
+        <p style={{ margin: '0 0 8px 0', fontSize: 12, color: '#444' }}>
+          {(() => {
+            if (
+              !xrpBalance ||
+              xrpBalance === '로딩중' ||
+              !upbitInfo ||
+              upbitInfo === '로딩중' ||
+              upbitInfo.usdtKrwPrice == null ||
+              upbitInfo.xrpPrice == null
+            ) {
+              return 'Bybit USDT + 업비트 XRP 총 평가액을 계산할 수 없습니다.';
+            }
+            const bybitUsdt = Number(xrpBalance.usdMarginBalance);
+            const upbitXrp = Number(upbitInfo.upbitXrpBalance);
+            if (!Number.isFinite(bybitUsdt) || !Number.isFinite(upbitXrp)) {
+              return 'Bybit USDT + 업비트 XRP 총 평가액을 계산할 수 없습니다.';
+            }
+            const bybitKrw = bybitUsdt * Number(upbitInfo.usdtKrwPrice);
+            const upbitKrw = upbitXrp * Number(upbitInfo.xrpPrice);
+            const total = bybitKrw + upbitKrw;
+            return `Bybit USDT 평가액: 약 ${Math.round(bybitKrw).toLocaleString()}원, 업비트 XRP 평가액: 약 ${Math.round(
+              upbitKrw
+            ).toLocaleString()}원, 합계: 약 ${Math.round(total).toLocaleString()}원`;
+          })()}
+        </p>
         <p style={{ margin: '0 0 8px 0', fontSize: 12, color: '#555' }}>
           {xrpBalance && xrpBalance !== '로딩중' && upbitInfo && upbitInfo !== '로딩중'
             ? (() => {
