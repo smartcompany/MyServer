@@ -1,8 +1,6 @@
 // LetsMeet Dashboard instrumentation
-// 폴링은 simulator/letsmeet-simulator.js에서 담당 (대시보드와 같은 프로세스)
+// 기존: pm2 시뮬레이터가 tick/자동 진행을 폴링.
+// 현재는 자동 진행을 사용하지 않고, 대시보드에서 1회 실행만 직접 호출한다.
 export async function register() {
-  if (process.env.NEXT_RUNTIME === "nodejs") {
-    const { startSimulator } = require("./simulator/letsmeet-simulator.js");
-    startSimulator();
-  }
+  // no-op
 }

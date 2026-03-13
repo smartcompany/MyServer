@@ -31,14 +31,6 @@ export async function PUT(request: NextRequest) {
     // selectedBotUids는 letsmeet_users.is_bot으로만 관리. PUT에서는 변경하지 않음.
     state.config = {
       ...state.config,
-      meetingsPerWeekPerBot:
-        typeof body.meetingsPerWeekPerBot === "number"
-          ? Math.max(0, Math.min(14, body.meetingsPerWeekPerBot))
-          : state.config.meetingsPerWeekPerBot,
-      creatorRatio:
-        typeof body.creatorRatio === "number"
-          ? Math.max(0, Math.min(1, body.creatorRatio))
-          : state.config.creatorRatio,
       applicationsPerRunPerBot:
         typeof body.applicationsPerRunPerBot === "number"
           ? Math.max(0, Math.min(10, body.applicationsPerRunPerBot))
@@ -52,7 +44,7 @@ export async function PUT(request: NextRequest) {
 
     await appendLog({
       level: "info",
-      message: `봇 설정 저장: bots=${state.config.selectedBotUids.length}, weekly=${state.config.meetingsPerWeekPerBot}, creatorRatio=${state.config.creatorRatio}, applyN=${state.config.applicationsPerRunPerBot}`,
+      message: `봇 설정 저장: applyN=${state.config.applicationsPerRunPerBot}`,
     });
     await writeBotState(state);
     return NextResponse.json({ config: state.config });

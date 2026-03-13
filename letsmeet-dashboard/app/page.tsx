@@ -8,12 +8,9 @@ const BASE = "/letsmeet-dashboard";
 type LogsResponse = { isRunning: boolean; logs: BotLog[]; botMeetingsCount: number };
 
 const defaultConfig: BotConfig = {
-  selectedBotUids: [],
-  meetingsPerWeekPerBot: 2,
   creatorRatio: 0.4,
   applicationsPerRunPerBot: 2,
   applyOnlyToBotMeetings: true,
-  isRunning: false,
   updatedAt: "",
 };
 
@@ -87,10 +84,7 @@ export default function DashboardPage() {
     [users]
   );
 
-  const creatorPreviewCount = Math.max(
-    selectedUsers.length > 0 ? 1 : 0,
-    Math.round(selectedUsers.length * config.creatorRatio)
-  );
+  const creatorPreviewCount = selectedUsers.length;
 
   async function toggleBot(uid: string) {
     const user = users.find((u) => u.uid === uid);
@@ -287,26 +281,12 @@ export default function DashboardPage() {
 
       <div style={{ display: "grid", gap: 16 }}>
         <div className="card">
-          <h2 style={{ marginTop: 0 }}>운영 제어</h2>
+          <h2 style={{ marginTop: 0 }}>운영 제어 (수동 1회 실행만 지원)</h2>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 12 }}>
-            <button
-              onClick={() => callControl("/api/bot-control/start")}
-              disabled={saving || loading}
-              style={buttonPrimary}
-            >
-              AI 봇 진행 시작
-            </button>
-            <button
-              onClick={() => callControl("/api/bot-control/stop")}
-              disabled={saving || loading}
-              style={buttonGhost}
-            >
-              AI 봇 진행 종료
-            </button>
             <button
               onClick={runSimulateOnce}
               disabled={saving || loading || simulating}
-              style={buttonGhost}
+              style={buttonPrimary}
             >
               {simulating ? "실행 중..." : "지금 1회 실행 (simulate)"}
             </button>
@@ -315,40 +295,14 @@ export default function DashboardPage() {
             </button>
           </div>
           <div style={{ color: "#374151", fontSize: 14 }}>
-            <div>상태: {config.isRunning ? "RUNNING" : "STOPPED"}</div>
             <div>선택된 봇 계정: {selectedUsers.length}개</div>
-            <div>시뮬레이션으로 생성된 봇 모임: {botMeetingsCount}개</div>
+            <div>최근 시뮬레이션에서 생성된 봇 모임: {botMeetingsCount}개</div>
           </div>
         </div>
 
         <div className="card">
-          <h2 style={{ marginTop: 0 }}>봇 정책 설정</h2>
+          <h2 style={{ marginTop: 0 }}>봇 정책 설정 (1회 실행용)</h2>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 12 }}>
-            <label style={labelStyle}>
-              봇별 주간 모임 생성 수
-              <input
-                type="number"
-                min={0}
-                max={14}
-                value={config.meetingsPerWeekPerBot}
-                onChange={(e) =>
-                  setConfig((prev) => ({ ...prev, meetingsPerWeekPerBot: Number(e.target.value || 0) }))
-                }
-                style={inputStyle}
-              />
-            </label>
-            <label style={labelStyle}>
-              모임 생성 담당 비율 (0~1)
-              <input
-                type="number"
-                min={0}
-                max={1}
-                step={0.1}
-                value={config.creatorRatio}
-                onChange={(e) => setConfig((prev) => ({ ...prev, creatorRatio: Number(e.target.value || 0) }))}
-                style={inputStyle}
-              />
-            </label>
             <label style={labelStyle}>
               봇당 신청 개수 (N)
               <input

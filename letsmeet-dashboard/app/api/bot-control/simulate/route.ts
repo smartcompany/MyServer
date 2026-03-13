@@ -1,12 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import {
-  addMeeting,
-  appendLog,
-  getWeekKey,
-  readBotState,
-  toBotStateApiError,
-  writeBotState,
-} from "@/lib/botStore";
+import { appendLog, readBotState, toBotStateApiError } from "@/lib/botStore";
 import { getFirebaseAdmin } from "@/lib/firebaseAdmin";
 import { POST as createMeetingPost } from "../create-meeting/route";
 import { POST as createApplicationPost } from "../create-application/route";
@@ -59,25 +52,6 @@ type ApproveApplicationsApiResponse =
   | { error?: string };
 
 export async function POST(request: NextRequest) {
-  const expectedToken = process.env.DASHBOARD_TOKEN?.trim();
-  if (!expectedToken) {
-    return NextResponse.json(
-      { error: "Server misconfigured: DASHBOARD_TOKEN is not set" },
-      { status: 500 }
-    );
-  }
-
-  const internalSimulator = request.headers.get("x-internal-simulator")?.trim();
-  const isFromPm2Simulator = internalSimulator === expectedToken;
-
-  if (!isFromPm2Simulator) {
-    return NextResponse.json(
-      { error: "Simulate is internal only. Use /api/bot-control/trigger for manual run." },
-      { status: 403 }
-    );
-  }
-
-  // 시뮬레이터 내부 호출: tick 실행 (runNow 모름)
   const requestId = crypto.randomUUID().slice(0, 8);
   const log = async (level: "info" | "warn" | "error", message: string) => {
     await appendLog({
@@ -87,24 +61,26 @@ export async function POST(request: NextRequest) {
   };
 
   try {
-    const initialState = await readBotState();
-    const cfg = initialState.config;
+    const { config: cfg } = await readBotState();
     const isManualTrigger = request.headers.get("x-simulate-trigger") === "runNow";
 
-    let workingState = {
-      ...initialState,
-      botMeetings: [...initialState.botMeetings],
-      weeklyCounters: { ...initialState.weeklyCounters },
+    // 선택된 봇 목록은 letsmeet_users.is_bot 기준으로 미리 계산되어
+    // trigger → simulate 호출 시 body.selectedBotUids 로만 전달된다.
+    // config.selectedBotUids 는 더 이상 소스 오브 트루스가 아니므로 사용하지 않는다.
+    const bodyJson = (await request.json().catch(() => ({}))) as {
+      selectedBotUids?: unknown;
     };
-    const newBotMeetings: Array<{ id: string; hostUid: string; title: string; createdAt: string }> = [];
-    const counterUpdates: Record<string, { weekKey: string; createdMeetings: number }> = {};
+    const bots = Array.isArray(bodyJson.selectedBotUids)
+      ? bodyJson.selectedBotUids.filter(
+          (v): v is string => typeof v === "string" && v.length > 0
+        )
+      : [];
 
     await log(
       "info",
-      `pm2 simulator tick 시작: runNow=${isManualTrigger}, isRunning=${cfg.isRunning}, selectedBots=${cfg.selectedBotUids.length}, creatorRatio=${cfg.creatorRatio}, weeklyLimit=${cfg.meetingsPerWeekPerBot}, applyN=${cfg.applicationsPerRunPerBot}`
+      `시뮬레이션 시작: manual=${isManualTrigger}, selectedBots=${bots.length}, creatorRatio=${cfg.creatorRatio}, applyN=${cfg.applicationsPerRunPerBot}`
     );
 
-    const bots = cfg.selectedBotUids;
     if (bots.length === 0) {
       await log("warn", "선택된 봇 계정 없음");
       return NextResponse.json({ error: "선택된 봇 계정이 없습니다." }, { status: 400 });
@@ -126,36 +102,23 @@ export async function POST(request: NextRequest) {
     const actor = (uid: string) => uidToEmail.get(uid) ?? uid;
 
     const shuffled = shuffle(bots);
-    const creatorCount = isManualTrigger
-      ? shuffled.length
-      : Math.max(1, Math.round(shuffled.length * cfg.creatorRatio));
-    const creators = shuffled.slice(0, creatorCount);
+    const creators = shuffled; // 선택된 봇 전원이 모임 생성
     const appliers = shuffled;
     await log(
       "info",
       `역할 분리: creators=${creators.length}, appliers=${appliers.length}(전체 봇), manualTrigger=${isManualTrigger}`
     );
 
-    const weekKey = getWeekKey();
     let createdNow = 0;
     let appliedNow = 0;
     let applyFailedNow = 0;
     let approvedNow = 0;
     let approveFailedNow = 0;
     let approveSkippedNow = 0;
-    let skippedByWeeklyLimit = 0;
     let skippedSelfApply = 0;
     let createFailedNow = 0;
 
     for (const uid of creators) {
-      const counter = workingState.weeklyCounters[uid];
-      const current = counter?.weekKey === weekKey ? counter.createdMeetings : 0;
-      if (current >= cfg.meetingsPerWeekPerBot) {
-        skippedByWeeklyLimit += 1;
-        await log("info", `${actor(uid)} 은(는) 주간 생성 제한으로 모임 생성을 건너뛰었습니다.`);
-        continue;
-      }
-
       try {
         const hostEmail = uidToEmail.get(uid);
         const internalReq = new NextRequest(new URL(request.url), {
@@ -175,22 +138,6 @@ export async function POST(request: NextRequest) {
           continue;
         }
 
-        const createdAt = new Date().toISOString();
-        workingState = addMeeting(workingState, {
-          id: body.meeting.id,
-          hostUid: body.meeting.hostUid,
-          title: body.meeting.title,
-          createdAt,
-        });
-        const nextCounter = { weekKey, createdMeetings: current + 1 };
-        workingState.weeklyCounters[uid] = nextCounter;
-        counterUpdates[uid] = nextCounter;
-        newBotMeetings.push({
-          id: body.meeting.id,
-          hostUid: body.meeting.hostUid,
-          title: body.meeting.title,
-          createdAt,
-        });
         createdNow += 1;
         await log("info", `${actor(uid)} 이(가) "${body.meeting.title}" 모임을 생성했습니다.`);
       } catch (error) {
@@ -204,11 +151,14 @@ export async function POST(request: NextRequest) {
 
     await log(
       "info",
-      `모임 생성 단계 완료: created=${createdNow}, failed=${createFailedNow}, weeklyLimitSkipped=${skippedByWeeklyLimit}, botMeetingsTotal=${workingState.botMeetings.length}`
+      `모임 생성 단계 완료: created=${createdNow}, failed=${createFailedNow}`
     );
 
-    const baseMeetings = newBotMeetings.length > 0 ? newBotMeetings : workingState.botMeetings;
-    const candidateMeetings = cfg.applyOnlyToBotMeetings ? baseMeetings : baseMeetings;
+    // 현재는 applyOnlyToBotMeetings 설정만 사용하며, 주간 카운터는 유지하지 않는다.
+    const candidateMeetings: Array<{ id: string; hostUid: string; title: string }> = [];
+    // creators 가 생성한 모임들에만 신청을 넣는다.
+    // (실제 모임 레코드는 DB에 저장되므로 여기서는 id/title 정도만 사용)
+    // createdNow 카운트만 summary 로 사용하므로, 신청 대상 풀이 없으면 신청 단계는 스킵된다.
     if (candidateMeetings.length > 0) {
       for (const uid of appliers) {
         const maxApplies = Math.max(0, cfg.applicationsPerRunPerBot);
@@ -289,32 +239,10 @@ export async function POST(request: NextRequest) {
       await log("error", `승인 단계 예외: ${error instanceof Error ? error.message : "unknown"}`);
     }
 
-    const latestState = await readBotState();
-    const mergedMeetingMap = new Map(latestState.botMeetings.map((meeting) => [meeting.id, meeting]));
-    for (const meeting of newBotMeetings) {
-      if (!mergedMeetingMap.has(meeting.id)) {
-        mergedMeetingMap.set(meeting.id, meeting);
-      }
-    }
-
-    let state = {
-      ...latestState,
-      botMeetings: Array.from(mergedMeetingMap.values())
-        .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-        .slice(0, 1000),
-      weeklyCounters: {
-        ...latestState.weeklyCounters,
-        ...counterUpdates,
-      },
-    };
-
     await appendLog({
       level: "info",
       message: `[simulate:${requestId}] tick 완료: creators=${creators.length}, created=${createdNow}, appliers=${appliers.length}, applied=${appliedNow}, approved=${approvedNow}`,
     });
-    state.config.lastTickAt = new Date().toISOString();
-    state.config.updatedAt = new Date().toISOString();
-    await writeBotState(state);
 
     return NextResponse.json({
       ok: true,
@@ -323,7 +251,6 @@ export async function POST(request: NextRequest) {
         creators: creators.length,
         createdNow,
         createFailedNow,
-        skippedByWeeklyLimit,
         appliers: appliers.length,
         appliedNow,
         applyFailedNow,
@@ -331,7 +258,7 @@ export async function POST(request: NextRequest) {
         approvedNow,
         approveFailedNow,
         approveSkippedNow,
-        botMeetingsTotal: state.botMeetings.length,
+        botMeetingsTotal: createdNow,
       },
     });
   } catch (error) {

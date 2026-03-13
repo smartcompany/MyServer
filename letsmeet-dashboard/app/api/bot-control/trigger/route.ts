@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import { appendLog, readBotState, writeBotState } from "@/lib/botStore";
+import { appendLog } from "@/lib/botStore";
+import { POST as simulatePost } from "../simulate/route";
 
 export const runtime = "nodejs";
 
-/** UI/외부에서 "1회 시뮬레이션" 요청 시 runNow만 설정. 실제 tick은 letsmeet-simulator 폴링이 처리. */
+/** UI/외부에서 "1회 시뮬레이션" 요청 시 즉시 simulate tick 1회 실행. */
 export async function POST(request: NextRequest) {
   const expectedToken = process.env.DASHBOARD_TOKEN?.trim();
   if (!expectedToken) {
@@ -18,18 +19,29 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const state = await readBotState();
-  const body = await request.json().catch(() => ({})) as { selectedBotUids?: unknown };
-  if (Array.isArray(body.selectedBotUids)) {
-    const uids = body.selectedBotUids.filter((v): v is string => typeof v === "string" && v.length > 0);
-    state.config.selectedBotUids = [...new Set(uids)];
-  }
-  state.config.runNow = true;
-  state.config.updatedAt = new Date().toISOString();
-  await writeBotState(state);
+  const body = (await request.json().catch(() => ({}))) as { selectedBotUids?: unknown };
+  const selectedBotUids = Array.isArray(body.selectedBotUids)
+    ? body.selectedBotUids.filter(
+        (v): v is string => typeof v === "string" && v.length > 0
+      )
+    : [];
+
+  // simulate 라우트를 직접 호출하여 즉시 tick 1회 실행
+  const internalReq = new NextRequest(new URL(request.url), {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-simulate-trigger": "runNow",
+    },
+    body: JSON.stringify({ selectedBotUids }),
+  });
+
   await appendLog({
     level: "info",
-    message: `1회 시뮬레이션 트리거됨 (선택 봇 ${state.config.selectedBotUids.length}개) - 폴링이 tick을 실행할 때까지 기다려주세요 (최대 ~10초).`,
+    message: `1회 시뮬레이션 즉시 실행 (선택 봇 ${selectedBotUids.length}개)`,
   });
-  return NextResponse.json({ ok: true, triggered: true });
+
+  const res = await simulatePost(internalReq);
+  const resBody = await res.json();
+  return NextResponse.json(resBody, { status: res.status });
 }
