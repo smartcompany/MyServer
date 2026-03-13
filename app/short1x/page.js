@@ -24,6 +24,7 @@ function mapUpbitInfo(data) {
     upbitKrwBalance: data.upbitKrwBalance,
     upbitUsdtBalance: data.upbitUsdtBalance,
     upbitXrpBuyOrderKrw: data.upbitXrpBuyOrderKrw,
+    upbitUsdtBuyOrderKrw: data.upbitUsdtBuyOrderKrw,
     xrpPrice: data.xrpPrice,
     usdKrwRate: data.usdKrwRate,
     usdtKrwPrice: data.usdtKrwPrice,
@@ -777,6 +778,13 @@ export default function Short1xPage() {
           <strong>업비트 XRP 지정가 매수 주문 금액:</strong>{' '}
           {upbitInfo && upbitInfo !== '로딩중' && upbitInfo.upbitXrpBuyOrderKrw != null
             ? `${Number(upbitInfo.upbitXrpBuyOrderKrw).toLocaleString()}원`
+            : '알 수 없음'}
+          <span style={{ color: '#666', fontSize: '0.9em' }}> (기준)</span>
+        </p>
+        <p style={{ margin: '0 0 4px 0' }}>
+          <strong>업비트 USDT 지정가 매수 주문 금액:</strong>{' '}
+          {upbitInfo && upbitInfo !== '로딩중' && upbitInfo.upbitUsdtBuyOrderKrw != null
+            ? `${Number(upbitInfo.upbitUsdtBuyOrderKrw).toLocaleString()}원`
             : '알 수 없음'}
           <span style={{ color: '#666', fontSize: '0.9em' }}> (기준)</span>
         </p>

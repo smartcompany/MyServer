@@ -159,7 +159,9 @@ export async function POST(request) {
       chanceData?.withdraw_limit?.can_withdraw === true ||
       String(chanceData?.withdraw_limit?.can_withdraw).toLowerCase() === 'true';
 
-    const available = Number.isFinite(balance) && Number.isFinite(locked) ? balance - locked : NaN;
+    // Upbit 앱에서 보이는 "보유 {asset}"과 최대한 맞추기 위해
+    // 여기서는 locked를 빼지 않고 balance 자체를 available로 사용한다.
+    const available = Number.isFinite(balance) ? balance : NaN;
 
     console.error(`[short1x][upbit-withdraw][${reqId}] withdraw chance`, {
       balance,
@@ -185,7 +187,14 @@ export async function POST(request) {
     }
 
     // 업비트는 보통 출금 수수료가 별도로 차감됩니다: amount + fee <= available 이어야 함
-    if (Number.isFinite(available) && Number.isFinite(fee) && amount + fee > available) {
+    // 다만 일부 계정/상품에서는 available이 음수로 내려오는 케이스가 있어,
+    // 이 경우에는 사전 차단하지 않고 업비트 원본 응답에 맡깁니다.
+    if (
+      Number.isFinite(available) &&
+      available >= 0 &&
+      Number.isFinite(fee) &&
+      amount + fee > available
+    ) {
       const maxSendable = Math.max(0, available - fee);
       return Response.json(
         {

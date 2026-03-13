@@ -41,6 +41,7 @@ export async function GET(request) {
       upbitKrwBalance: null,
       upbitUsdtBalance: null,
       upbitXrpBuyOrderKrw: null,
+      upbitUsdtBuyOrderKrw: null,
       xrpPrice: null,
       usdKrwRate: null,
       usdtKrwPrice: null,
@@ -74,7 +75,7 @@ export async function GET(request) {
       result.accountError = `업비트 계정 조회 실패: ${e?.message || '네트워크 오류'}`;
     }
 
-    // 2) 체결 대기 주문 중 매수 주문 금액 합계
+    // 2) 체결 대기 주문 중 매수 주문 금액 합계 (XRP, USDT)
     try {
       // GET /v1/orders 에 쿼리스트링을 붙이면 query_hash 서명이 필요해서
       // 여기서는 파라미터 없이 전체 wait 주문을 가져온 뒤 KRW-XRP만 필터링합니다.
@@ -86,15 +87,22 @@ export async function GET(request) {
         result.ordersError = `주문 정보 조회 실패: ${errText || ordersRes.status}`;
       } else {
         const orders = await ordersRes.json();
-        let sum = 0;
+        let sumXrp = 0;
+        let sumUsdt = 0;
         if (Array.isArray(orders)) {
           for (const o of orders) {
-            if (o.market === 'KRW-XRP' && o.side === 'bid' && o.price != null && o.volume != null) {
-              sum += Number(o.price) * Number(o.volume);
+            if (o.side === 'bid' && o.price != null && o.volume != null) {
+              const value = Number(o.price) * Number(o.volume);
+              if (o.market === 'KRW-XRP') {
+                sumXrp += value;
+              } else if (o.market === 'KRW-USDT') {
+                sumUsdt += value;
+              }
             }
           }
         }
-        result.upbitXrpBuyOrderKrw = Math.round(sum);
+        result.upbitXrpBuyOrderKrw = Math.round(sumXrp);
+        result.upbitUsdtBuyOrderKrw = Math.round(sumUsdt);
       }
     } catch (e) {
       result.ordersError = `주문 정보 조회 실패: ${e?.message || '네트워크 오류'}`;
