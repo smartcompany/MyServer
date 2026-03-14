@@ -37,17 +37,22 @@ export async function GET(request) {
       return Response.json({ error: message }, { status: 502 });
     }
 
-    // 업비트는 배열을 그대로 반환
+    // 업비트는 배열을 그대로 반환. XRP, USDT 등 입금 주소가 있는 것만 사용
     const rawList = Array.isArray(data) ? data : (data.addresses || data.data || []);
     const addresses = Array.isArray(rawList)
       ? rawList
-          .filter((item) => item.currency === 'XRP' && item.deposit_address)
-          .map((item) => ({
-            currency: item.currency,
-            net_type: item.net_type || 'XRP',
-            deposit_address: item.deposit_address,
-            secondary_address: item.secondary_address || '',
-          }))
+          .filter((item) => (item.currency === 'XRP' || item.currency === 'USDT') && (item.deposit_address || item.withdraw_address))
+          .map((item) => {
+            const addr = item.deposit_address || item.withdraw_address || '';
+            return {
+              currency: item.currency,
+              net_type: item.net_type || (item.currency === 'USDT' ? 'TRX' : 'XRP'),
+              deposit_address: addr,
+              withdraw_address: addr,
+              secondary_address: item.secondary_address || '',
+              exchange_name: item.exchange_name || '업비트',
+            };
+          })
       : [];
 
     return Response.json({ addresses });
