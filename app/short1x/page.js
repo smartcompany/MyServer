@@ -69,6 +69,7 @@ export default function Short1xPage() {
   const [lastOrderId, setLastOrderId] = useState(null); // 마지막 주문 ID (상태 확인용)
   const [orderStatusLoading, setOrderStatusLoading] = useState(false);
   const [bybitSymbol, setBybitSymbol] = useState('XRPUSD'); // 'XRPUSD' | 'XRPUSDT'
+  const [bybitFunding, setBybitFunding] = useState(null);  // { xrpusd: { fundingRateAnnualized, avgFundingRate10dAnnualized }, xrpusdt: {...} }
   const [remainderQty, setRemainderQty] = useState(null); // 부분 체결 시 미체결 수량 (나머지로 주문용)
 
   useEffect(() => {
@@ -139,6 +140,17 @@ export default function Short1xPage() {
         })
         .catch(() => {
           if (!cancelled) setBybitPosition(null);
+        });
+
+      fetch('/api/short1x/bybit-funding', { headers: { Authorization: 'Bearer ' + token } })
+        .then((res) => res.json())
+        .then((data) => {
+          if (cancelled) return;
+          if (data.error) setBybitFunding(null);
+          else setBybitFunding(data);
+        })
+        .catch(() => {
+          if (!cancelled) setBybitFunding(null);
         });
     };
 
@@ -1205,9 +1217,29 @@ export default function Short1xPage() {
             </select>
           </label>
         </div>
-        <p style={{ color: '#666', marginBottom: 16 }}>
-          Bybit <strong>{bybitSymbol}</strong> 퍼페추얼에 <strong>1배 레버리지</strong>로 숏 포지션을 엽니다. 시장가가 아닌{' '}
-          <strong>Post-Only</strong> 리밋 주문으로 수수료를 최소화합니다.
+        <p style={{ margin: '0 0 8px 0', fontSize: 13, color: '#333' }}>
+          {bybitFunding && (bybitSymbol === 'XRPUSDT' ? bybitFunding.xrpusdt : bybitFunding.xrpusd) ? (
+            (() => {
+              const info = bybitSymbol === 'XRPUSDT' ? bybitFunding.xrpusdt : bybitFunding.xrpusd;
+              const rawRate = info.fundingRate; // 8h당 펀딩피 (소수, 예: 0.0001 = 0.01%)
+              const avg10 = info.avgFundingRate10d; // 10일 평균 펀딩피 (소수)
+              const sum10 = info.sumFundingRate10d; // 10일 합산 펀딩피 (소수)
+              return (
+                <>
+                  <strong>{bybitSymbol} 현재 펀딩피:</strong>{' '}
+                  {rawRate != null ? `${Number(rawRate) >= 0 ? '+' : ''}${(Number(rawRate) * 100).toFixed(4)}% (8h)` : '—'}
+                  {' · '}
+                  <strong>10일 평균 펀딩피:</strong>{' '}
+                  {avg10 != null ? `${Number(avg10) >= 0 ? '+' : ''}${(Number(avg10) * 100).toFixed(4)}% (8h)` : '—'}
+                  {' · '}
+                  <strong>10일 합산 펀딩피:</strong>{' '}
+                  {sum10 != null ? `${Number(sum10) >= 0 ? '+' : ''}${(Number(sum10) * 100).toFixed(4)}% (10일)` : '—'}
+                </>
+              );
+            })()
+          ) : (
+            <>펀딩 레이트 조회 중… (1배 숏 시 펀딩 수급/지급 참고)</>
+          )}
         </p>
         <p style={{ margin: '0 0 8px 0', fontSize: 12, color: '#888' }}>
           최소 주문 금액: 5 USD (수량 × 지정가가 5 USD 이상이어야 합니다)
