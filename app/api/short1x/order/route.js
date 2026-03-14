@@ -71,22 +71,9 @@ export async function POST(request) {
       return Response.json({ error: '유효한 지정가 가격(USDT)을 입력해주세요.' }, { status: 400 });
     }
 
-    // 최소 주문 금액 체크용 노션:
-    // - XRPUSD: qty(XRP)×price
-    // - XRPUSDT: 사용자가 입력한 주문 금액(USDT)
+    // 노션(로그용): XRPUSD = qty×price, XRPUSDT = 사용자 입력 USDT
     const notionalUsd =
       symbol === 'XRPUSDT' ? Number(usdtValue) : Number(qty) * Number(price);
-    if (notionalUsd < 5) {
-      return Response.json(
-        {
-          error: '주문 금액(수량×지정가)이 최소 5 USD 이상이어야 합니다.',
-          retCode: 110094,
-          notionalUsd,
-          minOrderValueUsd: 5,
-        },
-        { status: 400 }
-      );
-    }
 
     console.log(`[short1x][order][${reqId}] 파라미터 검증 후`, {
       qty,
