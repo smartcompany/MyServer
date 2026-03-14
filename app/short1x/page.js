@@ -541,17 +541,17 @@ export default function Short1xPage() {
     const ratio = Math.max(0, Math.min(100, pct)) / 100;
 
     if (bybitSymbol === 'XRPUSDT') {
-      // XRPUSDT: 슬라이더는 보유 USDT (usdtAvailable)를 기준으로 주문 금액(USDT)을 정한다.
-      const usdtAvailRaw = Number(xrpBalance.usdtAvailable);
-      const usdtAvail =
-        Number.isFinite(usdtAvailRaw) && usdtAvailRaw > 0
-          ? Math.floor(usdtAvailRaw)
+      // XRPUSDT: 슬라이더는 UNIFIED 계정 가용 마진(usdAvailable)을 기준으로 주문 금액(USDT)을 정한다.
+      const usdAvailRaw = Number(xrpBalance.usdAvailable);
+      const usdAvail =
+        Number.isFinite(usdAvailRaw) && usdAvailRaw > 0
+          ? Math.floor(usdAvailRaw * 100) / 100
           : NaN;
-      if (!Number.isFinite(usdtAvail) || usdtAvail <= 0) {
+      if (!Number.isFinite(usdAvail) || usdAvail <= 0) {
         setQty('');
         return;
       }
-      const safeUsdt = usdtAvail * ratio * 0.999;
+      const safeUsdt = usdAvail * ratio * 0.999;
       const roundedUsdt = Math.floor(safeUsdt * 100) / 100;
       setQty(roundedUsdt > 0 ? roundedUsdt.toFixed(2) : '');
     } else {
