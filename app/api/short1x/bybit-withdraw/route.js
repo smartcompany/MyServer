@@ -1,6 +1,24 @@
-import { verifyToken } from '../../trade/middleware';
+import { verifyToken, checkRateLimit } from '../../trade/middleware';
 import { bybitSignedRequest, getBybitConfig } from '../bybit';
 import { v4 as uuidv4 } from 'uuid';
+import jwt from 'jsonwebtoken';
+
+const UPBIT_ACC_KEY = process.env.UPBIT_ACC_KEY;
+const UPBIT_SEC_KEY = process.env.UPBIT_SEC_KEY;
+const UPBIT_SERVER = 'https://api.upbit.com';
+
+function makeUpbitToken() {
+  if (!UPBIT_ACC_KEY || !UPBIT_SEC_KEY) {
+    throw new Error('UPBIT_ACC_KEY, UPBIT_SEC_KEY가 설정되지 않았습니다.');
+  }
+  return jwt.sign({ access_key: UPBIT_ACC_KEY, nonce: uuidv4() }, UPBIT_SEC_KEY);
+}
+
+function maskAddress(addr) {
+  if (!addr) return '';
+  if (addr.length <= 12) return addr;
+  return `${addr.slice(0, 6)}...${addr.slice(-6)}`;
+}
 
 /**
  * POST: Bybit UNIFIED 계정에서 코인 출금 (업비트 등 외부 주소로)
@@ -11,7 +29,7 @@ import { v4 as uuidv4 } from 'uuid';
  *   chain?: string,
  *   asset?: 'XRP' | 'USDT'
  * }
- * - address, tag: 업비트 출금 주소록과 동일한 주소/태그. Bybit 주소록에 미리 등록 필수.
+ * - address, tag: 업비트 입금 주소 목록(화이트리스트) 중에서만 허용
  * - asset: 미입력 시 "XRP"
  * - chain: 미입력 시 XRP는 "XRP", USDT는 "TRX" 등으로 프론트에서 전달
  */
@@ -23,6 +41,17 @@ export async function POST(request) {
   if (auth.error) {
     console.error(`[short1x][bybit-withdraw][${reqId}] auth failed`, auth.error);
     return Response.json({ error: auth.error }, { status: auth.status });
+  }
+
+  // 출금 남용 방지: 사용자당 1분에 3회까지 허용
+  const userId =
+    auth.user?.id || auth.user?.userId || auth.user?.sub || auth.user?.email || 'unknown';
+  const limited = checkRateLimit(userId, 'short1x:bybit-withdraw', 3, 60_000);
+  if (limited) {
+    return Response.json(
+      { error: 'Bybit 출금 요청이 너무 자주 발생하고 있습니다. 잠시 후 다시 시도해주세요.' },
+      { status: 429 }
+    );
   }
 
   try {
@@ -67,6 +96,68 @@ export async function POST(request) {
   }
   if (!chain) {
     chain = asset === 'USDT' ? 'TRX' : 'XRP';
+  }
+
+  // 1차 방어: 업비트 입금 주소 목록(화이트리스트)와 일치하는 주소/태그/체인인지 확인
+  try {
+    const token = makeUpbitToken();
+    const res = await fetch(`${UPBIT_SERVER}/v1/deposits/coin_addresses`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Accept: 'application/json',
+      },
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      const message = data?.error?.message || data?.error?.name || '입금 주소(화이트리스트) 조회 실패';
+      return Response.json({ error: message }, { status: 502 });
+    }
+
+    const rawList = Array.isArray(data) ? data : data.addresses || data.data || [];
+    const addresses = Array.isArray(rawList)
+      ? rawList
+          .filter(
+            (item) =>
+              (item.currency === 'XRP' || item.currency === 'USDT') &&
+              (item.deposit_address || item.withdraw_address)
+          )
+          .map((item) => {
+            const addr = item.deposit_address || item.withdraw_address || '';
+            return {
+              currency: item.currency,
+              net_type: item.net_type || (item.currency === 'USDT' ? 'TRX' : 'XRP'),
+              deposit_address: addr,
+              withdraw_address: addr,
+              secondary_address: item.secondary_address || '',
+            };
+          })
+      : [];
+
+    const matched = addresses.find(
+      (item) =>
+        item.currency === asset &&
+        item.withdraw_address === address &&
+        item.net_type === chain &&
+        String(item.secondary_address || '') === String(tag || '')
+    );
+
+    if (!matched) {
+      return Response.json(
+        {
+          error: `업비트에 등록된 ${asset} 입금 주소(화이트리스트)가 아닙니다. 업비트에 ${asset} 입금 주소를 먼저 등록한 뒤 다시 시도해주세요.`,
+        },
+        { status: 400 }
+      );
+    }
+  } catch (err) {
+    return Response.json(
+      {
+        error:
+          err?.message ||
+          '업비트 입금 주소(화이트리스트) 검증 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.',
+      },
+      { status: 502 }
+    );
   }
 
   const payload = {

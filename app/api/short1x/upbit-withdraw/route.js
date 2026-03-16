@@ -1,4 +1,4 @@
-import { verifyToken } from '../../trade/middleware';
+import { verifyToken, checkRateLimit } from '../../trade/middleware';
 import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
 import querystring from 'querystring';
@@ -53,6 +53,17 @@ export async function POST(request) {
     if (auth.error) {
       console.error(`[short1x][upbit-withdraw][${reqId}] auth failed`, auth.error);
       return Response.json({ error: auth.error }, { status: auth.status });
+    }
+
+    // 출금 남용 방지: 사용자당 1분에 3회까지 허용
+    const userId =
+      auth.user?.id || auth.user?.userId || auth.user?.sub || auth.user?.email || 'unknown';
+    const limited = checkRateLimit(userId, 'short1x:upbit-withdraw', 3, 60_000);
+    if (limited) {
+      return Response.json(
+        { error: '업비트 출금 요청이 너무 자주 발생하고 있습니다. 잠시 후 다시 시도해주세요.' },
+        { status: 429 }
+      );
     }
 
     let amount;

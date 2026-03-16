@@ -32,9 +32,8 @@ export async function POST(request) {
     );
   }
 
-  let qty;          // 검증/계산용 qty
-  let usdtValue;    // XRPUSDT에서 사용자가 보낸 주문 금액(USDT)
-  let price;        // 지정가 (USDT)
+  let qty;   // 요청: XRPUSD면 USD 금액, XRPUSDT면 XRP 수량. Bybit에는 그대로 전달(반올림/절삭만)
+  let price; // 지정가 (USDT)
   let side;
   let symbol = DEFAULT_SYMBOL;
   let category = DEFAULT_CATEGORY;
@@ -50,30 +49,24 @@ export async function POST(request) {
       category = 'linear';
     }
     if (qty == null || qty === '') {
-      return Response.json({ error: '수량(qty)을 입력해주세요.' }, { status: 400 });
+      return Response.json({ error: '수량/금액을 입력해주세요.' }, { status: 400 });
     }
     if (price == null || price === '') {
       return Response.json({ error: '지정가 가격(price)을 입력해주세요.' }, { status: 400 });
     }
 
     const qtyNum = Number(qty);
-    qty = String(qtyNum);
-    if (symbol === 'XRPUSDT') {
-      usdtValue = qtyNum; // XRPUSDT에서는 qty는 USDT 금액 의미
-    }
     price = String(Number(price));
-
-    if (Number(qty) <= 0 || !Number.isFinite(Number(qty))) {
-      const what = symbol === 'XRPUSDT' ? 'USDT 금액' : 'XRP 수량';
+    if (Number(qtyNum) <= 0 || !Number.isFinite(qtyNum)) {
+      const what = symbol === 'XRPUSD' ? 'USD 금액' : 'XRP 수량';
       return Response.json({ error: `유효한 ${what}을 입력해주세요.` }, { status: 400 });
     }
     if (Number(price) <= 0 || !Number.isFinite(Number(price))) {
       return Response.json({ error: '유효한 지정가 가격(USDT)을 입력해주세요.' }, { status: 400 });
     }
 
-    // 노션(로그용): XRPUSD = qty×price, XRPUSDT = 사용자 입력 USDT
-    const notionalUsd =
-      symbol === 'XRPUSDT' ? Number(usdtValue) : Number(qty) * Number(price);
+    const notionalUsd = symbol === 'XRPUSD' ? qtyNum : qtyNum * Number(price);
+    qty = String(qtyNum);
 
     console.log(`[short1x][order][${reqId}] 파라미터 검증 후`, {
       qty,
@@ -85,29 +78,11 @@ export async function POST(request) {
     return Response.json({ error: '요청 본문이 올바르지 않습니다.' }, { status: 400 });
   }
 
-  // Bybit에 넘기는 qty:
-  // - XRPUSD(inverse): qty = USD 노션(정수 USD)
-  // - XRPUSDT(linear): qty = XRP 수량 = (주문 금액 USDT / 가격)
+  // Bybit에 넘기는 qty: 받은 값 그대로 전달. XRPUSD는 정수 USD, XRPUSDT는 XRP 수량(소수 한 자리 절삭)
   if (symbol === 'XRPUSD') {
-    const qtyUsd = Number(qty) * Number(price);
-    qty = String(Math.round(qtyUsd));
+    qty = String(Math.round(Number(qty)));
   } else {
-    const usdtValueNum = Number(usdtValue);   // 사용자가 입력한 주문 금액(USDT)
-    const priceNum = Number(price);          // 지정가(USDT)
-    const xrpQty = priceNum > 0 ? usdtValueNum / priceNum : 0;
-    console.log(`[short1x][order][${reqId}] XRPUSDT computed qty`, {
-      usdtValue: usdtValueNum,
-      priceNum,
-      xrpQty,
-    });
-    if (!Number.isFinite(xrpQty) || xrpQty <= 0) {
-      return Response.json(
-        { error: '주문 금액이 너무 작습니다. USDT 금액과 가격을 확인해주세요.' },
-        { status: 400 }
-      );
-    }
-    // Bybit UI처럼 소수 한 자리까지 표시되는 걸 감안해서 소수 한 자리까지 전송
-    qty = String(Math.floor(xrpQty * 10) / 10);
+    qty = String(Math.floor(Number(qty) * 10) / 10);
   }
 
   try {

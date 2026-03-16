@@ -468,14 +468,17 @@ export default function Short1xPage() {
     const trimPrice = (shortPrice || '').trim();
 
     if (!trimQty || Number(trimQty) <= 0 || !Number.isFinite(Number(trimQty))) {
-      setMessage({ type: 'error', text: 'XRP 수량을 올바르게 입력해주세요.' });
+      setMessage({
+        type: 'error',
+        text: bybitSymbol === 'XRPUSD' ? 'USD 금액을 올바르게 입력해주세요.' : 'XRP 수량을 올바르게 입력해주세요.',
+      });
       return;
     }
     if (!trimPrice || Number(trimPrice) <= 0 || !Number.isFinite(Number(trimPrice))) {
       setMessage({ type: 'error', text: '지정가 가격(USDT)을 올바르게 입력해주세요.' });
       return;
     }
-    const notionalUsd = Number(trimQty) * Number(trimPrice);
+    const notionalUsd = bybitSymbol === 'XRPUSD' ? Number(trimQty) : Number(trimQty) * Number(trimPrice);
     if (notionalUsd < 5) {
       setMessage({
         type: 'error',
@@ -540,50 +543,44 @@ export default function Short1xPage() {
     if (!xrpBalance || xrpBalance === '로딩중') return;
     const ratio = Math.max(0, Math.min(100, pct)) / 100;
 
-    if (bybitSymbol === 'XRPUSDT') {
-      // XRPUSDT: 슬라이더는 UNIFIED 계정 가용 마진(usdAvailable)을 기준으로 주문 금액(USDT)을 정한다.
-      const usdAvailRaw = Number(xrpBalance.usdAvailable);
-      const usdAvail =
-        Number.isFinite(usdAvailRaw) && usdAvailRaw > 0
-          ? Math.floor(usdAvailRaw * 100) / 100
-          : NaN;
-      if (!Number.isFinite(usdAvail) || usdAvail <= 0) {
+    const usdAvailableRaw = Number(xrpBalance.usdAvailable);
+    const usdAvailable =
+      Number.isFinite(usdAvailableRaw) && usdAvailableRaw > 0
+        ? Math.floor(usdAvailableRaw)
+        : NaN;
+
+    if (bybitSymbol === 'XRPUSD') {
+      // XRPUSD: 입력값 = USD 금액. 가용 마진(USD)에 비율 적용
+      if (!Number.isFinite(usdAvailable) || usdAvailable <= 0) {
         setQty('');
         return;
       }
-      const safeUsdt = usdAvail * ratio * 0.999;
-      const roundedUsdt = Math.floor(safeUsdt * 100) / 100;
-      setQty(roundedUsdt > 0 ? roundedUsdt.toFixed(2) : '');
+      const safe = Math.floor(usdAvailable * ratio * 0.999);
+      setQty(safe > 0 ? String(safe) : '');
+      return;
+    }
+
+    // XRPUSDT: 입력값 = XRP 수량. 가용 마진 ÷ 지정가 = 최대 XRP, 비율 적용
+    const price = Number(shortPrice);
+    let baseQty = NaN;
+    if (Number.isFinite(price) && price > 0 && Number.isFinite(usdAvailable) && usdAvailable > 0) {
+      baseQty = usdAvailable / price;
     } else {
-      // XRPUSD: 기존처럼 USD 마진/가격 → XRP 수량 기준
-      const price = Number(shortPrice);
-      const usdAvailableRaw = Number(xrpBalance.usdAvailable);
-      const usdAvailable =
-        Number.isFinite(usdAvailableRaw) && usdAvailableRaw > 0
-          ? Math.floor(usdAvailableRaw)
-          : NaN;
-
-      let baseQty = NaN;
-      if (Number.isFinite(price) && price > 0 && Number.isFinite(usdAvailable) && usdAvailable > 0) {
-        baseQty = usdAvailable / price;
-      } else {
-        const availableXrp = Number(xrpBalance.xrp);
-        if (Number.isFinite(availableXrp) && availableXrp > 0) {
-          baseQty = availableXrp;
-        }
+      const availableXrp = Number(xrpBalance.xrp);
+      if (Number.isFinite(availableXrp) && availableXrp > 0) {
+        baseQty = availableXrp;
       }
-      if (!Number.isFinite(baseQty) || baseQty <= 0) {
-        setQty('');
-        return;
-      }
-
-      const safe = baseQty * ratio * 0.999; // 수수료/라운딩 버퍼
-      const rounded = Math.floor(safe * 100) / 100; // 소수 둘째 자리까지
-      if (rounded > 0) {
-        setQty(rounded.toFixed(2));
-      } else {
-        setQty('');
-      }
+    }
+    if (!Number.isFinite(baseQty) || baseQty <= 0) {
+      setQty('');
+      return;
+    }
+    const safe = baseQty * ratio * 0.999;
+    const rounded = Math.floor(safe * 100) / 100;
+    if (rounded > 0) {
+      setQty(rounded.toFixed(2));
+    } else {
+      setQty('');
     }
   }
 
@@ -1209,7 +1206,13 @@ export default function Short1xPage() {
             선물 심볼:
             <select
               value={bybitSymbol}
-              onChange={(e) => setBybitSymbol(e.target.value === 'XRPUSDT' ? 'XRPUSDT' : 'XRPUSD')}
+              onChange={(e) => {
+                const next = e.target.value === 'XRPUSDT' ? 'XRPUSDT' : 'XRPUSD';
+                if (next !== bybitSymbol) {
+                  setBybitSymbol(next);
+                  setQty(''); // 단위가 달라지므로 입력 초기화 (XRPUSD=USD, XRPUSDT=XRP)
+                }
+              }}
               style={{ padding: '4px 6px', borderRadius: 4, border: '1px solid #ccc', fontSize: 13 }}
             >
               <option value="XRPUSD">XRPUSD (inverse)</option>
@@ -1398,9 +1401,7 @@ export default function Short1xPage() {
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             <label style={{ fontWeight: 'bold' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span>
-                  {bybitSymbol === 'XRPUSDT' ? '주문 금액 (USDT 기준)' : 'XRP 수량'}
-                </span>
+                <span>{bybitSymbol === 'XRPUSD' ? '주문 금액 (USD 기준)' : 'XRP 수량'}</span>
                 {xrpBalance && xrpBalance !== '로딩중' && (
                   <button
                     type="button"
@@ -1421,16 +1422,11 @@ export default function Short1xPage() {
               <input
                 type="text"
                 inputMode="decimal"
-                placeholder={bybitSymbol === 'XRPUSDT' ? '예: 100 (USDT)' : '예: 100 (XRP)'}
+                placeholder={bybitSymbol === 'XRPUSD' ? '예: 100 (USD)' : '예: 100'}
                 value={qty}
                 onChange={(e) => setQty(e.target.value)}
                 style={{ display: 'block', marginTop: 6, padding: 10, fontSize: 16, width: '100%', boxSizing: 'border-box' }}
               />
-              {bybitSymbol === 'XRPUSDT' && qty && shortPrice && !isNaN(Number(qty)) && !isNaN(Number(shortPrice)) && (
-                <div style={{ marginTop: 4, fontSize: 12, color: '#555', textAlign: 'right' }}>
-                  ≈ {(Number(qty) / Number(shortPrice)).toFixed(4)} XRP
-                </div>
-              )}
             </label>
             <label style={{ fontWeight: 'bold' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
