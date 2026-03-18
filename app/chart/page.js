@@ -470,6 +470,8 @@ export default function ChartPage() {
         let touchStartY = 0;
         let crosshairVisibleAtTouchStart = false;
         const canvas = canvasRef.current;
+        const chartContainer = canvas?.parentElement; // 차트 영역 div 하나에만 터치 걸면, 밖은 브라우저가 스크롤
+
         if (canvas) {
           canvas.onmousedown = (e) => {
             if (e.button === 0) {
@@ -491,19 +493,24 @@ export default function ChartPage() {
             }
           };
           canvas.oncontextmenu = (e) => e.preventDefault();
-          // 터치: 탭=점선 토글, 드래그=점선 있을 때 점선 이동 / 없을 때 패닝
-          canvas.ontouchstart = (e) => {
-            if (e.touches.length === 0) return;
-            touchDragMode = null;
-            touchStartX = e.touches[0].clientX;
-            touchStartY = e.touches[0].clientY;
-            crosshairVisibleAtTouchStart = isCrosshairVisible;
-            panStartX = e.touches[0].clientX;
-            panStartMin = visibleMin;
-            panStartMax = visibleMax;
-            e.preventDefault();
-          };
         }
+
+        const onTouchStart = (e) => {
+          if (e.touches.length === 0) return;
+          // + / - 줌 버튼을 터치한 경우에는 기본 클릭 동작을 막지 않는다.
+          const target = e.target;
+          if (target && target.closest && target.closest('button')) {
+            return;
+          }
+          touchDragMode = null;
+          touchStartX = e.touches[0].clientX;
+          touchStartY = e.touches[0].clientY;
+          crosshairVisibleAtTouchStart = isCrosshairVisible;
+          panStartX = e.touches[0].clientX;
+          panStartMin = visibleMin;
+          panStartMax = visibleMax;
+          e.preventDefault();
+        };
         const onTouchMove = (e) => {
           if (e.touches.length === 0) return;
           const tx = e.touches[0].clientX;
@@ -680,9 +687,12 @@ export default function ChartPage() {
         window.addEventListener('mousemove', onMouseMove);
         window.addEventListener('mouseup', onMouseUp);
         window.addEventListener('mouseleave', onMouseLeave);
-        window.addEventListener('touchmove', onTouchMove, { passive: false });
-        window.addEventListener('touchend', onTouchEnd);
-        window.addEventListener('touchcancel', onTouchCancel);
+        if (chartContainer) {
+          chartContainer.addEventListener('touchstart', onTouchStart, { passive: false });
+          chartContainer.addEventListener('touchmove', onTouchMove, { passive: false });
+          chartContainer.addEventListener('touchend', onTouchEnd);
+          chartContainer.addEventListener('touchcancel', onTouchCancel);
+        }
 
         const onResize = () => {
           if (chart) chart.resize();
@@ -697,9 +707,12 @@ export default function ChartPage() {
           window.removeEventListener('mousemove', onMouseMove);
           window.removeEventListener('mouseup', onMouseUp);
           window.removeEventListener('mouseleave', onMouseLeave);
-          window.removeEventListener('touchmove', onTouchMove);
-          window.removeEventListener('touchend', onTouchEnd);
-          window.removeEventListener('touchcancel', onTouchCancel);
+          if (chartContainer) {
+            chartContainer.removeEventListener('touchstart', onTouchStart);
+            chartContainer.removeEventListener('touchmove', onTouchMove);
+            chartContainer.removeEventListener('touchend', onTouchEnd);
+            chartContainer.removeEventListener('touchcancel', onTouchCancel);
+          }
           window.removeEventListener('resize', onResize);
           window.removeEventListener('orientationchange', onOrientationChange);
         };
