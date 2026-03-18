@@ -143,7 +143,9 @@ export async function POST(request) {
       qty,
       price,
       timeInForce: 'PostOnly',
-      positionIdx: 0  // one-way mode
+      positionIdx: 0,  // one-way mode
+      // 청산(Buy)은 Close by Limit처럼 reduce-only로 강제 (반대로 포지션 열리는 것 방지)
+      ...(side === 'Buy' ? { reduceOnly: true } : {}),
     };
     console.error(`[short1x][order][${reqId}] create order request (Bybit 전송 body)`, orderBody);
 

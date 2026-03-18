@@ -464,8 +464,29 @@ export default function Short1xPage() {
 
   async function placeShortOrder(side) {
     console.warn('[short1x][placeShortOrder] 호출됨', { side, qty, shortPrice });
-    const trimQty = (qty || '').trim();
+    let trimQty = (qty || '').trim();
     const trimPrice = (shortPrice || '').trim();
+
+    // 청산(Buy): 입력 수량 대신 현재 포지션을 기준으로 비율만큼 계산 (Close by Limit/reduce-only 용도)
+    if (
+      side === 'Buy' &&
+      bybitPosition &&
+      bybitPosition !== '로딩중' &&
+      bybitPosition.size != null &&
+      Number(bybitPosition.size) !== 0
+    ) {
+      const posAbs = Math.abs(Number(bybitPosition.size));
+      if (Number.isFinite(posAbs) && posAbs > 0) {
+        const ratio = Math.max(0, Math.min(100, Number(shortPct))) / 100;
+        const closeQtyRaw = posAbs * ratio;
+        const closeQty =
+          bybitSymbol === 'XRPUSD'
+            ? String(Math.round(closeQtyRaw))
+            : (Math.floor(closeQtyRaw * 10) / 10).toFixed(1).replace(/\.0$/, '');
+        trimQty = closeQty;
+        setQty(closeQty); // UI에도 반영
+      }
+    }
 
     if (!trimQty || Number(trimQty) <= 0 || !Number.isFinite(Number(trimQty))) {
       setMessage({
@@ -479,11 +500,15 @@ export default function Short1xPage() {
       return;
     }
     const notionalUsd = bybitSymbol === 'XRPUSD' ? Number(trimQty) : Number(trimQty) * Number(trimPrice);
-    if (notionalUsd < 5) {
-      setMessage({
-        type: 'error',
-        text: `주문 금액(수량×지정가)이 최소 5 USD 이상이어야 합니다. (현재 약 ${notionalUsd.toFixed(2)} USD)`,
-      });
+    // 청산(reduce-only)은 소액 포지션도 닫아야 하므로 최소 5 USD 제한을 적용하지 않음
+    if (side !== 'Buy' && notionalUsd < 5) {
+      const hint =
+        bybitSymbol === 'XRPUSD'
+          ? 'XRPUSD는 입력값이 XRP 수량이 아니라 USD 금액입니다.'
+          : 'XRPUSDT는 입력값이 XRP 수량입니다.';
+      const msg = `주문 금액이 최소 5 USD 이상이어야 합니다. (현재 약 ${notionalUsd.toFixed(2)} USD)\n\n${hint}`;
+      setMessage({ type: 'error', text: msg });
+      alert(msg);
       return;
     }
 
@@ -499,14 +524,25 @@ export default function Short1xPage() {
     setMessage(null);
     try {
       const token = localStorage.getItem('token');
+      if (!token) {
+        const errMsg = '로그인 토큰이 없습니다. 다시 로그인해주세요.';
+        setMessage({ type: 'error', text: errMsg });
+        alert(errMsg);
+        return;
+      }
+
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 15000);
       const res = await fetch('/api/short1x/order', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': 'Bearer ' + token
         },
-        body: JSON.stringify(payload)
+        body: JSON.stringify(payload),
+        signal: controller.signal,
       });
+      clearTimeout(timeoutId);
       const data = await res.json().catch(() => ({}));
       console.warn('[short1x][placeShortOrder] 응답', {
         ok: res.ok,
@@ -515,7 +551,9 @@ export default function Short1xPage() {
       });
       if (!res.ok) {
         const errMsg = data.error || '주문 실패';
-        const detail = data.errorDetail || data.retCode != null ? `${errMsg} (retCode: ${data.retCode})` : errMsg;
+        const detail =
+          data.errorDetail ||
+          (data.retCode != null ? `${errMsg} (retCode: ${data.retCode})` : errMsg);
         setMessage({ type: 'error', text: detail });
         alert(detail);
         return;
@@ -531,7 +569,10 @@ export default function Short1xPage() {
       setLastOrderId(data.orderId || null);
       alert(successMsg);
     } catch (err) {
-      const errMsg = err.message || '주문 요청 실패';
+      const errMsg =
+        err?.name === 'AbortError'
+          ? '주문 요청이 시간 초과되었습니다. 네트워크/서버 상태를 확인하고 다시 시도해주세요.'
+          : err.message || '주문 요청 실패';
       setMessage({ type: 'error', text: errMsg });
       alert(errMsg);
     } finally {
