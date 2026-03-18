@@ -128,7 +128,9 @@ export default function Short1xPage() {
           if (!cancelled) setUpbitInfo({ accountError: '업비트 정보 조회 실패' });
         });
 
-      fetch('/api/short1x/bybit-position', { headers: { Authorization: 'Bearer ' + token } })
+      fetch(`/api/short1x/bybit-position?symbol=${encodeURIComponent(bybitSymbol)}`, {
+        headers: { Authorization: 'Bearer ' + token },
+      })
         .then((res) => res.json())
         .then((data) => {
           if (cancelled) return;
@@ -161,7 +163,7 @@ export default function Short1xPage() {
       cancelled = true;
       clearInterval(id);
     };
-  }, [loginArea]);
+  }, [loginArea, bybitSymbol]);
 
   useEffect(() => {
     if (loginArea) return;
@@ -486,6 +488,11 @@ export default function Short1xPage() {
         trimQty = closeQty;
         setQty(closeQty); // UI에도 반영
       }
+    } else if (side === 'Buy') {
+      const msg = `청산 수량을 계산하려면 현재 ${bybitSymbol} 포지션 정보가 필요합니다. (포지션 조회 중이거나 0으로 조회됨)\n\nBybit 포지션을 새로고침한 뒤 다시 시도해주세요.`;
+      setMessage({ type: 'error', text: msg });
+      alert(msg);
+      return;
     }
 
     if (!trimQty || Number(trimQty) <= 0 || !Number.isFinite(Number(trimQty))) {
