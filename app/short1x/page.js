@@ -500,30 +500,6 @@ export default function Short1xPage() {
     return { text, status, statusKo };
   }
 
-  async function pollOrderStatusUntilDone({ orderId, symbol, token, maxMs = 15000 }) {
-    const start = Date.now();
-    while (Date.now() - start < maxMs) {
-      const res = await fetch(
-        `/api/short1x/order-status?orderId=${encodeURIComponent(orderId)}&symbol=${encodeURIComponent(symbol)}`,
-        { headers: { Authorization: 'Bearer ' + token } }
-      );
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok || data?.error) {
-        return { error: data?.error || '주문 상태 조회 실패', data };
-      }
-      if (!data?.found) {
-        return { error: data?.message || '주문을 찾을 수 없습니다.', data };
-      }
-      const status = data.orderStatus;
-      if (status && !['New', 'PartiallyFilled'].includes(status)) {
-        return { data };
-      }
-      // 진행중이면 잠깐 대기 후 재시도
-      await new Promise((r) => setTimeout(r, 800));
-    }
-    return { error: '주문 상태 확인 시간이 초과되었습니다. 거래소에서 주문 상태를 직접 확인해주세요.' };
-  }
-
   async function placeShortOrder(side, opts = {}) {
     const { suppressAlert = false, returnData = false } = opts;
     console.warn('[short1x][placeShortOrder] 호출됨', { side, qty, shortPrice });
@@ -659,34 +635,12 @@ export default function Short1xPage() {
     setMessage(null);
     try {
       const data = await placeShortOrder('Buy', { suppressAlert: true, returnData: true });
-      const orderId = data?.orderId;
-      if (!orderId) {
-        // placeShortOrder 내부에서 에러 메시지를 세팅함
-        return;
-      }
-      const token = localStorage.getItem('token');
-      if (!token) return;
+      if (!data?.orderId) return; // placeShortOrder 내부에서 에러 메시지 세팅됨
 
-      const result = await pollOrderStatusUntilDone({
-        orderId,
-        symbol: bybitSymbol,
-        token,
-        maxMs: 20000,
-      });
-
-      if (result?.error) {
-        setMessage({ type: 'error', text: result.error });
-        alert(result.error);
-        return;
-      }
-
-      const statusData = result.data;
-      const { text, status } = formatOrderStatusText(statusData);
-      if (status === 'PartiallyFilled' && statusData?.leavesQty != null && Number(statusData.leavesQty) > 0) {
-        setRemainderQty(String(statusData.leavesQty));
-      } else {
-        setRemainderQty(null);
-      }
+      // /api/short1x/order 응답에 orderStatus/rejectReason/cancelType가 포함되므로 그대로 사용자에게 표시
+      const { text, status } = formatOrderStatusText(data);
+      setLastOrderId(data.orderId || null);
+      setRemainderQty(null);
       setMessage({ type: status === 'Filled' ? 'success' : 'error', text });
       alert(text);
     } finally {
