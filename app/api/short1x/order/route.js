@@ -159,6 +159,28 @@ export async function POST(request) {
       result: orderRes?.result,
     });
 
+    // create 응답만으로는 PostOnly 취소/거절 여부가 확정되지 않을 수 있어 즉시 상태를 한 번 더 조회
+    let orderStatus = null;
+    let rejectReason = '';
+    let cancelType = '';
+    try {
+      if (orderId) {
+        const statusRes = await bybitSignedRequest(
+          'GET',
+          `/v5/order/realtime?category=${category}&symbol=${symbol}&orderId=${encodeURIComponent(orderId)}&limit=1`
+        );
+        const list = statusRes?.result?.list || [];
+        const o = list[0] || null;
+        if (o) {
+          orderStatus = o.orderStatus || null;
+          rejectReason = o.rejectReason || '';
+          cancelType = o.cancelType || '';
+        }
+      }
+    } catch (e) {
+      console.error(`[short1x][order][${reqId}] order realtime status check failed`, e?.message || e);
+    }
+
     return Response.json({
       success: true,
       message:
@@ -170,7 +192,10 @@ export async function POST(request) {
       symbol,
       qty,
       price,
-      timeInForce: 'PostOnly'
+      timeInForce: 'PostOnly',
+      orderStatus,
+      rejectReason,
+      cancelType,
     });
   } catch (err) {
     const msg = err.retMsg || err.message || '주문 처리 중 오류가 발생했습니다.';

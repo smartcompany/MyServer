@@ -43,6 +43,7 @@ export default function Short1xPage() {
   const [shortPrice, setShortPrice] = useState(''); // Bybit 지정가 (USDT)
   const [shortPct, setShortPct] = useState(100);    // Bybit 사용 비율 (0~100%)
   const [loading, setLoading] = useState(false);
+  const [closeLoading, setCloseLoading] = useState(false); // 청산 버튼 전용 로딩
   const [message, setMessage] = useState(null); // { type: 'success'|'error', text }
   const [xrpBalance, setXrpBalance] = useState(null); // '로딩중' | { xrp, xrpEquity } | null
   const [bybitPosition, setBybitPosition] = useState(null); // '로딩중' | { size, side, avgPrice, positionMargin } | null
@@ -464,7 +465,67 @@ export default function Short1xPage() {
     }
   }
 
-  async function placeShortOrder(side) {
+  function formatOrderStatusText(data) {
+    const status = data?.orderStatus;
+    const statusKo =
+      status === 'Filled'
+        ? '체결됨'
+        : status === 'Cancelled'
+          ? '취소됨'
+          : status === 'Rejected'
+            ? '거절됨'
+            : status === 'PartiallyFilled'
+              ? '부분 체결'
+              : status === 'New'
+                ? '대기 중'
+                : status || '알 수 없음';
+    let text = `주문 상태: ${statusKo}`;
+    if (status === 'Cancelled' && data?.rejectReason) {
+      const reason = data.rejectReason;
+      const reasonKo =
+        reason === 'EC_PostOnlyWillTakeLiquidity'
+          ? 'Post-Only 주문이 유동성을 가져가서 취소됨 (지정가를 시장가보다 유리하게 조정 후 다시 주문하세요)'
+          : reason;
+      text += ` (사유: ${reasonKo})`;
+    }
+    if (status === 'Rejected' && data?.rejectReason) {
+      text += ` (사유: ${data.rejectReason})`;
+    }
+    if (status === 'Filled' && data?.cumExecQty) {
+      text += ` · 체결 수량: ${data.cumExecQty}`;
+    }
+    if (status === 'PartiallyFilled' && data?.leavesQty != null && Number(data.leavesQty) > 0) {
+      text += ` · 미체결 수량: ${data.leavesQty}`;
+    }
+    return { text, status, statusKo };
+  }
+
+  async function pollOrderStatusUntilDone({ orderId, symbol, token, maxMs = 15000 }) {
+    const start = Date.now();
+    while (Date.now() - start < maxMs) {
+      const res = await fetch(
+        `/api/short1x/order-status?orderId=${encodeURIComponent(orderId)}&symbol=${encodeURIComponent(symbol)}`,
+        { headers: { Authorization: 'Bearer ' + token } }
+      );
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || data?.error) {
+        return { error: data?.error || '주문 상태 조회 실패', data };
+      }
+      if (!data?.found) {
+        return { error: data?.message || '주문을 찾을 수 없습니다.', data };
+      }
+      const status = data.orderStatus;
+      if (status && !['New', 'PartiallyFilled'].includes(status)) {
+        return { data };
+      }
+      // 진행중이면 잠깐 대기 후 재시도
+      await new Promise((r) => setTimeout(r, 800));
+    }
+    return { error: '주문 상태 확인 시간이 초과되었습니다. 거래소에서 주문 상태를 직접 확인해주세요.' };
+  }
+
+  async function placeShortOrder(side, opts = {}) {
+    const { suppressAlert = false, returnData = false } = opts;
     console.warn('[short1x][placeShortOrder] 호출됨', { side, qty, shortPrice });
     let trimQty = (qty || '').trim();
     const trimPrice = (shortPrice || '').trim();
@@ -500,10 +561,14 @@ export default function Short1xPage() {
         type: 'error',
         text: bybitSymbol === 'XRPUSD' ? 'USD 금액을 올바르게 입력해주세요.' : 'XRP 수량을 올바르게 입력해주세요.',
       });
+      if (!suppressAlert) {
+        alert(bybitSymbol === 'XRPUSD' ? 'USD 금액을 올바르게 입력해주세요.' : 'XRP 수량을 올바르게 입력해주세요.');
+      }
       return;
     }
     if (!trimPrice || Number(trimPrice) <= 0 || !Number.isFinite(Number(trimPrice))) {
       setMessage({ type: 'error', text: '지정가 가격(USDT)을 올바르게 입력해주세요.' });
+      if (!suppressAlert) alert('지정가 가격(USDT)을 올바르게 입력해주세요.');
       return;
     }
     const notionalUsd = bybitSymbol === 'XRPUSD' ? Number(trimQty) : Number(trimQty) * Number(trimPrice);
@@ -515,7 +580,7 @@ export default function Short1xPage() {
           : 'XRPUSDT는 입력값이 XRP 수량입니다.';
       const msg = `주문 금액이 최소 5 USD 이상이어야 합니다. (현재 약 ${notionalUsd.toFixed(2)} USD)\n\n${hint}`;
       setMessage({ type: 'error', text: msg });
-      alert(msg);
+      if (!suppressAlert) alert(msg);
       return;
     }
 
@@ -534,7 +599,7 @@ export default function Short1xPage() {
       if (!token) {
         const errMsg = '로그인 토큰이 없습니다. 다시 로그인해주세요.';
         setMessage({ type: 'error', text: errMsg });
-        alert(errMsg);
+        if (!suppressAlert) alert(errMsg);
         return;
       }
 
@@ -562,7 +627,7 @@ export default function Short1xPage() {
           data.errorDetail ||
           (data.retCode != null ? `${errMsg} (retCode: ${data.retCode})` : errMsg);
         setMessage({ type: 'error', text: detail });
-        alert(detail);
+        if (!suppressAlert) alert(detail);
         return;
       }
       const successMsg =
@@ -574,16 +639,58 @@ export default function Short1xPage() {
         text: successMsg
       });
       setLastOrderId(data.orderId || null);
-      alert(successMsg);
+      if (!suppressAlert) alert(successMsg);
+      if (returnData) return data;
     } catch (err) {
       const errMsg =
         err?.name === 'AbortError'
           ? '주문 요청이 시간 초과되었습니다. 네트워크/서버 상태를 확인하고 다시 시도해주세요.'
           : err.message || '주문 요청 실패';
       setMessage({ type: 'error', text: errMsg });
-      alert(errMsg);
+      if (!suppressAlert) alert(errMsg);
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function closePositionWithPolling() {
+    if (closeLoading || loading) return;
+    setCloseLoading(true);
+    setMessage(null);
+    try {
+      const data = await placeShortOrder('Buy', { suppressAlert: true, returnData: true });
+      const orderId = data?.orderId;
+      if (!orderId) {
+        // placeShortOrder 내부에서 에러 메시지를 세팅함
+        return;
+      }
+      const token = localStorage.getItem('token');
+      if (!token) return;
+
+      const result = await pollOrderStatusUntilDone({
+        orderId,
+        symbol: bybitSymbol,
+        token,
+        maxMs: 20000,
+      });
+
+      if (result?.error) {
+        setMessage({ type: 'error', text: result.error });
+        alert(result.error);
+        return;
+      }
+
+      const statusData = result.data;
+      const { text, status } = formatOrderStatusText(statusData);
+      if (status === 'PartiallyFilled' && statusData?.leavesQty != null && Number(statusData.leavesQty) > 0) {
+        setRemainderQty(String(statusData.leavesQty));
+      } else {
+        setRemainderQty(null);
+      }
+      setMessage({ type: status === 'Filled' ? 'success' : 'error', text });
+      alert(text);
+    } finally {
+      setCloseLoading(false);
     }
   }
 
@@ -608,15 +715,24 @@ export default function Short1xPage() {
       return;
     }
 
-    // XRPUSDT: 입력값 = XRP 수량. 가용 마진 ÷ 지정가 = 최대 XRP, 비율 적용
+    // XRPUSDT: 입력값 = XRP 수량.
+    // - 포지션이 열려있으면 포지션 수량(abs size) 기준으로 비율 적용 (청산/부분청산에 직관적)
+    // - 포지션이 없으면 가용 마진 ÷ 지정가 = 최대 XRP, 비율 적용 (진입에 사용)
     const price = Number(shortPrice);
     let baseQty = NaN;
+    const posSizeAbs =
+      bybitPosition && bybitPosition !== '로딩중' && bybitPosition.size != null
+        ? Math.abs(Number(bybitPosition.size))
+        : NaN;
+    if (Number.isFinite(posSizeAbs) && posSizeAbs > 0) {
+      baseQty = posSizeAbs;
+    }
     if (Number.isFinite(price) && price > 0 && Number.isFinite(usdAvailable) && usdAvailable > 0) {
-      baseQty = usdAvailable / price;
+      if (!Number.isFinite(baseQty) || baseQty <= 0) baseQty = usdAvailable / price;
     } else {
       const availableXrp = Number(xrpBalance.xrp);
       if (Number.isFinite(availableXrp) && availableXrp > 0) {
-        baseQty = availableXrp;
+        if (!Number.isFinite(baseQty) || baseQty <= 0) baseQty = availableXrp;
       }
     }
     if (!Number.isFinite(baseQty) || baseQty <= 0) {
@@ -644,7 +760,7 @@ export default function Short1xPage() {
     try {
       const token = localStorage.getItem('token');
       const res = await fetch(
-        `/api/short1x/order-status?orderId=${encodeURIComponent(lastOrderId)}`,
+        `/api/short1x/order-status?orderId=${encodeURIComponent(lastOrderId)}&symbol=${encodeURIComponent(bybitSymbol)}`,
         { headers: { Authorization: 'Bearer ' + token } }
       );
       const data = await res.json().catch(() => ({}));
@@ -656,36 +772,8 @@ export default function Short1xPage() {
         setMessage({ type: 'error', text: data.message || '주문을 찾을 수 없습니다.' });
         return;
       }
-      const status = data.orderStatus;
-      const statusKo =
-        status === 'Filled'
-          ? '체결됨'
-          : status === 'Cancelled'
-            ? '취소됨'
-            : status === 'Rejected'
-              ? '거절됨'
-              : status === 'PartiallyFilled'
-                ? '부분 체결'
-                : status === 'New'
-                  ? '대기 중'
-                  : status || '알 수 없음';
-      let text = `주문 상태: ${statusKo}`;
-      if (status === 'Cancelled' && data.rejectReason) {
-        const reason = data.rejectReason;
-        const reasonKo =
-          reason === 'EC_PostOnlyWillTakeLiquidity'
-            ? 'Post-Only 주문이 유동성을 가져가서 취소됨 (지정가를 시장가보다 유리하게 조정 후 다시 주문하세요)'
-            : reason;
-        text += ` (사유: ${reasonKo})`;
-      }
-      if (status === 'Rejected' && data.rejectReason) {
-        text += ` (사유: ${data.rejectReason})`;
-      }
-      if (status === 'Filled' && data.cumExecQty) {
-        text += ` · 체결 수량: ${data.cumExecQty}`;
-      }
+      const { text, status } = formatOrderStatusText(data);
       if (status === 'PartiallyFilled' && data.leavesQty != null && Number(data.leavesQty) > 0) {
-        text += ` · 미체결 수량: ${data.leavesQty}`;
         setRemainderQty(String(data.leavesQty));
       } else {
         setRemainderQty(null);
@@ -1570,21 +1658,21 @@ export default function Short1xPage() {
             </button>
             <button
               type="button"
-              disabled={loading}
-              onClick={() => placeShortOrder('Buy')}
+              disabled={loading || closeLoading}
+              onClick={closePositionWithPolling}
               style={{
                 flex: 1,
                 padding: 12,
-                backgroundColor: loading ? '#999' : '#388e3c',
+                backgroundColor: loading || closeLoading ? '#999' : '#388e3c',
                 color: 'white',
                 border: 'none',
                 borderRadius: 8,
-                cursor: loading ? 'not-allowed' : 'pointer',
+                cursor: loading || closeLoading ? 'not-allowed' : 'pointer',
                 fontSize: 14,
                 fontWeight: 'bold'
               }}
             >
-              {loading ? '주문 중...' : '숏 포지션 청산 (Buy, Post-Only)'}
+              {closeLoading ? '청산 처리중... (상태 확인중)' : loading ? '주문 중...' : '숏 포지션 청산 (Buy, Post-Only)'}
             </button>
           </div>
         </div>

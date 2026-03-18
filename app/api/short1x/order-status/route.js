@@ -1,12 +1,11 @@
 import { verifyToken } from '../../trade/middleware';
 import { bybitSignedRequest, getBybitConfig } from '../bybit';
 
-const SYMBOL = 'XRPUSD';
-const CATEGORY = 'inverse';
-
 /**
- * GET: Bybit XRPUSD 주문 상태 조회 (orderId로)
- * query: orderId (필수)
+ * GET: Bybit 주문 상태 조회 (orderId로)
+ * query:
+ *  - orderId (필수)
+ *  - symbol (선택: XRPUSD | XRPUSDT, 미입력 시 XRPUSD)
  */
 export async function GET(request) {
   const auth = verifyToken(request);
@@ -19,6 +18,9 @@ export async function GET(request) {
   if (!orderId || !orderId.trim()) {
     return Response.json({ error: 'orderId를 입력해주세요.' }, { status: 400 });
   }
+  const symbolParam = String(searchParams.get('symbol') || '').toUpperCase();
+  const symbol = symbolParam === 'XRPUSDT' ? 'XRPUSDT' : 'XRPUSD';
+  const category = symbol === 'XRPUSDT' ? 'linear' : 'inverse';
 
   try {
     getBybitConfig();
@@ -32,7 +34,7 @@ export async function GET(request) {
   try {
     const res = await bybitSignedRequest(
       'GET',
-      `/v5/order/history?category=${CATEGORY}&symbol=${SYMBOL}&orderId=${encodeURIComponent(orderId.trim())}&limit=1`
+      `/v5/order/history?category=${category}&symbol=${symbol}&orderId=${encodeURIComponent(orderId.trim())}&limit=1`
     );
     const list = res?.result?.list || [];
     const order = list[0] || null;
