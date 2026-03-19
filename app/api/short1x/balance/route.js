@@ -1,11 +1,14 @@
 import { verifyToken } from '../../trade/middleware';
 import { bybitSignedRequest, getBybitConfig } from '../bybit';
 
-/** Bybit 출금 가능 금액 API 응답에서 UTA(또는 FUND) 값 추출 */
+/** Bybit 출금 가능 금액 API 응답에서 계정타입별 값 추출 */
 function getWithdrawableFromResult(result, coin) {
   const wa = result?.withdrawableAmount || {};
-  const uta = wa.UTA || wa.FUND || wa.SPOT;
-  const amount = uta?.withdrawableAmount ?? uta?.availableBalance;
+  // UTA(Unified Trading), FUND, SPOT 등 실제 키 이름은 Bybit 응답에 따라 다를 수 있음
+  const keys = Object.keys(wa);
+  if (keys.length === 0) return null;
+  const first = wa[keys[0]];
+  const amount = first?.withdrawableAmount ?? first?.availableBalance;
   if (amount != null && String(amount).trim() !== '') return String(amount).trim();
   return null;
 }
@@ -59,8 +62,11 @@ export async function GET(request) {
         bybitSignedRequest('GET', '/v5/asset/withdraw/withdrawable-amount?coin=XRP'),
         bybitSignedRequest('GET', '/v5/asset/withdraw/withdrawable-amount?coin=USDT'),
       ]);
+      console.log('[short1x] balance withdrawable XRP raw result:', JSON.stringify(xrpRes?.result));
+      console.log('[short1x] balance withdrawable USDT raw result:', JSON.stringify(usdtRes?.result));
       withdrawableXrp = getWithdrawableFromResult(xrpRes?.result, 'XRP');
       withdrawableUsdt = getWithdrawableFromResult(usdtRes?.result, 'USDT');
+      console.log('[short1x] balance parsed withdrawableXrp=%s withdrawableUsdt=%s', withdrawableXrp, withdrawableUsdt);
     } catch (e) {
       console.error('[short1x] balance withdrawable 조회 실패:', e?.retMsg || e?.message || e);
     }
@@ -70,9 +76,11 @@ export async function GET(request) {
     let withdrawPercentageFeeUsdt = null;
     try {
       const coinRes = await bybitSignedRequest('GET', '/v5/asset/coin/query-info?coin=USDT');
+      console.log('[short1x] balance USDT coin info raw result:', JSON.stringify(coinRes?.result));
       const rows = coinRes?.result?.rows || [];
       const usdtRow = rows.find((r) => r.coin === 'USDT');
-      const trxChain = usdtRow?.chains?.find(
+      const chains = usdtRow?.chains || [];
+      const trxChain = chains.find(
         (c) => (c.chain || '').toUpperCase() === 'TRX' && c.chainWithdraw === '1'
       );
       if (trxChain) {
@@ -81,12 +89,15 @@ export async function GET(request) {
         if (fee != null && String(fee).trim() !== '') withdrawFeeUsdt = String(fee).trim();
         if (pct != null && String(pct).trim() !== '' && Number(pct) !== 0)
           withdrawPercentageFeeUsdt = String(pct).trim();
+      } else {
+        console.log('[short1x] balance USDT chains:', chains.map((c) => ({ chain: c.chain, chainWithdraw: c.chainWithdraw })));
       }
+      console.log('[short1x] balance withdrawFeeUsdt=%s withdrawPercentageFeeUsdt=%s', withdrawFeeUsdt, withdrawPercentageFeeUsdt);
     } catch (e) {
       console.error('[short1x] balance USDT coin info 조회 실패:', e?.retMsg || e?.message || e);
     }
 
-    return Response.json({
+    const payload = {
       xrp: walletBalance,
       xrpTotal: walletBalance,
       xrpEquity: equity,
@@ -99,7 +110,9 @@ export async function GET(request) {
       withdrawableUsdt,
       withdrawFeeUsdt,
       withdrawPercentageFeeUsdt,
-    });
+    };
+    console.log('[short1x] balance response payload:', JSON.stringify(payload));
+    return Response.json(payload);
   } catch (err) {
     const msg = err.retMsg || err.message || '잔액 조회 실패';
     console.error('[short1x] 잔액 조회 오류:', msg);
