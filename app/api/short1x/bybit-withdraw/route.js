@@ -163,10 +163,11 @@ export async function POST(request) {
     );
   }
 
-  // Bybit로 보낼 최종 값: address는 화이트리스트 검증 통과한 업비트 입금 주소 그대로
+  // Bybit 주소록에 등록할 때 사용한 chain 이름과 정확히 일치해야 함. USDT 트론은 UI에 따라 TRX 또는 TRC20
+  const chainForBybit = asset === 'USDT' ? 'TRX' : chain;
   const payload = {
     coin: asset,
-    chain: asset === 'USDT' ? 'TRX' : chain,
+    chain: chainForBybit,
     address,
     amount: String(amount),
     timestamp: Date.now(),
@@ -175,9 +176,17 @@ export async function POST(request) {
     requestId: reqId.slice(0, 32),
   };
   if (tag && asset === 'XRP') payload.tag = tag;
+  // USDT(TRC20)는 tag 미지원. 키 자체를 넣지 않음 (빈 문자열이면 오류 가능)
+  if (asset === 'USDT' && payload.tag !== undefined) delete payload.tag;
+
+  const mask = (s) => (s.length <= 10 ? s : `${s.slice(0, 6)}...${s.slice(-4)}`);
+
+  async function doWithdraw(chainValue) {
+    const p = { ...payload, chain: chainValue };
+    return bybitSignedRequest('POST', '/v5/asset/withdraw/create', p);
+  }
 
   try {
-    const mask = (s) => (s.length <= 10 ? s : `${s.slice(0, 6)}...${s.slice(-4)}`);
     console.error(`[short1x][bybit-withdraw][${reqId}] withdraw create`, {
       asset,
       chain: payload.chain,
@@ -185,7 +194,17 @@ export async function POST(request) {
       addressMasked: mask(address),
       addressLength: address.length,
     });
-    const res = await bybitSignedRequest('POST', '/v5/asset/withdraw/create', payload);
+    let res;
+    try {
+      res = await doWithdraw(chainForBybit);
+    } catch (firstErr) {
+      if (firstErr?.retCode === 131002 && asset === 'USDT' && chainForBybit === 'TRX') {
+        console.error(`[short1x][bybit-withdraw][${reqId}] 131002 with TRX, retry with TRC20`);
+        res = await doWithdraw('TRC20');
+      } else {
+        throw firstErr;
+      }
+    }
     const id = res?.result?.id;
     console.error(`[short1x][bybit-withdraw][${reqId}] success`, { id });
     return Response.json({
@@ -196,7 +215,10 @@ export async function POST(request) {
   } catch (err) {
     let msg = err?.retMsg || err?.message || 'Bybit 출금 처리 중 오류가 발생했습니다.';
     const code = err?.retCode;
-    if (typeof msg === 'string' && /permission denied|api key permission/i.test(msg)) {
+    if (code === 131002) {
+      msg =
+        'Bybit 출금 주소록(화이트리스트)에 해당 주소가 없습니다. Bybit 앱/웹에서 [자산] → [출금] → [주소록]에 업비트 입금 주소를 먼저 등록한 뒤 다시 시도해주세요. (https://www.bybit.com/user/assets/money-address)';
+    } else if (typeof msg === 'string' && /permission denied|api key permission/i.test(msg)) {
       msg = 'API 키 권한 부족입니다. Bybit에서 해당 API 키에 [지갑 - 출금(Withdraw)] 권한을 활성화해주세요. (마스터 API 키만 출금 가능합니다.)';
     }
     console.error(`[short1x][bybit-withdraw][${reqId}] error`, { retCode: code, retMsg: msg });

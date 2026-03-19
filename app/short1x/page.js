@@ -1672,7 +1672,7 @@ export default function Short1xPage() {
             </select>
           </p>
           <p style={{ margin: '0 0 8px 0', fontSize: 12, color: '#666' }}>
-            Bybit 주소록에 등록된 주소만 출금 가능합니다. 선택한 자산에 맞는 업비트 입금 주소를 API로 불러와 선택합니다.
+            Bybit 출금 주소록(화이트리스트)에 등록된 주소만 출금 가능합니다. 출금 전에 Bybit [자산 → 출금 → 주소록]에서 업비트 입금 주소를 먼저 등록해주세요. 아래 선택지는 업비트에 등록된 입금 주소입니다.
           </p>
           {upbitDepositAddressesError && (
             <p style={{ color: '#c62828', margin: '0 0 8px 0' }}>{upbitDepositAddressesError}</p>
