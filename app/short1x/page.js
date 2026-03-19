@@ -1387,9 +1387,9 @@ export default function Short1xPage() {
           {xrpBalance && xrpBalance !== '로딩중' && upbitInfo && upbitInfo !== '로딩중'
             ? (() => {
                 if (bybitSymbol === 'XRPUSDT') {
-                  const usdtAvail = Number(xrpBalance.usdtAvailable);
+                  const usdtAvail = Number(xrpBalance.withdrawableUsdt);
                   if (!Number.isFinite(usdtAvail)) {
-                    return '현재 Bybit USDT 잔고 정보를 불러오는 중입니다.';
+                    return '현재 Bybit USDT 출금 가능 잔고 정보를 불러오는 중입니다.';
                   }
                   const krw =
                     upbitInfo.usdtKrwPrice != null
@@ -1691,29 +1691,19 @@ export default function Short1xPage() {
             <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
               <span style={{ fontSize: 12, color: '#555' }}>
                 출금 수량 ({bybitWithdrawAsset})
-                {bybitWithdrawAsset === 'XRP' && xrpBalance && xrpBalance !== '로딩중' && xrpBalance.xrp != null && (
-                  <span
-                    role="button"
-                    tabIndex={0}
-                    onClick={() => {
-                      const available = Number(xrpBalance.xrp);
-                      const fee = 0.25;
-                      const maxSend = Math.max(0, available - fee);
-                      setBybitWithdrawAmount(maxSend % 1 === 0 ? String(maxSend) : maxSend.toFixed(4));
-                    }}
-                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); const available = Number(xrpBalance.xrp); const fee = 0.25; const maxSend = Math.max(0, available - fee); setBybitWithdrawAmount(maxSend % 1 === 0 ? String(maxSend) : maxSend.toFixed(4)); } }}
-                    style={{ marginLeft: 8, color: '#1976d2', cursor: Number(xrpBalance.xrp) > 0.25 ? 'pointer' : 'default', textDecoration: Number(xrpBalance.xrp) > 0.25 ? 'underline' : 'none' }}
-                  >
-                    출금 가능: {Number(xrpBalance.xrp).toLocaleString(undefined, { maximumFractionDigits: 4 })} XRP
+                {bybitWithdrawAsset === 'XRP' && (
+                  <span style={{ marginLeft: 8, color: '#555' }}>
+                    출금 가능: {xrpBalance && xrpBalance !== '로딩중' && xrpBalance.withdrawableXrp != null
+                      ? `${Number(xrpBalance.withdrawableXrp).toLocaleString(undefined, { maximumFractionDigits: 4 })} XRP`
+                      : xrpBalance === '로딩중' ? '조회 중...' : '—'}
                   </span>
                 )}
-                {bybitWithdrawAsset === 'XRP' && (!xrpBalance || xrpBalance === '로딩중') && (
-                  <span style={{ marginLeft: 8, color: '#999' }}>
-                    출금 가능: {xrpBalance === '로딩중' ? '조회 중...' : '— (잔액 조회 후 표시)'}
+                {bybitWithdrawAsset === 'USDT' && (
+                  <span style={{ marginLeft: 8, color: '#555' }}>
+                    출금 가능: {xrpBalance && xrpBalance !== '로딩중' && xrpBalance.withdrawableUsdt != null
+                      ? `${Number(xrpBalance.withdrawableUsdt).toLocaleString(undefined, { maximumFractionDigits: 2 })} USDT`
+                      : xrpBalance === '로딩중' ? '조회 중...' : '—'}
                   </span>
-                )}
-                {bybitWithdrawAsset === 'XRP' && xrpBalance && xrpBalance !== '로딩중' && xrpBalance.xrp == null && (
-                  <span style={{ marginLeft: 8, color: '#999' }}>출금 가능: —</span>
                 )}
                 {bybitWithdrawAsset === 'XRP' && (
                   <span style={{ marginLeft: 8, color: '#666' }}>
@@ -1725,7 +1715,15 @@ export default function Short1xPage() {
                 )}
                 {bybitWithdrawAsset === 'USDT' && (
                   <span style={{ marginLeft: 8, color: '#666' }}>
-                    출금 수수료: 네트워크/거래소 정책에 따름 (Bybit/업비트에서 확인 필요)
+                    출금 수수료: {xrpBalance?.withdrawFeeUsdt != null
+                      ? `${Number(xrpBalance.withdrawFeeUsdt).toLocaleString(undefined, { maximumFractionDigits: 4 })} USDT`
+                      : '—'}
+                    {xrpBalance?.withdrawPercentageFeeUsdt != null && Number(xrpBalance.withdrawPercentageFeeUsdt) > 0 && (
+                      <> + {(Number(xrpBalance.withdrawPercentageFeeUsdt) * 100).toFixed(2)}%</>
+                    )}
+                    {xrpBalance?.withdrawFeeUsdt == null && xrpBalance?.withdrawPercentageFeeUsdt == null && xrpBalance && xrpBalance !== '로딩중' && (
+                      <> (네트워크/거래소 정책에 따름)</>
+                    )}
                   </span>
                 )}
               </span>
@@ -1742,73 +1740,66 @@ export default function Short1xPage() {
                   type="button"
                   onClick={() => {
                     if (bybitWithdrawAsset === 'XRP') {
-                      if (xrpBalance && xrpBalance !== '로딩중' && xrpBalance.xrp != null) {
-                        const available = Number(xrpBalance.xrp);
-                        const fee = 0.25;
-                        const maxSend = Math.max(0, available - fee);
-                        setBybitWithdrawAmount(
-                          maxSend % 1 === 0 ? String(maxSend) : maxSend.toFixed(4)
-                        );
+                      const v = xrpBalance?.withdrawableXrp != null ? Number(xrpBalance.withdrawableXrp) : NaN;
+                      if (Number.isFinite(v) && v > 0.25) {
+                        const maxSend = Math.max(0, v - 0.25);
+                        setBybitWithdrawAmount(maxSend % 1 === 0 ? String(maxSend) : maxSend.toFixed(4));
                       }
-                    } else if (bybitWithdrawAsset === 'USDT') {
-                      if (
-                        xrpBalance &&
-                        xrpBalance !== '로딩중' &&
-                        xrpBalance.usdtAvailable != null
-                      ) {
-                        const available = Number(xrpBalance.usdtAvailable);
-                        const maxSend = Math.max(0, available);
-                        setBybitWithdrawAmount(
-                          maxSend % 1 === 0 ? String(maxSend) : maxSend.toFixed(4)
-                        );
+                    } else {
+                      const v = xrpBalance?.withdrawableUsdt != null ? Number(xrpBalance.withdrawableUsdt) : NaN;
+                      const feeFixed = xrpBalance?.withdrawFeeUsdt != null ? Number(xrpBalance.withdrawFeeUsdt) : 0;
+                      const feePct = xrpBalance?.withdrawPercentageFeeUsdt != null ? Number(xrpBalance.withdrawPercentageFeeUsdt) : 0;
+                      const fee = feePct > 0
+                        ? (feeFixed + v * feePct) / (1 + feePct)
+                        : feeFixed;
+                      const maxSend = feePct > 0
+                        ? Math.max(0, (v - feeFixed) / (1 + feePct))
+                        : Math.max(0, v - feeFixed);
+                      if (Number.isFinite(v) && Number.isFinite(maxSend) && maxSend > 0) {
+                        setBybitWithdrawAmount(maxSend % 1 === 0 ? String(maxSend) : maxSend.toFixed(2));
                       }
                     }
                   }}
                   disabled={
                     bybitWithdrawAsset === 'XRP'
-                      ? !xrpBalance ||
-                        xrpBalance === '로딩중' ||
-                        xrpBalance.xrp == null ||
-                        Number(xrpBalance.xrp) <= 0.25
-                      : !xrpBalance ||
-                        xrpBalance === '로딩중' ||
-                        xrpBalance.usdtAvailable == null ||
-                        Number(xrpBalance.usdtAvailable) <= 0
+                      ? xrpBalance?.withdrawableXrp == null || Number(xrpBalance?.withdrawableXrp) <= 0.25
+                      : (() => {
+                          const v = Number(xrpBalance?.withdrawableUsdt);
+                          if (xrpBalance?.withdrawableUsdt == null || !Number.isFinite(v) || v <= 0) return true;
+                          const f = xrpBalance?.withdrawFeeUsdt != null ? Number(xrpBalance.withdrawFeeUsdt) : 0;
+                          const p = xrpBalance?.withdrawPercentageFeeUsdt != null ? Number(xrpBalance.withdrawPercentageFeeUsdt) : 0;
+                          const maxSend = p > 0 ? (v - f) / (1 + p) : v - f;
+                          return maxSend <= 0;
+                        })()
                   }
                   style={{
                     padding: '8px 12px',
                     fontSize: 12,
                     backgroundColor:
                       bybitWithdrawAsset === 'XRP'
-                        ? !xrpBalance ||
-                          xrpBalance === '로딩중' ||
-                          xrpBalance.xrp == null ||
-                          Number(xrpBalance.xrp) <= 0.25
-                          ? '#ccc'
-                          : '#1976d2'
-                        : !xrpBalance ||
-                          xrpBalance === '로딩중' ||
-                          xrpBalance.usdtAvailable == null ||
-                          Number(xrpBalance.usdtAvailable) <= 0
-                        ? '#ccc'
-                        : '#1976d2',
+                        ? xrpBalance?.withdrawableXrp != null && Number(xrpBalance.withdrawableXrp) > 0.25 ? '#1976d2' : '#ccc'
+                        : (() => {
+                            const v = Number(xrpBalance?.withdrawableUsdt);
+                            if (xrpBalance?.withdrawableUsdt == null || !Number.isFinite(v) || v <= 0) return '#ccc';
+                            const f = xrpBalance?.withdrawFeeUsdt != null ? Number(xrpBalance.withdrawFeeUsdt) : 0;
+                            const p = xrpBalance?.withdrawPercentageFeeUsdt != null ? Number(xrpBalance.withdrawPercentageFeeUsdt) : 0;
+                            const maxSend = p > 0 ? (v - f) / (1 + p) : v - f;
+                            return maxSend > 0 ? '#1976d2' : '#ccc';
+                          })(),
                     color: 'white',
                     border: 'none',
                     borderRadius: 6,
                     cursor:
                       bybitWithdrawAsset === 'XRP'
-                        ? !xrpBalance ||
-                          xrpBalance === '로딩중' ||
-                          xrpBalance.xrp == null ||
-                          Number(xrpBalance.xrp) <= 0.25
-                          ? 'not-allowed'
-                          : 'pointer'
-                        : !xrpBalance ||
-                          xrpBalance === '로딩중' ||
-                          xrpBalance.usdtAvailable == null ||
-                          Number(xrpBalance.usdtAvailable) <= 0
-                        ? 'not-allowed'
-                        : 'pointer',
+                        ? xrpBalance?.withdrawableXrp != null && Number(xrpBalance.withdrawableXrp) > 0.25 ? 'pointer' : 'not-allowed'
+                        : (() => {
+                            const v = Number(xrpBalance?.withdrawableUsdt);
+                            if (xrpBalance?.withdrawableUsdt == null || !Number.isFinite(v) || v <= 0) return 'not-allowed';
+                            const f = xrpBalance?.withdrawFeeUsdt != null ? Number(xrpBalance.withdrawFeeUsdt) : 0;
+                            const p = xrpBalance?.withdrawPercentageFeeUsdt != null ? Number(xrpBalance.withdrawPercentageFeeUsdt) : 0;
+                            const maxSend = p > 0 ? (v - f) / (1 + p) : v - f;
+                            return maxSend > 0 ? 'pointer' : 'not-allowed';
+                          })(),
                     fontWeight: 'bold',
                   }}
                 >
