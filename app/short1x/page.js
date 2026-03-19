@@ -67,6 +67,7 @@ export default function Short1xPage() {
   const [upbitDepositAddressesError, setUpbitDepositAddressesError] = useState(null);
   const [bybitWithdrawAsset, setBybitWithdrawAsset] = useState('XRP'); // 'XRP' | 'USDT'
   const [bybitWithdrawDepositValue, setBybitWithdrawDepositValue] = useState(''); // 선택한 입금 주소 "address||tag"
+  const [bybitWithdrawConfirm, setBybitWithdrawConfirm] = useState(null); // 출금 확인 팝업: { address, tag, amount, asset } | null
   const [lastOrderId, setLastOrderId] = useState(null); // 마지막 주문 ID (상태 확인용)
   const [orderStatusLoading, setOrderStatusLoading] = useState(false);
   const [bybitSymbol, setBybitSymbol] = useState('XRPUSD'); // 'XRPUSD' | 'XRPUSDT'
@@ -417,7 +418,7 @@ export default function Short1xPage() {
     }
   }
 
-  async function bybitWithdraw(e) {
+  function bybitWithdraw(e) {
     e.preventDefault();
     const amount = Number(String(bybitWithdrawAmount).replace(/,/g, ''));
     if (!bybitWithdrawDepositValue) {
@@ -433,6 +434,19 @@ export default function Short1xPage() {
       setMessage({ type: 'error', text: `출금 수량(${bybitWithdrawAsset})을 입력해주세요.` });
       return;
     }
+    setMessage(null);
+    setBybitWithdrawConfirm({
+      address: address.trim(),
+      tag: (tag || '').trim() || undefined,
+      amount,
+      asset: bybitWithdrawAsset,
+    });
+  }
+
+  async function bybitWithdrawConfirmSubmit() {
+    if (!bybitWithdrawConfirm) return;
+    const { address, tag, amount, asset } = bybitWithdrawConfirm;
+    setBybitWithdrawConfirm(null);
     setBybitWithdrawLoading(true);
     setMessage(null);
     try {
@@ -442,26 +456,25 @@ export default function Short1xPage() {
         headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
         body: JSON.stringify({
           amount,
-          address: address.trim(),
-          tag: (tag || '').trim() || undefined,
-          asset: bybitWithdrawAsset,
-          chain: bybitWithdrawAsset === 'USDT' ? 'TRX' : 'XRP',
+          address,
+          tag: tag || undefined,
+          asset,
+          chain: asset === 'USDT' ? 'TRX' : 'XRP',
         }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        const errMsg = data.error || `Bybit ${bybitWithdrawAsset} 출금 실패`;
+        const errMsg = data.error || `Bybit ${asset} 출금 실패`;
         setMessage({ type: 'error', text: errMsg });
         alert(errMsg);
         return;
       }
-      const successMsg =
-        data.message || `Bybit ${bybitWithdrawAsset} 출금 요청이 접수되었습니다.`;
+      const successMsg = data.message || `Bybit ${asset} 출금 요청이 접수되었습니다.`;
       setMessage({ type: 'success', text: successMsg });
       alert(successMsg);
       setBybitWithdrawAmount('');
     } catch (err) {
-      const errMsg = err.message || 'Bybit XRP 출금 실패';
+      const errMsg = err.message || 'Bybit 출금 실패';
       setMessage({ type: 'error', text: errMsg });
       alert(errMsg);
     } finally {
@@ -1855,6 +1868,83 @@ export default function Short1xPage() {
                 : `Bybit → 업비트 ${bybitWithdrawAsset} 출금`}
             </button>
           </form>
+          {bybitWithdrawConfirm && (
+            <div
+              style={{
+                position: 'fixed',
+                inset: 0,
+                background: 'rgba(0,0,0,0.5)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                zIndex: 10000,
+              }}
+              onClick={() => setBybitWithdrawConfirm(null)}
+            >
+              <div
+                style={{
+                  background: '#fff',
+                  padding: 24,
+                  borderRadius: 12,
+                  maxWidth: 400,
+                  width: '90%',
+                  boxShadow: '0 4px 20px rgba(0,0,0,0.2)',
+                }}
+                onClick={(e) => e.stopPropagation()}
+              >
+                <p style={{ margin: '0 0 16px 0', fontWeight: 'bold', fontSize: 16 }}>
+                  출금 정보 확인
+                </p>
+                <p style={{ margin: '0 0 4px 0', fontSize: 12, color: '#555' }}>출금 주소</p>
+                <p style={{ margin: '0 0 12px 0', fontSize: 14, wordBreak: 'break-all', fontFamily: 'monospace' }}>
+                  {bybitWithdrawConfirm.address}
+                  {bybitWithdrawConfirm.tag && (
+                    <span style={{ display: 'block', marginTop: 4 }}>태그: {bybitWithdrawConfirm.tag}</span>
+                  )}
+                </p>
+                <p style={{ margin: '0 0 4px 0', fontSize: 12, color: '#555' }}>출금 수량</p>
+                <p style={{ margin: '0 0 20px 0', fontSize: 18, fontWeight: 'bold' }}>
+                  {Number(bybitWithdrawConfirm.amount).toLocaleString(undefined, { maximumFractionDigits: 8 })} {bybitWithdrawConfirm.asset}
+                </p>
+                <p style={{ margin: '0 0 16px 0', fontSize: 12, color: '#666' }}>
+                  위 내용이 맞으면 확인을 눌러 출금을 요청하세요.
+                </p>
+                <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                  <button
+                    type="button"
+                    onClick={() => setBybitWithdrawConfirm(null)}
+                    style={{
+                      padding: '10px 16px',
+                      fontSize: 14,
+                      background: '#e0e0e0',
+                      color: '#333',
+                      border: 'none',
+                      borderRadius: 8,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    취소
+                  </button>
+                  <button
+                    type="button"
+                    onClick={bybitWithdrawConfirmSubmit}
+                    style={{
+                      padding: '10px 16px',
+                      fontSize: 14,
+                      background: '#1976d2',
+                      color: '#fff',
+                      border: 'none',
+                      borderRadius: 8,
+                      cursor: 'pointer',
+                      fontWeight: 'bold',
+                    }}
+                  >
+                    확인
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
       {message && (

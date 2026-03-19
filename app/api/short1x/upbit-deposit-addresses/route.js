@@ -43,13 +43,15 @@ export async function GET(request) {
       ? rawList
           .filter((item) => (item.currency === 'XRP' || item.currency === 'USDT') && (item.deposit_address || item.withdraw_address))
           .map((item) => {
-            const addr = item.deposit_address || item.withdraw_address || '';
+            const addr = String(item.deposit_address || item.withdraw_address || '').trim();
+            let net = item.net_type || (item.currency === 'USDT' ? 'TRX' : 'XRP');
+            if (String(net).toUpperCase() === 'TRC20') net = 'TRX';
             return {
               currency: item.currency,
-              net_type: item.net_type || (item.currency === 'USDT' ? 'TRX' : 'XRP'),
+              net_type: net,
               deposit_address: addr,
               withdraw_address: addr,
-              secondary_address: item.secondary_address || '',
+              secondary_address: String(item.secondary_address || '').trim(),
               exchange_name: item.exchange_name || '업비트',
             };
           })

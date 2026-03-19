@@ -122,22 +122,25 @@ export async function POST(request) {
               (item.deposit_address || item.withdraw_address)
           )
           .map((item) => {
-            const addr = item.deposit_address || item.withdraw_address || '';
+            const addr = String(item.deposit_address || item.withdraw_address || '').trim();
+            let net = (item.net_type || (item.currency === 'USDT' ? 'TRX' : 'XRP')).toUpperCase();
+            if (net === 'TRC20') net = 'TRX';
             return {
               currency: item.currency,
-              net_type: item.net_type || (item.currency === 'USDT' ? 'TRX' : 'XRP'),
+              net_type: net,
               deposit_address: addr,
               withdraw_address: addr,
-              secondary_address: item.secondary_address || '',
+              secondary_address: String(item.secondary_address || '').trim(),
             };
           })
       : [];
 
+    const chainNorm = chain.toUpperCase();
     const matched = addresses.find(
       (item) =>
         item.currency === asset &&
         item.withdraw_address === address &&
-        item.net_type === chain &&
+        item.net_type === chainNorm &&
         String(item.secondary_address || '') === String(tag || '')
     );
 
@@ -160,26 +163,27 @@ export async function POST(request) {
     );
   }
 
+  // Bybit로 보낼 최종 값: address는 화이트리스트 검증 통과한 업비트 입금 주소 그대로
   const payload = {
     coin: asset,
-    chain,
+    chain: asset === 'USDT' ? 'TRX' : chain,
     address,
     amount: String(amount),
     timestamp: Date.now(),
     forceChain: 1,
-    accountType: 'UTA', // UTA(유니파이드) 지갑에서만 출금
+    accountType: 'UTA',
     requestId: reqId.slice(0, 32),
   };
-  // XRP만 destination tag 사용. USDT(TRC20)는 tag 없음 — 보내면 Bybit에서 "destination tag are not equal" 오류
   if (tag && asset === 'XRP') payload.tag = tag;
 
   try {
+    const mask = (s) => (s.length <= 10 ? s : `${s.slice(0, 6)}...${s.slice(-4)}`);
     console.error(`[short1x][bybit-withdraw][${reqId}] withdraw create`, {
-      coin: asset,
+      asset,
       chain: payload.chain,
       amount: payload.amount,
-      address: `${address.slice(0, 8)}...`,
-      hasTag: Boolean(tag),
+      addressMasked: mask(address),
+      addressLength: address.length,
     });
     const res = await bybitSignedRequest('POST', '/v5/asset/withdraw/create', payload);
     const id = res?.result?.id;
