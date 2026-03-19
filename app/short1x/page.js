@@ -109,6 +109,10 @@ export default function Short1xPage() {
               usdMarginBalance: data.usdMarginBalance,
               totalWalletBalance: data.totalWalletBalance,
               totalInitialMargin: data.totalInitialMargin,
+              withdrawableXrp: data.withdrawableXrp,
+              withdrawableUsdt: data.withdrawableUsdt,
+              withdrawFeeUsdt: data.withdrawFeeUsdt,
+              withdrawPercentageFeeUsdt: data.withdrawPercentageFeeUsdt,
             });
         })
         .catch(() => {
