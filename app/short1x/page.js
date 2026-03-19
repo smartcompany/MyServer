@@ -1643,7 +1643,13 @@ export default function Short1xPage() {
               onChange={(e) => {
                 const v = e.target.value === 'USDT' ? 'USDT' : 'XRP';
                 setBybitWithdrawAsset(v);
-                setBybitWithdrawDepositValue('');
+                const list = upbitDepositAddresses.filter((a) => a.currency === v);
+                if (list.length > 0) {
+                  const first = list[0];
+                  setBybitWithdrawDepositValue(`${first.withdraw_address}||${first.secondary_address || ''}`);
+                } else {
+                  setBybitWithdrawDepositValue('');
+                }
                 setBybitWithdrawAmount('');
               }}
               style={{ marginLeft: 8, padding: '2px 6px', fontSize: 12, borderRadius: 4, border: '1px solid #ccc' }}
