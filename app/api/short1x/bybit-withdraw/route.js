@@ -170,7 +170,8 @@ export async function POST(request) {
     accountType: 'UTA', // UTA(유니파이드) 지갑에서만 출금
     requestId: reqId.slice(0, 32),
   };
-  if (tag) payload.tag = tag;
+  // XRP만 destination tag 사용. USDT(TRC20)는 tag 없음 — 보내면 Bybit에서 "destination tag are not equal" 오류
+  if (tag && asset === 'XRP') payload.tag = tag;
 
   try {
     console.error(`[short1x][bybit-withdraw][${reqId}] withdraw create`, {
