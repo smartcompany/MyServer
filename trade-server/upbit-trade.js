@@ -116,7 +116,7 @@ console.log = (...args) => {
 
 console.error = (...args) => {
   const dateString = formatDate();
-  const message = `[${dateString}] ERROR : ${args.join(' ')}\n`;
+  const message = `[${dateString}] ERROR: ${args.join(' ')}\n`;
   try {
     rotateLogIfNeeded();
     fs.appendFileSync(logFilePath, message);
