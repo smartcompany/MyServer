@@ -120,8 +120,11 @@ export default function ChartPage() {
   const [status, setStatus] = useState('로딩 중…');
   const [error, setError] = useState(null);
   const [crosshairData, setCrosshairData] = useState(null); // { x, y, value, dateLabel }
+  const [pinnedTooltip, setPinnedTooltip] = useState(null); // { title, lines[] } | null
   const setCrosshairDataRef = useRef(setCrosshairData);
   setCrosshairDataRef.current = setCrosshairData;
+  const setPinnedTooltipRef = useRef(setPinnedTooltip);
+  setPinnedTooltipRef.current = setPinnedTooltip;
 
   useEffect(() => {
     let chart = chartRef.current;
@@ -167,11 +170,19 @@ export default function ChartPage() {
           if (low < y1Min) y1Min = low;
           if (high > y1Max) y1Max = high;
         });
-        const y1Padding = (y1Max - y1Min) * 0.02 || 1;
+        let yMin = Infinity;
+        let yMax = -Infinity;
+        usdPoints.forEach((p) => {
+          if (p.y < yMin) yMin = p.y;
+          if (p.y > yMax) yMax = p.y;
+        });
+        const chartMin = Math.min(yMin, y1Min);
+        const chartMax = Math.max(yMax, y1Max);
+        const y1Padding = (chartMax - chartMin) * 0.02 || 1;
         if (y1Min === Infinity) y1Min = 0;
         if (y1Max === -Infinity) y1Max = 1500;
-        y1Min -= y1Padding;
-        y1Max += y1Padding;
+        const sharedYMin = (Number.isFinite(chartMin) ? chartMin : y1Min) - y1Padding;
+        const sharedYMax = (Number.isFinite(chartMax) ? chartMax : y1Max) + y1Padding;
 
         const allDates = [...usdPoints, ...usdtBars]
           .map((p) => p.x.getTime())
@@ -186,6 +197,52 @@ export default function ChartPage() {
         let visibleMax = xMaxFull;
 
         if (chartRef.current) chart?.destroy();
+        setPinnedTooltipRef.current?.(null);
+
+        const buildTooltipDataAt = (x) => {
+          if (!x) return null;
+          const t = x instanceof Date ? x.getTime() : Number(x);
+          if (Number.isNaN(t)) return null;
+          let usdVal = null;
+          let usdtO = null;
+          let usdtC = null;
+          let minUsd = Infinity;
+          let minUsdt = Infinity;
+          usdPoints.forEach((p) => {
+            const d = Math.abs((p.x instanceof Date ? p.x.getTime() : p.x) - t);
+            if (d < minUsd) {
+              minUsd = d;
+              usdVal = p.y;
+            }
+          });
+          usdtBars.forEach((p) => {
+            const d = Math.abs((p.x instanceof Date ? p.x.getTime() : p.x) - t);
+            if (d < minUsdt) {
+              minUsdt = d;
+              usdtO = p.o;
+              usdtC = p.c;
+            }
+          });
+          const d = x instanceof Date ? x : new Date(t);
+          const title = d.toLocaleString('ko-KR', {
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+            hour: '2-digit',
+            minute: '2-digit',
+          });
+          const lines = [];
+          if (usdVal != null) lines.push(`USD/KRW: ${Number(usdVal).toLocaleString('ko-KR')} 원`);
+          if (usdtC != null) lines.push(`USDT 종가: ${Number(usdtC).toLocaleString('ko-KR')} 원`);
+          if (usdtO != null) lines.push(`USDT 시가: ${Number(usdtO).toLocaleString('ko-KR')} 원`);
+          if (usdVal != null && usdtC != null) {
+            const gimp = usdtC - usdVal;
+            const gimpPct = (gimp / usdVal) * 100;
+            const sign = gimp >= 0 ? '+' : '';
+            lines.push(`김프: ${sign}${Number(gimp).toFixed(2)} 원 (${sign}${Number(gimpPct).toFixed(2)}%)`);
+          }
+          return { title, lines };
+        };
 
         chart = new ChartJS(canvasRef.current, {
           type: 'line',
@@ -239,91 +296,16 @@ export default function ChartPage() {
                 labels: { color: '#a1a1aa', usePointStyle: true },
               },
               tooltip: {
-                backgroundColor: 'rgba(24, 24, 27, 0.88)',
-                titleColor: '#e4e4e7',
-                bodyColor: '#e4e4e7',
-                borderColor: 'rgba(39, 39, 42, 0.9)',
-                borderWidth: 1,
-                callbacks: {
-                  title: (items) => {
-                    if (!items.length || !items[0].raw) return '';
-                    const x = items[0].raw.x;
-                    if (x instanceof Date)
-                      return x.toLocaleString('ko-KR', {
-                        year: 'numeric',
-                        month: '2-digit',
-                        day: '2-digit',
-                        hour: '2-digit',
-                        minute: '2-digit',
-                      });
-                    return '';
-                  },
-                  label: () => '',
-                  afterBody: (items) => {
-                    if (!items.length) return [];
-                    const raw = items[0].raw;
-                    const x = raw?.x;
-                    if (!x) return [];
-                    const t = x instanceof Date ? x.getTime() : Number(x);
-                    let usdVal = null;
-                    let usdtO = null,
-                      usdtC = null;
-                    let minUsd = Infinity,
-                      minUsdt = Infinity;
-                    usdPoints.forEach((p) => {
-                      const d = Math.abs(
-                        (p.x instanceof Date ? p.x.getTime() : p.x) - t
-                      );
-                      if (d < minUsd) {
-                        minUsd = d;
-                        usdVal = p.y;
-                      }
-                    });
-                    usdtBars.forEach((p) => {
-                      const d = Math.abs(
-                        (p.x instanceof Date ? p.x.getTime() : p.x) - t
-                      );
-                      if (d < minUsdt) {
-                        minUsdt = d;
-                        usdtO = p.o;
-                        usdtC = p.c;
-                      }
-                    });
-                    const lines = [];
-                    if (usdVal != null)
-                      lines.push(
-                        'USD/KRW: ' +
-                          Number(usdVal).toLocaleString('ko-KR') +
-                          ' 원'
-                      );
-                    if (usdtC != null)
-                      lines.push(
-                        'USDT 종가: ' +
-                          Number(usdtC).toLocaleString('ko-KR') +
-                          ' 원'
-                      );
-                    if (usdtO != null)
-                      lines.push(
-                        'USDT 시가: ' +
-                          Number(usdtO).toLocaleString('ko-KR') +
-                          ' 원'
-                      );
-                    if (usdVal != null && usdtC != null) {
-                      const gimp = usdtC - usdVal;
-                      const gimpPct = (gimp / usdVal) * 100;
-                      const sign = gimp >= 0 ? '+' : '';
-                      lines.push(
-                        '김프: ' +
-                          sign +
-                          Number(gimp).toFixed(2) +
-                          ' 원 (' +
-                          sign +
-                          Number(gimpPct).toFixed(2) +
-                          '%)'
-                      );
-                    }
-                    return lines;
-                  },
+                enabled: false,
+                external: (context) => {
+                  const tp = context?.tooltip;
+                  if (!tp || tp.opacity === 0 || !tp.dataPoints?.length) {
+                    setPinnedTooltipRef.current?.(null);
+                    return;
+                  }
+                  const x = tp.dataPoints[0]?.raw?.x;
+                  const data = buildTooltipDataAt(x);
+                  setPinnedTooltipRef.current?.(data);
                 },
               },
             },
@@ -347,6 +329,8 @@ export default function ChartPage() {
               y: {
                 type: 'linear',
                 position: 'left',
+                min: sharedYMin,
+                max: sharedYMax,
                 grid: { color: '#27272a', drawOnChartArea: true },
                 ticks: {
                   color: '#71717a',
@@ -361,8 +345,8 @@ export default function ChartPage() {
               y1: {
                 type: 'linear',
                 position: 'right',
-                min: y1Min,
-                max: y1Max,
+                min: sharedYMin,
+                max: sharedYMax,
                 grid: { drawOnChartArea: false },
                 ticks: {
                   color: '#71717a',
@@ -465,12 +449,7 @@ export default function ChartPage() {
         let startY = 0;
         let crosshairVisibleAtDown = false;
         const DRAG_THRESHOLD_PX = 5;
-        let touchDragMode = null;
-        let touchStartX = 0;
-        let touchStartY = 0;
-        let crosshairVisibleAtTouchStart = false;
         const canvas = canvasRef.current;
-        const chartContainer = canvas?.parentElement; // 차트 영역 div 하나에만 터치 걸면, 밖은 브라우저가 스크롤
 
         if (canvas) {
           canvas.onmousedown = (e) => {
@@ -495,102 +474,6 @@ export default function ChartPage() {
           canvas.oncontextmenu = (e) => e.preventDefault();
         }
 
-        const onTouchStart = (e) => {
-          if (e.touches.length === 0) return;
-          // + / - 줌 버튼을 터치한 경우에는 기본 클릭 동작을 막지 않는다.
-          const target = e.target;
-          if (target && target.closest && target.closest('button')) {
-            return;
-          }
-          touchDragMode = null;
-          touchStartX = e.touches[0].clientX;
-          touchStartY = e.touches[0].clientY;
-          crosshairVisibleAtTouchStart = isCrosshairVisible;
-          panStartX = e.touches[0].clientX;
-          panStartMin = visibleMin;
-          panStartMax = visibleMax;
-          e.preventDefault();
-        };
-        const onTouchMove = (e) => {
-          if (e.touches.length === 0) return;
-          const tx = e.touches[0].clientX;
-          const ty = e.touches[0].clientY;
-          if (touchDragMode === null && chart) {
-            const dx = tx - touchStartX;
-            const dy = ty - touchStartY;
-            if (dx * dx + dy * dy > DRAG_THRESHOLD_PX * DRAG_THRESHOLD_PX) {
-              if (crosshairVisibleAtTouchStart) {
-                touchDragMode = 'crosshair';
-                isCrosshair = true;
-                const rect = canvasRef.current?.getBoundingClientRect();
-                if (rect) updateCrosshair(tx - rect.left, ty - rect.top);
-              } else {
-                touchDragMode = 'pan';
-                isPanning = true;
-              }
-            }
-          }
-          if (touchDragMode === 'crosshair' && isCrosshair && chart) {
-            const rect = canvasRef.current?.getBoundingClientRect();
-            if (rect) updateCrosshair(tx - rect.left, ty - rect.top);
-            e.preventDefault();
-            return;
-          }
-          if (touchDragMode === 'pan' && isPanning && chart) {
-            const xScale = chart.scales.x;
-            if (xScale && xScale.width > 0) {
-              const deltaX = tx - panStartX;
-              const span = panStartMax - panStartMin;
-              const timeDelta = (deltaX / xScale.width) * span;
-              let newMin = panStartMin - timeDelta;
-              let newMax = panStartMax - timeDelta;
-              if (newMin < xMinFull) {
-                newMin = xMinFull;
-                newMax = Math.min(xMaxRight, newMin + span);
-              }
-              if (newMax > xMaxRight) {
-                newMax = xMaxRight;
-                newMin = Math.max(xMinFull, newMax - span);
-              }
-              visibleMin = newMin;
-              visibleMax = newMax;
-              chart.options.scales.x.min = visibleMin;
-              chart.options.scales.x.max = visibleMax;
-              chart.update('none');
-            }
-            e.preventDefault();
-          }
-        };
-        const onTouchEnd = (e) => {
-          if (e.touches.length === 0) {
-            if (touchDragMode === null && chart) {
-              const rect = canvasRef.current?.getBoundingClientRect();
-              if (rect && e.changedTouches?.[0]) {
-                const ct = e.changedTouches[0];
-                const px = ct.clientX - rect.left;
-                const py = ct.clientY - rect.top;
-                if (isCrosshairVisible) {
-                  // 이미 보이는 경우 → 토글로 숨김
-                  isCrosshairVisible = false;
-                  clearCrosshair();
-                } else {
-                  isCrosshairVisible = true;
-                  updateCrosshair(px, py);
-                }
-              }
-            }
-            touchDragMode = null;
-            isPanning = false;
-            isCrosshair = false;
-          }
-        };
-        const onTouchCancel = (e) => {
-          if (e.touches.length === 0) {
-            touchDragMode = null;
-            isPanning = false;
-            isCrosshair = false;
-          }
-        };
         const onMouseMove = (e) => {
           if (isCrosshair && chart) {
             const rect = canvasRef.current?.getBoundingClientRect();
@@ -687,12 +570,6 @@ export default function ChartPage() {
         window.addEventListener('mousemove', onMouseMove);
         window.addEventListener('mouseup', onMouseUp);
         window.addEventListener('mouseleave', onMouseLeave);
-        if (chartContainer) {
-          chartContainer.addEventListener('touchstart', onTouchStart, { passive: false });
-          chartContainer.addEventListener('touchmove', onTouchMove, { passive: false });
-          chartContainer.addEventListener('touchend', onTouchEnd);
-          chartContainer.addEventListener('touchcancel', onTouchCancel);
-        }
 
         const onResize = () => {
           if (chart) chart.resize();
@@ -707,12 +584,6 @@ export default function ChartPage() {
           window.removeEventListener('mousemove', onMouseMove);
           window.removeEventListener('mouseup', onMouseUp);
           window.removeEventListener('mouseleave', onMouseLeave);
-          if (chartContainer) {
-            chartContainer.removeEventListener('touchstart', onTouchStart);
-            chartContainer.removeEventListener('touchmove', onTouchMove);
-            chartContainer.removeEventListener('touchend', onTouchEnd);
-            chartContainer.removeEventListener('touchcancel', onTouchCancel);
-          }
           window.removeEventListener('resize', onResize);
           window.removeEventListener('orientationchange', onOrientationChange);
         };
@@ -829,6 +700,30 @@ export default function ChartPage() {
                 {crosshairData.dateLabel || '—'}
               </div>
             </>
+          )}
+          {pinnedTooltip && (
+            <div
+              style={{
+                position: 'absolute',
+                left: 10,
+                top: 10,
+                padding: '8px 10px',
+                background: 'rgba(24,24,27,0.9)',
+                border: '1px solid rgba(39,39,42,0.9)',
+                borderRadius: 6,
+                color: '#e4e4e7',
+                fontSize: '0.78rem',
+                lineHeight: 1.35,
+                zIndex: 5,
+                pointerEvents: 'none',
+                maxWidth: '70%',
+              }}
+            >
+              <div style={{ fontWeight: 700, marginBottom: 4 }}>{pinnedTooltip.title}</div>
+              {pinnedTooltip.lines.map((line, idx) => (
+                <div key={idx}>{line}</div>
+              ))}
+            </div>
           )}
           <div
             style={{

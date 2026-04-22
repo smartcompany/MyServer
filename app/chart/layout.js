@@ -5,7 +5,9 @@
 export const viewport = {
   width: 'device-width',
   initialScale: 1,
-  maximumScale: 2,
+  minimumScale: 0.5,
+  maximumScale: 5,
+  userScalable: true,
 };
 
 export default function ChartLayout({ children }) {
