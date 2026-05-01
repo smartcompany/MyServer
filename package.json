@@ -1,4 +1,7 @@
 {
+  "overrides": {
+    "form-data": "^4.0.5"
+  },
   "dependencies": {
     "@supabase/supabase-js": "^2.50.5",
     "axios": "^1.10.0",
