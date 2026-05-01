@@ -6,6 +6,8 @@ const DATA_DIR = path.join(process.cwd(), 'data');
 const UPBIT_CANDLES_URL = 'https://api.upbit.com/v1/candles/minutes/60';
 const MARKET = 'KRW-USDT';
 const MAX_COUNT = 200;
+/** USD/KRW·USDT 시간봉 공통 최대 보관 길이 (90일 × 24시간) — lib/chart-data-update.js 의 MAX_SERIES_ITEMS 와 동일 */
+const CHART_RETENTION_HOURS = 90 * 24;
 
 function parseDt(s) {
   if (!s) return null;
@@ -61,7 +63,16 @@ async function ensureUsdtData() {
     throw e;
   }
   const obj = JSON.parse(content);
-  const series = obj.series || [];
+  let series = obj.series || [];
+  if (series.length > CHART_RETENTION_HOURS) {
+    series = series.slice(-CHART_RETENTION_HOURS);
+    obj.series = series;
+    if (series.length) {
+      obj.start_date = series[0].datetime.slice(0, 10);
+      obj.end_date = series[series.length - 1].datetime.slice(0, 10);
+    }
+    await fs.writeFile(filePath, JSON.stringify(obj, null, 2), 'utf-8');
+  }
   if (isDataUpToDate(series, obj.time_unit)) return obj;
 
   // to 생략 시 최신 200개 봉 반환. 그중 우리 마지막 시각보다 이후만 추가
@@ -87,8 +98,8 @@ async function ensureUsdtData() {
   }
   if (added > 0) {
     series.sort((a, b) => (a.datetime < b.datetime ? -1 : 1));
-    const maxItems = 60 * 24;
-    if (series.length > maxItems) obj.series = series.slice(-maxItems);
+    if (series.length > CHART_RETENTION_HOURS)
+      obj.series = series.slice(-CHART_RETENTION_HOURS);
     else obj.series = series;
     if (obj.series.length) {
       obj.start_date = obj.series[0].datetime.slice(0, 10);
@@ -99,12 +110,22 @@ async function ensureUsdtData() {
   return obj;
 }
 
-/** USD/KRW JSON 읽기 (갱신은 별도 스크립트 또는 추후 yahoo-finance2 연동) */
+/** USD/KRW JSON 읽기. 90일(시간봉) 초과분은 잘라 저장 */
 async function loadUsdKrwData() {
   const filePath = path.join(DATA_DIR, 'usd_krw_hour.json');
   try {
     const content = await fs.readFile(filePath, 'utf-8');
-    return JSON.parse(content);
+    const obj = JSON.parse(content);
+    const series = obj.series || [];
+    if (series.length > CHART_RETENTION_HOURS) {
+      obj.series = series.slice(-CHART_RETENTION_HOURS);
+      if (obj.series.length) {
+        obj.start_date = obj.series[0].datetime.slice(0, 10);
+        obj.end_date = obj.series[obj.series.length - 1].datetime.slice(0, 10);
+      }
+      await fs.writeFile(filePath, JSON.stringify(obj, null, 2), 'utf-8');
+    }
+    return obj;
   } catch (e) {
     if (e.code === 'ENOENT') return null;
     throw e;
