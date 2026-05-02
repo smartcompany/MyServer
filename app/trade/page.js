@@ -10,6 +10,8 @@ export default function TradePage() {
   const [config, setConfig] = useState({
     buy: '',
     sell: '',
+    maxBuyExchangeRate: '',
+    minSellExchangeRate: '',
     isTrading: false
   });
   const [stopTradingTimes, setStopTradingTimes] = useState([]);
@@ -178,6 +180,14 @@ export default function TradePage() {
       setConfig({
         buy: data.buyThreshold ?? '',
         sell: data.sellThreshold ?? '',
+        maxBuyExchangeRate:
+          data.maxBuyExchangeRate != null && data.maxBuyExchangeRate !== ''
+            ? String(data.maxBuyExchangeRate)
+            : '',
+        minSellExchangeRate:
+          data.minSellExchangeRate != null && data.minSellExchangeRate !== ''
+            ? String(data.minSellExchangeRate)
+            : '',
         isTrading: Boolean(data.isTrading)
       });
       setIsTradeByMoney(data.isTradeByMoney ?? true);
@@ -226,6 +236,49 @@ export default function TradePage() {
       console.error('설정 업데이트 실패:', error);
       // 실패 시 이전 값으로 되돌리기
       setConfig(prev => ({ ...prev, isTrading: !isTrading }));
+    }
+  }
+
+  async function saveExchangeRateLimits() {
+    const token = localStorage.getItem('token');
+    if (!configLoaded) {
+      alert('설정이 아직 로드되지 않았습니다. 잠시 후 다시 시도하세요.');
+      return;
+    }
+    const maxRaw = String(config.maxBuyExchangeRate ?? '').trim();
+    const minRaw = String(config.minSellExchangeRate ?? '').trim();
+    const maxNum = maxRaw === '' ? null : Number(maxRaw);
+    const minNum = minRaw === '' ? null : Number(minRaw);
+    if (maxNum != null && (!Number.isFinite(maxNum) || maxNum <= 0)) {
+      alert('매수 최대 환율은 비우거나 0보다 큰 숫자로 입력해주세요.');
+      return;
+    }
+    if (minNum != null && (!Number.isFinite(minNum) || minNum <= 0)) {
+      alert('매도 최저 환율은 비우거나 0보다 큰 숫자로 입력해주세요.');
+      return;
+    }
+    try {
+      const res = await fetch('/api/trade/config', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ' + token
+        },
+        body: JSON.stringify({
+          updates: [
+            { key: 'maxBuyExchangeRate', value: maxNum },
+            { key: 'minSellExchangeRate', value: minNum }
+          ]
+        })
+      });
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        alert('❌ 저장 실패: ' + (errorData.error || 'Unknown error'));
+        return;
+      }
+      alert('✅ 환율 조건이 저장되었습니다. (비운 항목은 조건 없음)');
+    } catch (e) {
+      alert('❌ 저장 실패: ' + (e.message || '네트워크 오류'));
     }
   }
 
@@ -836,6 +889,72 @@ export default function TradePage() {
                 borderRadius: '4px'
               }} placeholder="예: 2.5" />
             </div>
+          </div>
+
+          <div style={{ marginBottom: '20px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+            <div style={{ display: 'flex', gap: '10px' }}>
+              <div style={{ flex: 1, padding: '15px', backgroundColor: '#e3f2fd', borderRadius: '4px' }}>
+                <div style={{ fontSize: '14px', color: '#666', marginBottom: '5px' }}>매수 최대 환율 (USD/KRW)</div>
+                <div style={{ fontSize: '11px', color: '#888', marginBottom: '6px' }}>
+                  현재 환율이 이 값 이상이면 매수 주문을 넣지 않습니다. 비우면 사용 안 함.
+                </div>
+                <input
+                  type="number"
+                  step="0.01"
+                  value={config.maxBuyExchangeRate}
+                  onChange={(e) => setConfig((prev) => ({ ...prev, maxBuyExchangeRate: e.target.value }))}
+                  style={{
+                    width: '100%',
+                    padding: '12px',
+                    marginTop: '5px',
+                    boxSizing: 'border-box',
+                    fontSize: '16px',
+                    border: '1px solid #ddd',
+                    borderRadius: '4px'
+                  }}
+                  placeholder="예: 1500"
+                />
+              </div>
+              <div style={{ flex: 1, padding: '15px', backgroundColor: '#fff3e0', borderRadius: '4px' }}>
+                <div style={{ fontSize: '14px', color: '#666', marginBottom: '5px' }}>매도 최저 환율 (USD/KRW)</div>
+                <div style={{ fontSize: '11px', color: '#888', marginBottom: '6px' }}>
+                  현재 환율이 이 값 이하면 매도 주문을 넣지 않습니다. 비우면 사용 안 함.
+                </div>
+                <input
+                  type="number"
+                  step="0.01"
+                  value={config.minSellExchangeRate}
+                  onChange={(e) => setConfig((prev) => ({ ...prev, minSellExchangeRate: e.target.value }))}
+                  style={{
+                    width: '100%',
+                    padding: '12px',
+                    marginTop: '5px',
+                    boxSizing: 'border-box',
+                    fontSize: '16px',
+                    border: '1px solid #ddd',
+                    borderRadius: '4px'
+                  }}
+                  placeholder="예: 1300"
+                />
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={saveExchangeRateLimits}
+              style={{
+                alignSelf: 'flex-start',
+                padding: '8px 16px',
+                fontSize: '14px',
+                backgroundColor: '#607d8b',
+                color: 'white',
+                border: 'none',
+                borderRadius: '4px',
+                cursor: 'pointer',
+                fontWeight: 'bold'
+              }}
+            >
+              환율 조건 저장
+            </button>
           </div>
 
           {/* 탭 내용 */}

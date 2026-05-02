@@ -685,6 +685,22 @@ function setBuyOrdered(order, uuid, price, volume) {
   order.status = 'buy_ordered';
 }
 
+/** config.json의 환율 상한/하한: 유효한 양수만 사용, 그 외는 조건 없음 */
+function parseExchangeRateLimit(value) {
+  if (value == null || value === '') return null;
+  const n = Number(value);
+  if (!Number.isFinite(n) || n <= 0) return null;
+  return n;
+}
+
+/** 체결 대기 주문의 미체결 USDT 수량 (부분 체결 반영) */
+function remainingOrderVolumeUsdt(orderedData, order) {
+  const vol = parseFloat(orderedData.volume ?? order.volume ?? 0);
+  const executed = parseFloat(orderedData.executed_volume || 0);
+  const rem = vol - executed;
+  return rem > 0 ? rem : 0;
+}
+
 function loadConfig() {
   try {
     const data = fs.readFileSync(configFilePath, 'utf8');
@@ -697,7 +713,9 @@ function loadConfig() {
       isTrading: false,
       buyThreshold: 0.5,
       sellThreshold: 2.5,
-      isTradeByMoney: true
+      isTradeByMoney: true,
+      maxBuyExchangeRate: null,
+      minSellExchangeRate: null,
     };
   }
 }
@@ -711,6 +729,10 @@ async function processBuyOrder(order, orderState, rate) {
     console.log(`[주문 ${order.id}] buyThreshold, sellThreshold 설정 없음`);
     return false; // 처리 실패
   }
+
+  const tradingCfg = loadConfig();
+  const maxBuyExchangeRate = parseExchangeRateLimit(tradingCfg.maxBuyExchangeRate);
+  const rateOk = rate != null && Number.isFinite(Number(rate));
 
   const expactedBuyPrice = Math.round(rate * (1 + buyThreshold / 100));
   const expactedSellPrice = Math.round(rate * (1 + sellThreshold / 100));
@@ -752,8 +774,26 @@ async function processBuyOrder(order, orderState, rate) {
         console.log(`[주문 ${order.id}] 매수 부분 체결: ${buyExecuted}/${orderedData.volume} (대기 중)`);
       }
 
-      // 가격 변동 체크 및 취소 필요 여부 확인 → 취소 없이 가격만 변경 (cancel_and_new)
-      if (needToCancelOrder(orderedData, expactedBuyPrice, expactedSellPrice)) {
+      // 매수 최대 환율: 이 이상이면 가격을 올리는 cancel_and_new 대신 주문 취소 후 buy_pending (환율 내려오면 재시도)
+      if (maxBuyExchangeRate != null && rateOk && Number(rate) >= maxBuyExchangeRate) {
+        const remainingVol = remainingOrderVolumeUsdt(orderedData, order);
+        if (remainingVol > 0) {
+          console.log(
+            `[주문 ${order.id}] 매수 최대 환율(${maxBuyExchangeRate}) 도달·초과 — 현재 환율 ${Number(rate).toFixed(
+              2,
+            )}원 → 지정가 취소 후 buy_pending, 잔여 ${remainingVol} USDT`,
+          );
+          const cancelResult = await cancelOrder(order.uuid);
+          if (cancelResult != null) {
+            setBuyPending(order, remainingVol, null);
+            order.uuid = null;
+            saveOrderState(orderState);
+          } else {
+            console.error(`[주문 ${order.id}] 매수 최대 환율로 취소 시도했으나 cancelOrder 실패`);
+          }
+        }
+      } else if (needToCancelOrder(orderedData, expactedBuyPrice, expactedSellPrice)) {
+        // 가격 변동 체크 → 취소 없이 가격만 변경 (cancel_and_new)
         const newPrice = Math.round(expactedBuyPrice);
         const cancelNewResponse = await cancelAndNewOrder(order.uuid, {
           new_ord_type: 'limit',
@@ -784,6 +824,10 @@ async function processSellOrder(order, orderState, rate) {
     console.log(`[주문 ${order.id}] buyThreshold, sellThreshold 설정 없음`);
     return false; // 처리 실패
   }
+
+  const tradingCfgSell = loadConfig();
+  const minSellExchangeRateOrd = parseExchangeRateLimit(tradingCfgSell.minSellExchangeRate);
+  const rateOkSell = rate != null && Number.isFinite(Number(rate));
 
   // 주문 가격은 정수(원 단위)로 맞춤
   const expactedBuyPrice = Math.round(rate * (1 + buyThreshold / 100));
@@ -829,8 +873,25 @@ async function processSellOrder(order, orderState, rate) {
         console.log(`[주문 ${order.id}] 매도 부분 체결: ${sellExecuted}/${orderedData.volume} (대기 중)`);
       }
 
-      // 가격 변동 체크 및 취소 필요 여부 확인 → 취소 없이 가격만 변경 (cancel_and_new)
-      if (needToCancelOrder(orderedData, expactedBuyPrice, expactedSellPrice)) {
+      // 매도 최저 환율: 이 이하면 가격을 내리는 cancel_and_new 대신 주문 취소 후 sell_pending
+      if (minSellExchangeRateOrd != null && rateOkSell && Number(rate) <= minSellExchangeRateOrd) {
+        const remainingSellVol = remainingOrderVolumeUsdt(orderedData, order);
+        if (remainingSellVol > 0) {
+          console.log(
+            `[주문 ${order.id}] 매도 최저 환율(${minSellExchangeRateOrd}) 이하 — 현재 환율 ${Number(rate).toFixed(
+              2,
+            )}원 → 지정가 취소 후 sell_pending, 잔여 ${remainingSellVol} USDT`,
+          );
+          const cancelSellResult = await cancelOrder(order.uuid);
+          if (cancelSellResult != null) {
+            setSellPending(order, remainingSellVol, null);
+            order.uuid = null;
+            saveOrderState(orderState);
+          } else {
+            console.error(`[주문 ${order.id}] 매도 최저 환율로 취소 시도했으나 cancelOrder 실패`);
+          }
+        }
+      } else if (needToCancelOrder(orderedData, expactedBuyPrice, expactedSellPrice)) {
         try {
           const newPrice = Math.round(expactedSellPrice);
           console.log(`[주문 ${order.id}] 매도 가격 변경 시도 (cancel_and_new) → ${newPrice}원, 기존 UUID: ${order.uuid}`);
@@ -858,6 +919,11 @@ async function processSellOrder(order, orderState, rate) {
 }
 
 async function processPendingOrders(orderState, rate, tetherPrice) {
+  const tradingConfig = loadConfig();
+  const maxBuyExchangeRate = parseExchangeRateLimit(tradingConfig.maxBuyExchangeRate);
+  const minSellExchangeRate = parseExchangeRateLimit(tradingConfig.minSellExchangeRate);
+  const rateOk = rate != null && Number.isFinite(Number(rate));
+
   for (const order of orderState.orders) {
     // 매도 대기 중인 주문에 대해 매도 주문 생성 (sell_pending → sell_ordered)
     const buyThreshold = order.buyThreshold;
@@ -884,8 +950,12 @@ async function processPendingOrders(orderState, rate, tetherPrice) {
     if (order.status === 'sell_pending') {
       // volume은 이미 수량으로 계산되어 있음
       const volumeToSell = order.volume;
-      
-      if (volumeToSell > 0) {
+
+      if (minSellExchangeRate != null && rateOk && Number(rate) <= minSellExchangeRate) {
+        console.log(
+          `[주문 ${order.id}] 매도 스킵: 현재 USD/KRW 환율 ${Number(rate).toFixed(2)} ≤ 매도 최저 환율 ${minSellExchangeRate.toFixed(2)}`,
+        );
+      } else if (volumeToSell > 0) {
         console.log(`[주문 ${order.id}] 김치 ${sellThreshold.toFixed(1)}% 에, ${expactedSellPrice} 원에 ${volumeToSell} 매도 주문 걸기`);
         const sellOrder = await sellTether(expactedSellPrice, volumeToSell);
         if (sellOrder) {
@@ -900,8 +970,12 @@ async function processPendingOrders(orderState, rate, tetherPrice) {
     if (order.status === 'buy_pending') {
       // volume은 이미 수량으로 계산되어 있음
       const volumeToBuy = order.volume;
-      
-      if (volumeToBuy > 0) {
+
+      if (maxBuyExchangeRate != null && rateOk && Number(rate) >= maxBuyExchangeRate) {
+        console.log(
+          `[주문 ${order.id}] 매수 스킵: 현재 USD/KRW 환율 ${Number(rate).toFixed(2)} ≥ 매수 최대 환율 ${maxBuyExchangeRate.toFixed(2)}`,
+        );
+      } else if (volumeToBuy > 0) {
         console.log(`[주문 ${order.id}] 매수 주문 생성: 김치 ${buyThreshold.toFixed(1)}% 에, ${expactedBuyPrice} 원에 ${volumeToBuy} 매수 주문 걸기`);
         const buyOrder = await buyTether(expactedBuyPrice, volumeToBuy);
         if (buyOrder) {
