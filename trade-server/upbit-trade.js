@@ -902,7 +902,7 @@ async function processBuyOrder(order, orderState, rate, tetherPrice = null) {
             order.uuid = null;
             saveOrderState(orderState);
           } else {
-            console.error(`[주문 ${order.id}] 매수 최대 환율로 취소 시도했으나 cancelOrder 실패`);
+            console.error(`[주문 ${order.id}] 매수 최대 환율로 취소 시도했으나 CancelOrder 실패`);
           }
         }
       } else if (needToCancelOrder(orderedData, expactedBuyPrice, expactedSellPrice)) {
