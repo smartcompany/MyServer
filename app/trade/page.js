@@ -3,6 +3,28 @@
 import { useState, useEffect } from 'react';
 import { isTokenValid } from './utils';
 
+/** lib/kimchi-fx-delta.js effectiveKimchiPricingThresholds 와 동일한 클램프 */
+function clampEffectiveBuyPremium(value) {
+  return Math.max(-50, Math.min(50, value));
+}
+function clampEffectiveSellPremium(value) {
+  return Math.max(-50, Math.min(80, value));
+}
+
+function effectiveBuyThresholdForDisplay(rawBuy, deltaPp, fxEnabled) {
+  const b0 = Number(rawBuy);
+  if (!Number.isFinite(b0)) return null;
+  if (!fxEnabled || deltaPp == null || !Number.isFinite(Number(deltaPp))) return b0;
+  return clampEffectiveBuyPremium(b0 - Number(deltaPp));
+}
+
+function effectiveSellThresholdForDisplay(rawSell, deltaPp, fxEnabled) {
+  const s0 = Number(rawSell);
+  if (!Number.isFinite(s0)) return null;
+  if (!fxEnabled || deltaPp == null || !Number.isFinite(Number(deltaPp))) return s0;
+  return clampEffectiveSellPremium(s0 - Number(deltaPp));
+}
+
 export default function TradePage() {
   const [loginArea, setLoginArea] = useState(true);
   const [mainArea, setMainArea] = useState(false);
@@ -1469,18 +1491,41 @@ export default function TradePage() {
                               )}
                             </>
                           )}
-                          {/* 매수 대기 상태에서 매수 기준 프리미엄 표시 */}
-                          {(task.status === 'buy_pending' || task.status === 'buy_ordered') && task.buyThreshold != null && (
-                            <div style={{ fontSize: '12px', color: '#2196F3', marginTop: '5px' }}>
-                              매수 기준 프리미엄: {Number(task.buyThreshold).toFixed(2)}%
-                            </div>
-                          )}
-                          {/* 매도 대기 상태에서 매도 기준 프리미엄 표시 */}
-                          {(task.status === 'sell_pending' || task.status === 'sell_ordered') && task.sellThreshold != null && (
-                            <div style={{ fontSize: '12px', color: '#FF9800', marginTop: '5px' }}>
-                              매도 기준 프리미엄: {Number(task.sellThreshold).toFixed(2)}%
-                            </div>
-                          )}
+                          {/* 매수 대기: 보정 임계(거래 엔진과 동일) + 괄호에 설정 기준 */}
+                          {(task.status === 'buy_pending' || task.status === 'buy_ordered') && task.buyThreshold != null && (() => {
+                            const raw = Number(task.buyThreshold);
+                            const deltaPp = monitorData?.orders?.kimchiFxDeltaPp;
+                            const fxOn =
+                              Boolean(config.kimchiFxDeltaEnabled) &&
+                              deltaPp != null &&
+                              Number.isFinite(Number(deltaPp));
+                            const eff = effectiveBuyThresholdForDisplay(task.buyThreshold, deltaPp, fxOn);
+                            return (
+                              <div style={{ fontSize: '12px', color: '#2196F3', marginTop: '5px' }}>
+                                매수 기준 프리미엄:{' '}
+                                {fxOn
+                                  ? `${eff.toFixed(2)}% (기준 ${raw.toFixed(2)}%)`
+                                  : `${raw.toFixed(2)}%`}
+                              </div>
+                            );
+                          })()}
+                          {(task.status === 'sell_pending' || task.status === 'sell_ordered') && task.sellThreshold != null && (() => {
+                            const raw = Number(task.sellThreshold);
+                            const deltaPp = monitorData?.orders?.kimchiFxDeltaPp;
+                            const fxOn =
+                              Boolean(config.kimchiFxDeltaEnabled) &&
+                              deltaPp != null &&
+                              Number.isFinite(Number(deltaPp));
+                            const eff = effectiveSellThresholdForDisplay(task.sellThreshold, deltaPp, fxOn);
+                            return (
+                              <div style={{ fontSize: '12px', color: '#FF9800', marginTop: '5px' }}>
+                                매도 기준 프리미엄:{' '}
+                                {fxOn
+                                  ? `${eff.toFixed(2)}% (기준 ${raw.toFixed(2)}%)`
+                                  : `${raw.toFixed(2)}%`}
+                              </div>
+                            );
+                          })()}
                           {task.uuid && (
                             <div style={{ fontSize: '12px', color: '#666', marginTop: '5px' }}>
                               {task.status === 'buy_ordered' ? '매수' : '매도'} UUID: {task.uuid.substring(0, 20)}...
