@@ -1222,23 +1222,6 @@ async function logAccountAndMarketInfo() {
 
     console.log(`현재 테더: ${tetherPrice}원, 환율: ${rate}원, 김프(raw): ${kimchiPremium >= 0 ? '+' : ''}${kimchiPremium.toFixed(3)}%`);
 
-    const cfgM = loadConfig();
-    if (
-      cfgM.kimchiFxDeltaEnabled &&
-      kimchiFxDeltaLib &&
-      typeof kimchiFxDeltaLib.deltaAddPpForFx === 'function' &&
-      rate != null &&
-      tetherPrice != null &&
-      Number.isFinite(Number(rate))
-    ) {
-      const bucketsM = kimchiFxDeltaLib.loadKimchiFxDeltaBuckets(projectRoot);
-      const deltaGlob = kimchiFxDeltaLib.deltaAddPpForFx(Number(rate), bucketsM);
-      const premAdjApprox = kimchiPremium + deltaGlob;
-      console.log(
-        `📎 FX구간 김프 보정(전역): Δ = ${deltaGlob >= 0 ? '+' : ''}${deltaGlob.toFixed(2)}pp  →  김프(raw)+Δ ≈ ${premAdjApprox >= 0 ? '+' : ''}${premAdjApprox.toFixed(3)}% (매매 목표는 「설정김프 − Δ」로 따로 계산됨)`,
-      );
-    }
-
     return { accountInfo, rate, tetherPrice, kimchiPremium };
   }
   return null;
