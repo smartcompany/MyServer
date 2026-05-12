@@ -61,6 +61,13 @@ const NAVER_EXCHANGE_RATE_URL = 'https://finance.naver.com/marketindex/exchangeD
 // projectRoot는 위에서 이미 정의됨
 const tradeServerDir = path.join(projectRoot, 'trade-server');
 
+let kimchiFxDeltaLib = null;
+try {
+  kimchiFxDeltaLib = require(path.join(projectRoot, 'lib', 'kimchi-fx-delta.js'));
+} catch (e) {
+  console.error('⚠️ [upbit-trade] lib/kimchi-fx-delta.js 로드 실패:', e.message);
+}
+
 const ordersFilePath = path.join(tradeServerDir, 'orderState.json');
 const cashBalanceLogPath = path.join(tradeServerDir, 'cashBalance.json');
 const configFilePath = path.join(tradeServerDir, 'config.json');
@@ -139,6 +146,8 @@ const DEFAULT_ORDER_STATE = {
   command: null,
   commandParams: null,
   tetherPrice: null,
+  usdKrwRate: null,
+  kimchiFxDeltaPp: null,
 };
 
 function readOrderStateFromFile() {
@@ -716,12 +725,106 @@ function loadConfig() {
       isTradeByMoney: true,
       maxBuyExchangeRate: null,
       minSellExchangeRate: null,
+      kimchiFxDeltaEnabled: false,
     };
   }
 }
 
+/** 김프 임계(%)를 USDT Signal과 동일하게 환율 구간 델타로 조정할 때 목표 김프(%) */
+function pricingThresholdsForOrder(order, rate) {
+  const cfg = loadConfig();
+  if (
+    !kimchiFxDeltaLib ||
+    typeof kimchiFxDeltaLib.effectiveKimchiPricingThresholds !== 'function'
+  ) {
+    return {
+      buyTh: Number(order.buyThreshold),
+      sellTh: Number(order.sellThreshold),
+      deltaPp: 0,
+      applied: false,
+    };
+  }
+  return kimchiFxDeltaLib.effectiveKimchiPricingThresholds({
+    buyThreshold: order.buyThreshold,
+    sellThreshold: order.sellThreshold,
+    rate,
+    kimchiFxDeltaEnabled: Boolean(cfg.kimchiFxDeltaEnabled),
+    projectRoot,
+  });
+}
 
-async function processBuyOrder(order, orderState, rate) {
+/**
+ * 설정 김프(원본) / FX 보정 Δ / 적용 목표 김프 / 예상 지정가 · 현재 시장 김프를 한눈에.
+ * @param {string} tag 예: 매수주문생성, 매도지정가갱신
+ */
+function logKimchiFxPricingContext(orderId, tag, ctx) {
+  const {
+    rate,
+    tetherPrice,
+    buyRaw,
+    sellRaw,
+    buyTh,
+    sellTh,
+    deltaPp,
+    applied,
+    expactedBuyPrice,
+    expactedSellPrice,
+  } = ctx;
+  const r = rate != null && Number.isFinite(Number(rate)) ? Number(rate) : null;
+  const t = tetherPrice != null && Number.isFinite(Number(tetherPrice)) ? Number(tetherPrice) : null;
+  const rawPremPct = r && t ? ((t - r) / r) * 100 : null;
+
+  const br = Number(buyRaw);
+  const sr = Number(sellRaw);
+  const bEff = Number(buyTh);
+  const sEff = Number(sellTh);
+  const d = Number(deltaPp);
+
+  const fxLine =
+    r != null
+      ? `USD/KRW ${r.toLocaleString('ko-KR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+      : 'USD/KRW(없음)';
+  const tetherLine =
+    t != null
+      ? `USDT ${t.toLocaleString('ko-KR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}원`
+      : 'USDT(없음)';
+  const livePrem =
+    rawPremPct != null
+      ? `현재 김프(raw, 테더 기준) ${rawPremPct >= 0 ? '+' : ''}${rawPremPct.toFixed(3)}%`
+      : '';
+
+  let deltaExplain;
+  if (!applied) {
+    deltaExplain = 'FX구간 보정: 미적용(대시보드에서 끔 또는 USD/KRW 없음)';
+  } else if (!Number.isFinite(d) || d === 0) {
+    deltaExplain = 'FX구간 보정: 켜짐 · 이 환율 구간 Δ = 0.00pp → 적용목표 = 설정값';
+  } else {
+    deltaExplain = `FX구간 보정: 켜짐 · Δ = ${d >= 0 ? '+' : ''}${d.toFixed(2)}pp → 적용목표김프 = 설정김프 − Δ`;
+  }
+
+  console.log(
+    `[주문 ${orderId}] ═══ 김프·지정가 [${tag}] ═══ ${fxLine} · ${tetherLine}${livePrem ? ' · ' + livePrem : ''}`,
+  );
+  console.log(
+    `[주문 ${orderId}] 설정김프(대시보드): 매수 ${br.toFixed(2)}% / 매도 ${sr.toFixed(2)}%  │  ${deltaExplain}`,
+  );
+  console.log(
+    `[주문 ${orderId}] 적용목표김프(가격계산용): 매수 ${bEff.toFixed(3)}% / 매도 ${sEff.toFixed(3)}%`,
+  );
+  if (
+    expactedBuyPrice != null &&
+    expactedSellPrice != null &&
+    Number.isFinite(expactedBuyPrice) &&
+    Number.isFinite(expactedSellPrice)
+  ) {
+    console.log(
+      `[주문 ${orderId}] 예상 지정가(환율×목표김프%): 매수 ${Math.round(expactedBuyPrice)}원 · 매도 ${Math.round(expactedSellPrice)}원 (실제 호가 발주 전에 테더 시세로 상·하한 클램프될 수 있음)`,
+    );
+  }
+}
+
+
+async function processBuyOrder(order, orderState, rate, tetherPrice = null) {
   const cashBalance = loadCashBalance();
   const buyThreshold = order.buyThreshold;
   const sellThreshold = order.sellThreshold;
@@ -734,10 +837,9 @@ async function processBuyOrder(order, orderState, rate) {
   const maxBuyExchangeRate = parseExchangeRateLimit(tradingCfg.maxBuyExchangeRate);
   const rateOk = rate != null && Number.isFinite(Number(rate));
 
-  const expactedBuyPrice = Math.round(rate * (1 + buyThreshold / 100));
-  const expactedSellPrice = Math.round(rate * (1 + sellThreshold / 100));
-  
-
+  const { buyTh, sellTh, deltaPp, applied } = pricingThresholdsForOrder(order, rate);
+  const expactedBuyPrice = Math.round(rate * (1 + buyTh / 100));
+  const expactedSellPrice = Math.round(rate * (1 + sellTh / 100));
   const orderedData = await checkOrderedData(order.uuid);
   if (orderedData == null) {
     console.log(`[주문 ${order.id}] 주문 상태 확인 실패`);
@@ -748,7 +850,18 @@ async function processBuyOrder(order, orderState, rate) {
     case 'done':
       // 매수 체결 → 매도 대기 상태로 전환
       console.log(`매수 주문 처리됨: ${orderedData.price}원, 수량: ${orderedData.volume} [주문 ${order.id}]`);
-      
+      logKimchiFxPricingContext(order.id, '매수체결→매도대기', {
+        rate,
+        tetherPrice,
+        buyRaw: buyThreshold,
+        sellRaw: sellThreshold,
+        buyTh,
+        sellTh,
+        deltaPp,
+        applied,
+        expactedBuyPrice,
+        expactedSellPrice,
+      });
       // 테더 매도로 전환 (수량과 예상 매도 가격 전달)
       setSellPending(order, orderedData.volume, expactedSellPrice);
 
@@ -801,6 +914,18 @@ async function processBuyOrder(order, orderState, rate) {
           new_volume: 'remain_only',
         });
         if (cancelNewResponse && cancelNewResponse.new_order_uuid) {
+          logKimchiFxPricingContext(order.id, '매수지정가갱신(cancel_and_new)', {
+            rate,
+            tetherPrice,
+            buyRaw: buyThreshold,
+            sellRaw: sellThreshold,
+            buyTh,
+            sellTh,
+            deltaPp,
+            applied,
+            expactedBuyPrice: newPrice,
+            expactedSellPrice,
+          });
           console.log(`[주문 ${order.id}] 가격 변동 반영 (cancel_and_new) → ${newPrice}원, 새 UUID: ${cancelNewResponse.new_order_uuid}`);
           order.uuid = cancelNewResponse.new_order_uuid;
           order.price = newPrice;
@@ -815,7 +940,7 @@ async function processBuyOrder(order, orderState, rate) {
   return true; // 처리 완료
 }
 
-async function processSellOrder(order, orderState, rate) {
+async function processSellOrder(order, orderState, rate, tetherPrice = null) {
   const cashBalance = loadCashBalance();
   const buyThreshold = order.buyThreshold;
   const sellThreshold = order.sellThreshold;
@@ -829,10 +954,10 @@ async function processSellOrder(order, orderState, rate) {
   const minSellExchangeRateOrd = parseExchangeRateLimit(tradingCfgSell.minSellExchangeRate);
   const rateOkSell = rate != null && Number.isFinite(Number(rate));
 
-  // 주문 가격은 정수(원 단위)로 맞춤
-  const expactedBuyPrice = Math.round(rate * (1 + buyThreshold / 100));
-  const expactedSellPrice = Math.round(rate * (1 + sellThreshold / 100));
-
+  const { buyTh: buyThSell, sellTh: sellThSell, deltaPp: deltaPpSell, applied: appliedSell } =
+    pricingThresholdsForOrder(order, rate);
+  const expactedBuyPrice = Math.round(rate * (1 + buyThSell / 100));
+  const expactedSellPrice = Math.round(rate * (1 + sellThSell / 100));
   const orderedData = await checkOrderedData(order.uuid);
   if (orderedData == null) {
     console.log(`[주문 ${order.id}] 주문 상태 확인 실패`);
@@ -844,6 +969,18 @@ async function processSellOrder(order, orderState, rate) {
     case 'done':
       // 매도 체결 → 완료 처리
       console.log(`[주문 ${order.id}] 매도 주문 처리됨: ${orderedData.price}원, 수량: ${orderedData.volume}`);
+      logKimchiFxPricingContext(order.id, '매도체결→매수대기', {
+        rate,
+        tetherPrice,
+        buyRaw: buyThreshold,
+        sellRaw: sellThreshold,
+        buyTh: buyThSell,
+        sellTh: sellThSell,
+        deltaPp: deltaPpSell,
+        applied: appliedSell,
+        expactedBuyPrice,
+        expactedSellPrice,
+      });
       // 매도 금액을 수량으로 변환하여 매수 (매도 금액 / 김프 계산 가격)
       // 매도 체결 금액 = orderedData.volume * orderedData.price
       // 이 금액으로 매수할 수량 = 매도 금액 / expactedBuyPrice (김프 계산 가격)
@@ -901,6 +1038,18 @@ async function processSellOrder(order, orderState, rate) {
             new_volume: 'remain_only',
           });
           if (cancelNewResponse && cancelNewResponse.new_order_uuid) {
+            logKimchiFxPricingContext(order.id, '매도지정가갱신(cancel_and_new)', {
+              rate,
+              tetherPrice,
+              buyRaw: buyThreshold,
+              sellRaw: sellThreshold,
+              buyTh: buyThSell,
+              sellTh: sellThSell,
+              deltaPp: deltaPpSell,
+              applied: appliedSell,
+              expactedBuyPrice,
+              expactedSellPrice: newPrice,
+            });
             console.log(`[주문 ${order.id}] 매도 가격 변동 반영 (cancel_and_new) → ${newPrice}원, 새 UUID: ${cancelNewResponse.new_order_uuid}`);
             order.uuid = cancelNewResponse.new_order_uuid;
             order.price = newPrice;
@@ -934,9 +1083,11 @@ async function processPendingOrders(orderState, rate, tetherPrice) {
       return false; // 처리 실패
     }
 
-    let expactedBuyPrice = Math.round(rate * (1 + buyThreshold / 100));
-    let expactedSellPrice = Math.round(rate * (1 + sellThreshold / 100));
-    
+    const { buyTh: buyThPend, sellTh: sellThPend, deltaPp: deltaPpPend, applied: appliedPend } =
+      pricingThresholdsForOrder(order, rate);
+    let expactedBuyPrice = Math.round(rate * (1 + buyThPend / 100));
+    let expactedSellPrice = Math.round(rate * (1 + sellThPend / 100));
+
     // 매수 가격은 현재 테더 가격보다 낮아야 함 (현재가가 최고값)
     if (expactedBuyPrice > tetherPrice) {
       expactedBuyPrice = tetherPrice;
@@ -956,7 +1107,21 @@ async function processPendingOrders(orderState, rate, tetherPrice) {
           `[주문 ${order.id}] 매도 스킵: 현재 USD/KRW 환율 ${Number(rate).toFixed(2)} ≤ 매도 최저 환율 ${minSellExchangeRate.toFixed(2)}`,
         );
       } else if (volumeToSell > 0) {
-        console.log(`[주문 ${order.id}] 김치 ${sellThreshold.toFixed(1)}% 에, ${expactedSellPrice} 원에 ${volumeToSell} 매도 주문 걸기`);
+        logKimchiFxPricingContext(order.id, '매도주문발주', {
+          rate,
+          tetherPrice,
+          buyRaw: buyThreshold,
+          sellRaw: sellThreshold,
+          buyTh: buyThPend,
+          sellTh: sellThPend,
+          deltaPp: deltaPpPend,
+          applied: appliedPend,
+          expactedBuyPrice,
+          expactedSellPrice,
+        });
+        console.log(
+          `[주문 ${order.id}] 매도 지정가 발주: ${expactedSellPrice}원 × ${volumeToSell} USDT`,
+        );
         const sellOrder = await sellTether(expactedSellPrice, volumeToSell);
         if (sellOrder) {
           console.log(`[주문 ${order.id}] 매도 주문 성공, UUID: ${sellOrder.uuid}`);
@@ -976,7 +1141,21 @@ async function processPendingOrders(orderState, rate, tetherPrice) {
           `[주문 ${order.id}] 매수 스킵: 현재 USD/KRW 환율 ${Number(rate).toFixed(2)} ≥ 매수 최대 환율 ${maxBuyExchangeRate.toFixed(2)}`,
         );
       } else if (volumeToBuy > 0) {
-        console.log(`[주문 ${order.id}] 매수 주문 생성: 김치 ${buyThreshold.toFixed(1)}% 에, ${expactedBuyPrice} 원에 ${volumeToBuy} 매수 주문 걸기`);
+        logKimchiFxPricingContext(order.id, '매수주문발주', {
+          rate,
+          tetherPrice,
+          buyRaw: buyThreshold,
+          sellRaw: sellThreshold,
+          buyTh: buyThPend,
+          sellTh: sellThPend,
+          deltaPp: deltaPpPend,
+          applied: appliedPend,
+          expactedBuyPrice,
+          expactedSellPrice,
+        });
+        console.log(
+          `[주문 ${order.id}] 매수 지정가 발주: ${expactedBuyPrice}원 × ${volumeToBuy} USDT`,
+        );
         const buyOrder = await buyTether(expactedBuyPrice, volumeToBuy);
         if (buyOrder) {
           setBuyOrdered(order, buyOrder.uuid, buyOrder.price, buyOrder.volume); 
@@ -1041,8 +1220,25 @@ async function logAccountAndMarketInfo() {
     // 김치 프리미엄 계산
     const kimchiPremium = ((tetherPrice - rate)/rate) * 100;
 
-    console.log(`현재 테더: ${tetherPrice}원, 환율: ${rate}원, 김프: ${kimchiPremium.toFixed(2)}%`);
-    
+    console.log(`현재 테더: ${tetherPrice}원, 환율: ${rate}원, 김프(raw): ${kimchiPremium >= 0 ? '+' : ''}${kimchiPremium.toFixed(3)}%`);
+
+    const cfgM = loadConfig();
+    if (
+      cfgM.kimchiFxDeltaEnabled &&
+      kimchiFxDeltaLib &&
+      typeof kimchiFxDeltaLib.deltaAddPpForFx === 'function' &&
+      rate != null &&
+      tetherPrice != null &&
+      Number.isFinite(Number(rate))
+    ) {
+      const bucketsM = kimchiFxDeltaLib.loadKimchiFxDeltaBuckets(projectRoot);
+      const deltaGlob = kimchiFxDeltaLib.deltaAddPpForFx(Number(rate), bucketsM);
+      const premAdjApprox = kimchiPremium + deltaGlob;
+      console.log(
+        `📎 FX구간 김프 보정(전역): Δ = ${deltaGlob >= 0 ? '+' : ''}${deltaGlob.toFixed(2)}pp  →  김프(raw)+Δ ≈ ${premAdjApprox >= 0 ? '+' : ''}${premAdjApprox.toFixed(3)}% (매매 목표는 「설정김프 − Δ」로 따로 계산됨)`,
+      );
+    }
+
     return { accountInfo, rate, tetherPrice, kimchiPremium };
   }
   return null;
@@ -1150,28 +1346,38 @@ async function trade() {
   for (const order of orderState.orders) {
     // 매수 주문 대기 중인 주문 체크 (업비트에 주문 넣은 상태)
     if (order.status === 'buy_ordered') {
-      await processBuyOrder(order, orderState, rate);
+      await processBuyOrder(order, orderState, rate, tetherPrice);
       continue; // 다음 주문으로
     }
 
     // 매도 주문 대기 중인 주문 체크 (업비트에 주문 넣은 상태)
     if (order.status === 'sell_ordered') {
-      await processSellOrder(order, orderState, rate);
+      await processSellOrder(order, orderState, rate, tetherPrice);
       continue; // 다음 주문으로
     }
   }
 
-  updateCashBalnce(orderState, accountInfo, tetherPrice);
+  updateCashBalnce(orderState, accountInfo, tetherPrice, rate);
 
   // 매도 대기 또는 매수 대기 주문 처리 (sell_pending → sell_ordered, buy_pending → buy_ordered)
   await processPendingOrders(orderState, rate, tetherPrice);
 
   // 현재 테더 가격을 orderState에 저장 (요약/웹에서 재사용)
   orderState.tetherPrice = tetherPrice;
+  orderState.usdKrwRate = rate;
+  {
+    const cfgSnap = loadConfig();
+    orderState.kimchiFxDeltaPp = null;
+    if (cfgSnap.kimchiFxDeltaEnabled && kimchiFxDeltaLib && rate != null && Number.isFinite(Number(rate))) {
+      const bucketsSnap = kimchiFxDeltaLib.loadKimchiFxDeltaBuckets(projectRoot);
+      orderState.kimchiFxDeltaPp =
+        kimchiFxDeltaLib.deltaAddPpForFx(Number(rate), bucketsSnap) ?? null;
+    }
+  }
   saveOrderState(orderState);
 }
 
-function updateCashBalnce(orderState, accountInfo, tetherPrice) {
+function updateCashBalnce(orderState, accountInfo, tetherPrice, rate = null) {
   let isUpdated = false;
 
   const krwAccount = accountInfo.find(asset => asset.currency === 'KRW');
@@ -1195,8 +1401,11 @@ function updateCashBalnce(orderState, accountInfo, tetherPrice) {
             // buy_ordered 상태이고 price가 있으면 volume * price
             return sum + ((order.volume || 0) * order.price);
           } else if (order.status === 'buy_pending' && order.buyThreshold != null && tetherPrice) {
-            // buy_pending 상태일 때는 예상 가격 계산 (volume * expactedBuyPrice)
-            const expactedBuyPrice = Math.round(tetherPrice * (1 + order.buyThreshold / 100));
+            const { buyTh: buyThCash } = pricingThresholdsForOrder(order, rate);
+            const expactedBuyPrice =
+              rate != null && Number.isFinite(Number(rate))
+                ? Math.round(Number(rate) * (1 + buyThCash / 100))
+                : Math.round(tetherPrice * (1 + Number(order.buyThreshold) / 100));
             return sum + ((order.volume || 0) * expactedBuyPrice);
           }
           return sum;

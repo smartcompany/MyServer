@@ -4,6 +4,7 @@
   "sellThreshold": 2.5,
   "maxBuyExchangeRate": null,
   "minSellExchangeRate": null,
+  "kimchiFxDeltaEnabled": false,
   "isTradeByMoney": true,
   "stopTradingTimes": [
     {

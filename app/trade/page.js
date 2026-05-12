@@ -12,6 +12,7 @@ export default function TradePage() {
     sell: '',
     maxBuyExchangeRate: '',
     minSellExchangeRate: '',
+    kimchiFxDeltaEnabled: false,
     isTrading: false
   });
   const [stopTradingTimes, setStopTradingTimes] = useState([]);
@@ -188,6 +189,7 @@ export default function TradePage() {
           data.minSellExchangeRate != null && data.minSellExchangeRate !== ''
             ? String(data.minSellExchangeRate)
             : '',
+        kimchiFxDeltaEnabled: Boolean(data.kimchiFxDeltaEnabled),
         isTrading: Boolean(data.isTrading)
       });
       setIsTradeByMoney(data.isTradeByMoney ?? true);
@@ -236,6 +238,37 @@ export default function TradePage() {
       console.error('설정 업데이트 실패:', error);
       // 실패 시 이전 값으로 되돌리기
       setConfig(prev => ({ ...prev, isTrading: !isTrading }));
+    }
+  }
+
+  async function saveKimchiFxDeltaEnabled(nextVal) {
+    const token = localStorage.getItem('token');
+    if (!configLoaded) {
+      alert('설정이 아직 로드되지 않았습니다. 잠시 후 다시 시도하세요.');
+      return;
+    }
+    const checked = Boolean(nextVal);
+    try {
+      const res = await fetch('/api/trade/config', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ' + token
+        },
+        body: JSON.stringify({
+          updates: [{ key: 'kimchiFxDeltaEnabled', value: checked }]
+        })
+      });
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        alert('❌ 저장 실패: ' + (errorData.error || 'Unknown error'));
+        setConfig((prev) => ({ ...prev, kimchiFxDeltaEnabled: !checked }));
+        return;
+      }
+      setConfig((prev) => ({ ...prev, kimchiFxDeltaEnabled: checked }));
+    } catch (e) {
+      alert('❌ 저장 실패: ' + (e.message || '네트워크 오류'));
+      setConfig((prev) => ({ ...prev, kimchiFxDeltaEnabled: !checked }));
     }
   }
 
@@ -855,6 +888,16 @@ export default function TradePage() {
                   <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#4CAF50' }}>{monitorData.orders?.completed || 0}</div>
                 </div>
               </div>
+              {monitorData.orders?.usdKrwRate != null && (
+                <div style={{ fontSize: '12px', color: '#444', marginTop: '10px', paddingTop: '8px', borderTop: '1px solid #eee' }}>
+                  USD/KRW(거래 루프 기준): {Number(monitorData.orders.usdKrwRate).toLocaleString('ko-KR', { maximumFractionDigits: 2 })}원
+                  {config.kimchiFxDeltaEnabled && monitorData.orders.kimchiFxDeltaPp != null && (
+                    <span style={{ marginLeft: '8px', color: '#2e7d32' }}>
+                      · 적용 Δ: {Number(monitorData.orders.kimchiFxDeltaPp).toFixed(2)}pp
+                    </span>
+                  )}
+                </div>
+              )}
               {monitorData.timestamp && (
                 <div style={{ fontSize: '11px', color: '#999', marginTop: '10px', textAlign: 'right' }}>
                   마지막 업데이트: {new Date(monitorData.timestamp).toLocaleTimeString('ko-KR')}
@@ -955,6 +998,31 @@ export default function TradePage() {
             >
               환율 조건 저장
             </button>
+          </div>
+
+          <div style={{ marginBottom: '20px', padding: '15px', backgroundColor: '#e8f5e9', borderRadius: '4px' }}>
+            <div style={{ fontSize: '14px', fontWeight: 'bold', marginBottom: '8px', color: '#33691e' }}>
+              김프 USD/KRW 구간 보정 (USDT Signal `delta_add_pp`)
+            </div>
+            <p style={{ margin: '0 0 10px', fontSize: '12px', color: '#555', lineHeight: 1.5 }}>
+              켜면 <code style={{ fontSize: '11px' }}>trade-server/kimchi-fx-delta.json</code> 의 구간별
+              Δ(퍼센트포인트)만큼 <strong>목표 김프</strong>를 조정합니다. 실제 매매 목표 가격은{' '}
+              <code style={{ fontSize: '11px' }}>rate × (1 + (임계% − Δ) / 100)</code> 와 동일한 방식입니다
+              (USDT Signal 앱 설명과 동일).
+            </p>
+            <label style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer' }}>
+              <input
+                type="checkbox"
+                checked={config.kimchiFxDeltaEnabled}
+                disabled={!configLoaded}
+                onChange={(e) => {
+                  const v = e.target.checked;
+                  setConfig((prev) => ({ ...prev, kimchiFxDeltaEnabled: v }));
+                  saveKimchiFxDeltaEnabled(v);
+                }}
+              />
+              <span style={{ fontSize: '14px' }}>환율 구간 김프 보정 사용</span>
+            </label>
           </div>
 
           {/* 탭 내용 */}

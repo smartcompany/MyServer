@@ -22,6 +22,16 @@ function generateUUID() {
 
 const configPath = getTradeServerPath('config.json');
 
+function loadKimchiFxDeltaLib() {
+  try {
+    const nativeRequire = eval('require');
+    return nativeRequire(path.join(process.cwd(), 'lib', 'kimchi-fx-delta.js'));
+  } catch (e) {
+    console.warn('[tasks] kimchi-fx-delta 모듈 없음:', e.message);
+    return null;
+  }
+}
+
 function loadConfig() {
   try {
     if (!fs.existsSync(configPath)) {
@@ -65,7 +75,15 @@ function loadUpbitTradeModule() {
 
 // volume 계산 함수
 // tetherPriceOverride는 필수(웹에서 현재 테더 가격을 전달)
-async function calculateVolume(type, amount, isTradeByMoney, buyThreshold, sellThreshold, tetherPriceOverride) {
+async function calculateVolume(
+  type,
+  amount,
+  isTradeByMoney,
+  buyThreshold,
+  sellThreshold,
+  tetherPriceOverride,
+  options = {},
+) {
   if (isTradeByMoney) {
     const tetherPrice = Number(tetherPriceOverride);
     if (!tetherPrice || Number.isNaN(tetherPrice) || tetherPrice <= 0) {
@@ -73,18 +91,44 @@ async function calculateVolume(type, amount, isTradeByMoney, buyThreshold, sellT
     }
 
     const money = Number(amount);
+    const cfg = options.tradingConfig || {};
+    const usdKrw = options.usdKrwRate;
+    const useFxForPx =
+      typeof usdKrw === 'number' && Number.isFinite(usdKrw) && usdKrw > 0;
+    const basePx = useFxForPx ? usdKrw : tetherPrice;
+
+    let effBuy = Number(buyThreshold);
+    let effSell = Number(sellThreshold);
+    const klib = loadKimchiFxDeltaLib();
+    if (
+      cfg.kimchiFxDeltaEnabled &&
+      klib &&
+      typeof klib.effectiveKimchiPricingThresholds === 'function' &&
+      useFxForPx
+    ) {
+      const eff = klib.effectiveKimchiPricingThresholds({
+        buyThreshold,
+        sellThreshold,
+        rate: usdKrw,
+        kimchiFxDeltaEnabled: true,
+        projectRoot: process.cwd(),
+      });
+      effBuy = eff.buyTh;
+      effSell = eff.sellTh;
+    }
+
     let expactedPrice;
-    
+
     if (type === 'buy') {
       if (buyThreshold == null) {
         throw new Error('매수 작업은 buyThreshold 값이 필요합니다');
       }
-      expactedPrice = Math.round(tetherPrice * (1 + buyThreshold / 100));
+      expactedPrice = Math.round(basePx * (1 + effBuy / 100));
     } else {
       if (sellThreshold == null) {
         throw new Error('매도 작업은 sellThreshold 값이 필요합니다');
       }
-      expactedPrice = Math.round(tetherPrice * (1 + sellThreshold / 100));
+      expactedPrice = Math.round(basePx * (1 + effSell / 100));
     }
 
     const volume = Math.floor(money / expactedPrice);
@@ -153,6 +197,9 @@ export async function POST(request) {
       return Response.json({ error: 'tetherPrice는 0보다 큰 숫자여야 합니다' }, { status: 400 });
     }
 
+    const orderStateSnap = getOrderState();
+    const cfgSnap = loadConfig() || {};
+
     // volume 계산
     let volume;
     try {
@@ -162,7 +209,14 @@ export async function POST(request) {
         isTradeByMoney,
         buyThreshold,
         sellThreshold,
-        tetherPrice != null ? Number(tetherPrice) : undefined
+        tetherPrice != null ? Number(tetherPrice) : undefined,
+        {
+          tradingConfig: cfgSnap,
+          usdKrwRate:
+            typeof orderStateSnap.usdKrwRate === 'number'
+              ? orderStateSnap.usdKrwRate
+              : undefined,
+        },
       );
     } catch (error) {
       const statusCode = error.message.includes('필요합니다') || error.message.includes('0 이하') ? 400 : 500;

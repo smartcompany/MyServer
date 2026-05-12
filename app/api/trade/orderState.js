@@ -9,6 +9,8 @@ const DEFAULT_STATE = {
   command: null,
   commandParams: null,
   tetherPrice: null,
+  usdKrwRate: null,
+  kimchiFxDeltaPp: null,
 };
 
 // null 값을 제거하는 함수 (재귀적으로 객체와 배열 처리)

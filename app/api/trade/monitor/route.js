@@ -75,6 +75,9 @@ export async function GET(request) {
       },
       orders: {
         tetherPrice: orderState.tetherPrice,
+        usdKrwRate: typeof orderState.usdKrwRate === 'number' ? orderState.usdKrwRate : null,
+        kimchiFxDeltaPp:
+          typeof orderState.kimchiFxDeltaPp === 'number' ? orderState.kimchiFxDeltaPp : null,
         total: orderState.orders?.length || 0,
         buyPending: orderState.orders?.filter(o => o.status === 'buy_pending').length || 0,
         buyOrdered: orderState.orders?.filter(o => o.status === 'buy_ordered').length || 0,
