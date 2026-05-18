@@ -35,6 +35,7 @@ export default function TradePage() {
     maxBuyExchangeRate: '',
     minSellExchangeRate: '',
     kimchiFxDeltaEnabled: false,
+    kimchiFxDeltaMethod: 'equal_count_quintiles',
     isTrading: false
   });
   const [stopTradingTimes, setStopTradingTimes] = useState([]);
@@ -212,6 +213,7 @@ export default function TradePage() {
             ? String(data.minSellExchangeRate)
             : '',
         kimchiFxDeltaEnabled: Boolean(data.kimchiFxDeltaEnabled),
+        kimchiFxDeltaMethod: data.kimchiFxDeltaMethod ?? 'equal_count_quintiles',
         isTrading: Boolean(data.isTrading)
       });
       setIsTradeByMoney(data.isTradeByMoney ?? true);
@@ -291,6 +293,44 @@ export default function TradePage() {
     } catch (e) {
       alert('❌ 저장 실패: ' + (e.message || '네트워크 오류'));
       setConfig((prev) => ({ ...prev, kimchiFxDeltaEnabled: !checked }));
+    }
+  }
+
+  async function saveKimchiFxDeltaMethod(nextVal) {
+    const token = localStorage.getItem('token');
+    if (!configLoaded) {
+      alert('설정이 아직 로드되지 않았습니다. 잠시 후 다시 시도하세요.');
+      return;
+    }
+
+    const nextMethod = String(nextVal || 'equal_count_quintiles');
+    if (!['equal_count_quintiles', 'affine_fx_ratio'].includes(nextMethod)) {
+      alert('FX 보정 방법이 올바르지 않습니다.');
+      return;
+    }
+
+    try {
+      const res = await fetch('/api/trade/config', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ' + token
+        },
+        body: JSON.stringify({
+          updates: [{ key: 'kimchiFxDeltaMethod', value: nextMethod }]
+        })
+      });
+
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        alert('❌ 저장 실패: ' + (errorData.error || 'Unknown error'));
+        setConfig((prev) => ({ ...prev, kimchiFxDeltaMethod: config.kimchiFxDeltaMethod }));
+        return;
+      }
+      setConfig((prev) => ({ ...prev, kimchiFxDeltaMethod: nextMethod }));
+    } catch (e) {
+      alert('❌ 저장 실패: ' + (e.message || '네트워크 오류'));
+      setConfig((prev) => ({ ...prev, kimchiFxDeltaMethod: config.kimchiFxDeltaMethod }));
     }
   }
 
@@ -1027,8 +1067,8 @@ export default function TradePage() {
               김프 USD/KRW 구간 보정 (USDT Signal `delta_add_pp`)
             </div>
             <p style={{ margin: '0 0 10px', fontSize: '12px', color: '#555', lineHeight: 1.5 }}>
-              켜면 <code style={{ fontSize: '11px' }}>trade-server/kimchi-fx-delta.json</code> 의 구간별
-              Δ(퍼센트포인트)만큼 <strong>목표 김프</strong>를 조정합니다. 실제 매매 목표 가격은{' '}
+              켜면 <code style={{ fontSize: '11px' }}>trade-server/kimchi-fx-delta.json</code>의 선택된 방식으로
+              계산된 Δ(퍼센트포인트)만큼 <strong>목표 김프</strong>를 조정합니다. 실제 매매 목표 가격은{' '}
               <code style={{ fontSize: '11px' }}>rate × (1 + (임계% − Δ) / 100)</code> 와 동일한 방식입니다
               (USDT Signal 앱 설명과 동일).
             </p>
@@ -1045,6 +1085,30 @@ export default function TradePage() {
               />
               <span style={{ fontSize: '14px' }}>환율 구간 김프 보정 사용</span>
             </label>
+            {config.kimchiFxDeltaEnabled && (
+              <div style={{ marginTop: '10px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <div style={{ fontSize: '13px', color: '#555', minWidth: '110px' }}>Δ 계산 방식</div>
+                <select
+                  value={config.kimchiFxDeltaMethod}
+                  disabled={!configLoaded}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    setConfig((prev) => ({ ...prev, kimchiFxDeltaMethod: v }));
+                    saveKimchiFxDeltaMethod(v);
+                  }}
+                  style={{
+                    flex: 1,
+                    padding: '8px 10px',
+                    border: '1px solid #ddd',
+                    borderRadius: '4px',
+                    fontSize: '14px'
+                  }}
+                >
+                  <option value="equal_count_quintiles">equal_count_quintiles (구간표)</option>
+                  <option value="affine_fx_ratio">affine_fx_ratio (환율 비율식)</option>
+                </select>
+              </div>
+            )}
           </div>
 
           {/* 탭 내용 */}

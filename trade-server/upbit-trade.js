@@ -726,6 +726,7 @@ function loadConfig() {
       maxBuyExchangeRate: null,
       minSellExchangeRate: null,
       kimchiFxDeltaEnabled: false,
+      kimchiFxDeltaMethod: 'equal_count_quintiles',
     };
   }
 }
@@ -749,6 +750,7 @@ function pricingThresholdsForOrder(order, rate) {
     sellThreshold: order.sellThreshold,
     rate,
     kimchiFxDeltaEnabled: Boolean(cfg.kimchiFxDeltaEnabled),
+    kimchiFxDeltaMethod: cfg.kimchiFxDeltaMethod,
     projectRoot,
   });
 }
@@ -1352,9 +1354,11 @@ async function trade() {
     const cfgSnap = loadConfig();
     orderState.kimchiFxDeltaPp = null;
     if (cfgSnap.kimchiFxDeltaEnabled && kimchiFxDeltaLib && rate != null && Number.isFinite(Number(rate))) {
-      const bucketsSnap = kimchiFxDeltaLib.loadKimchiFxDeltaBuckets(projectRoot);
       orderState.kimchiFxDeltaPp =
-        kimchiFxDeltaLib.deltaAddPpForFx(Number(rate), bucketsSnap) ?? null;
+        kimchiFxDeltaLib.deltaAddPpForFxWithMethod(Number(rate), {
+          projectRoot,
+          kimchiFxDeltaMethod: cfgSnap.kimchiFxDeltaMethod,
+        }) ?? null;
     }
   }
   saveOrderState(orderState);

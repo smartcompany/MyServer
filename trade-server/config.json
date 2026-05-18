@@ -5,6 +5,7 @@
   "maxBuyExchangeRate": null,
   "minSellExchangeRate": null,
   "kimchiFxDeltaEnabled": false,
+  "kimchiFxDeltaMethod": "equal_count_quintiles",
   "isTradeByMoney": true,
   "stopTradingTimes": [
     {

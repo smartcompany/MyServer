@@ -111,6 +111,7 @@ async function calculateVolume(
         sellThreshold,
         rate: usdKrw,
         kimchiFxDeltaEnabled: true,
+        kimchiFxDeltaMethod: cfg.kimchiFxDeltaMethod,
         projectRoot: process.cwd(),
       });
       effBuy = eff.buyTh;
