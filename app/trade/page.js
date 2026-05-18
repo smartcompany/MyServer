@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { isTokenValid } from './utils';
+import KimchiFxDeltaTuningModal from './KimchiFxDeltaTuningModal';
 
 /** lib/kimchi-fx-delta.js effectiveKimchiPricingThresholds 와 동일한 클램프 */
 function clampEffectiveBuyPremium(value) {
@@ -59,6 +60,7 @@ export default function TradePage() {
   const [addingSellTask, setAddingSellTask] = useState(false);
   const [deletingTaskId, setDeletingTaskId] = useState(null);
   const [tetherPrice, setTetherPrice] = useState(null);
+  const [kimchiFxTuningOpen, setKimchiFxTuningOpen] = useState(false);
 
   useEffect(() => {
     checkAuth();
@@ -1086,7 +1088,7 @@ export default function TradePage() {
               <span style={{ fontSize: '14px' }}>환율 구간 김프 보정 사용</span>
             </label>
             {config.kimchiFxDeltaEnabled && (
-              <div style={{ marginTop: '10px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <div style={{ marginTop: '10px', display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '10px' }}>
                 <div style={{ fontSize: '13px', color: '#555', minWidth: '110px' }}>Δ 계산 방식</div>
                 <select
                   value={config.kimchiFxDeltaMethod}
@@ -1098,6 +1100,7 @@ export default function TradePage() {
                   }}
                   style={{
                     flex: 1,
+                    minWidth: '200px',
                     padding: '8px 10px',
                     border: '1px solid #ddd',
                     borderRadius: '4px',
@@ -1107,9 +1110,38 @@ export default function TradePage() {
                   <option value="equal_count_quintiles">equal_count_quintiles (구간표)</option>
                   <option value="affine_fx_ratio">affine_fx_ratio (환율 비율식)</option>
                 </select>
+                <button
+                  type="button"
+                  disabled={!configLoaded}
+                  onClick={() => setKimchiFxTuningOpen(true)}
+                  style={{
+                    padding: '8px 14px',
+                    fontSize: '13px',
+                    backgroundColor: '#388e3c',
+                    color: '#fff',
+                    border: 'none',
+                    borderRadius: '4px',
+                    cursor: configLoaded ? 'pointer' : 'default',
+                    fontWeight: 'bold',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  세부 설정
+                </button>
               </div>
             )}
           </div>
+
+          <KimchiFxDeltaTuningModal
+            open={kimchiFxTuningOpen}
+            onClose={() => setKimchiFxTuningOpen(false)}
+            onApplied={(method) => {
+              if (method) {
+                setConfig((prev) => ({ ...prev, kimchiFxDeltaMethod: method }));
+              }
+              alert('✅ kimchi-fx-delta.json에 적용했습니다.');
+            }}
+          />
 
           {/* 탭 내용 */}
           <div>
