@@ -29,6 +29,12 @@ function tuningFormFromPayload(json) {
     affineBiasPp: dm.bias_pp != null ? String(dm.bias_pp) : '0',
     affineKPpPerFxPercent:
       dm.k_pp_per_fx_percent != null ? String(dm.k_pp_per_fx_percent) : '0',
+    affineHighFxOnsetInclusive:
+      dm.high_fx_onset_inclusive != null ? String(dm.high_fx_onset_inclusive) : '',
+    affineKHiPpPerFxPercentSquared:
+      dm.k_hi_pp_per_fx_percent_squared != null
+        ? String(dm.k_hi_pp_per_fx_percent_squared)
+        : '0',
     affineClampMin: dm.clamp_min != null ? String(dm.clamp_min) : '',
     affineClampMax: dm.clamp_max != null ? String(dm.clamp_max) : '',
     bucketDeltas: buckets.map((b) => String(b.delta_add_pp ?? 0)),
@@ -120,6 +126,8 @@ export default function KimchiFxDeltaTuningModal({ open, onClose, onApplied }) {
           fx_reference: parseD(form.affineFxReference, 1450),
           bias_pp: parseD(form.affineBiasPp, 0),
           k_pp_per_fx_percent: parseD(form.affineKPpPerFxPercent, 0),
+          high_fx_onset_inclusive: parseOpt(form.affineHighFxOnsetInclusive),
+          k_hi_pp_per_fx_percent_squared: parseD(form.affineKHiPpPerFxPercentSquared, 0),
           clamp_min: parseOpt(form.affineClampMin),
           clamp_max: parseOpt(form.affineClampMax),
         },
@@ -144,6 +152,14 @@ export default function KimchiFxDeltaTuningModal({ open, onClose, onApplied }) {
             affineFxReference: String(data.tuningForm.affineFxReference ?? ''),
             affineBiasPp: String(data.tuningForm.affineBiasPp ?? ''),
             affineKPpPerFxPercent: String(data.tuningForm.affineKPpPerFxPercent ?? ''),
+            affineHighFxOnsetInclusive:
+              data.tuningForm.affineHighFxOnsetInclusive != null &&
+              data.tuningForm.affineHighFxOnsetInclusive !== ''
+                ? String(data.tuningForm.affineHighFxOnsetInclusive)
+                : '',
+            affineKHiPpPerFxPercentSquared: String(
+              data.tuningForm.affineKHiPpPerFxPercentSquared ?? '0',
+            ),
             affineClampMin:
               data.tuningForm.affineClampMin != null
                 ? String(data.tuningForm.affineClampMin)
@@ -238,6 +254,8 @@ export default function KimchiFxDeltaTuningModal({ open, onClose, onApplied }) {
                   ['기준 환율 (fx_reference)', 'affineFxReference'],
                   ['k_pp_per_fx_percent', 'affineKPpPerFxPercent'],
                   ['bias_pp', 'affineBiasPp'],
+                  ['고환율 2차 시작 (₩, 비우면 선형만)', 'affineHighFxOnsetInclusive'],
+                  ['k_hi (고환율 2차, pp/%²)', 'affineKHiPpPerFxPercentSquared'],
                   ['clamp_min (비우면 없음)', 'affineClampMin'],
                   ['clamp_max (비우면 없음)', 'affineClampMax'],
                 ].map(([label, key]) => (

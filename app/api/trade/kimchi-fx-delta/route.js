@@ -29,11 +29,14 @@ function payloadToTuningForm(json) {
       : METHOD_QUINTILES;
   const dm = json?.delta_model && typeof json.delta_model === 'object' ? json.delta_model : {};
   const buckets = Array.isArray(json?.buckets) ? json.buckets : [];
+  const onset = parseNum(dm.high_fx_onset_inclusive);
   return {
     method,
     affineFxReference: parseNum(dm.fx_reference, 1450),
     affineBiasPp: parseNum(dm.bias_pp, 0),
     affineKPpPerFxPercent: parseNum(dm.k_pp_per_fx_percent, 0),
+    affineHighFxOnsetInclusive: onset != null && onset > 0 ? onset : '',
+    affineKHiPpPerFxPercentSquared: parseNum(dm.k_hi_pp_per_fx_percent_squared, 0),
     affineClampMin: dm.clamp_min != null ? parseNum(dm.clamp_min) : '',
     affineClampMax: dm.clamp_max != null ? parseNum(dm.clamp_max) : '',
     bucketDeltas: buckets.map((b) => parseNum(b.delta_add_pp, 0)),
@@ -72,7 +75,10 @@ function applyTuningToJson(existing, body) {
     if (k == null) {
       throw new Error('k_pp_per_fx_percent가 필요합니다');
     }
-    const bias = parseNum(aff.bias_pp, 0);
+    const bias = parseNum(aff.bias_pp);
+    if (bias == null) {
+      throw new Error('bias_pp가 필요합니다');
+    }
     const deltaModel = {
       ...(out.delta_model && typeof out.delta_model === 'object' ? out.delta_model : {}),
       type: 'affine_ratio',
@@ -80,6 +86,18 @@ function applyTuningToJson(existing, body) {
       bias_pp: bias,
       k_pp_per_fx_percent: k,
     };
+    const onset = parseNum(aff.high_fx_onset_inclusive);
+    const kHi = parseNum(aff.k_hi_pp_per_fx_percent_squared, 0);
+    if (onset != null && onset > 0) {
+      deltaModel.high_fx_onset_inclusive = onset;
+    } else {
+      delete deltaModel.high_fx_onset_inclusive;
+    }
+    if (kHi != null && kHi !== 0) {
+      deltaModel.k_hi_pp_per_fx_percent_squared = kHi;
+    } else {
+      delete deltaModel.k_hi_pp_per_fx_percent_squared;
+    }
     const cmin = parseNum(aff.clamp_min);
     const cmax = parseNum(aff.clamp_max);
     if (cmin != null) deltaModel.clamp_min = cmin;
