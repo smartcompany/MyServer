@@ -26,6 +26,12 @@ function effectiveSellThresholdForDisplay(rawSell, deltaPp, fxEnabled) {
   return clampEffectiveSellPremium(s0 - Number(deltaPp));
 }
 
+function kimchiFxDeltaMethodLabel(method) {
+  return method === 'affine_fx_ratio'
+    ? '환율 비율식 (affine_fx_ratio)'
+    : '구간표 (equal_count_quintiles)';
+}
+
 export default function TradePage() {
   const [loginArea, setLoginArea] = useState(true);
   const [mainArea, setMainArea] = useState(false);
@@ -61,6 +67,8 @@ export default function TradePage() {
   const [deletingTaskId, setDeletingTaskId] = useState(null);
   const [tetherPrice, setTetherPrice] = useState(null);
   const [kimchiFxTuningOpen, setKimchiFxTuningOpen] = useState(false);
+  const [kimchiFxDeltaMethodDraft, setKimchiFxDeltaMethodDraft] = useState('equal_count_quintiles');
+  const [savingKimchiFxDeltaMethod, setSavingKimchiFxDeltaMethod] = useState(false);
 
   useEffect(() => {
     checkAuth();
@@ -203,6 +211,7 @@ export default function TradePage() {
         return;
       }
       
+      const appliedMethod = data.kimchiFxDeltaMethod ?? 'equal_count_quintiles';
       setConfig({
         buy: data.buyThreshold ?? '',
         sell: data.sellThreshold ?? '',
@@ -215,9 +224,10 @@ export default function TradePage() {
             ? String(data.minSellExchangeRate)
             : '',
         kimchiFxDeltaEnabled: Boolean(data.kimchiFxDeltaEnabled),
-        kimchiFxDeltaMethod: data.kimchiFxDeltaMethod ?? 'equal_count_quintiles',
+        kimchiFxDeltaMethod: appliedMethod,
         isTrading: Boolean(data.isTrading)
       });
+      setKimchiFxDeltaMethodDraft(appliedMethod);
       setIsTradeByMoney(data.isTradeByMoney ?? true);
       const times = data.stopTradingTimes ?? [];
       setStopTradingTimes(times);
@@ -302,15 +312,16 @@ export default function TradePage() {
     const token = localStorage.getItem('token');
     if (!configLoaded) {
       alert('설정이 아직 로드되지 않았습니다. 잠시 후 다시 시도하세요.');
-      return;
+      return false;
     }
 
     const nextMethod = String(nextVal || 'equal_count_quintiles');
     if (!['equal_count_quintiles', 'affine_fx_ratio'].includes(nextMethod)) {
       alert('FX 보정 방법이 올바르지 않습니다.');
-      return;
+      return false;
     }
 
+    setSavingKimchiFxDeltaMethod(true);
     try {
       const res = await fetch('/api/trade/config', {
         method: 'POST',
@@ -326,13 +337,23 @@ export default function TradePage() {
       if (!res.ok) {
         const errorData = await res.json().catch(() => ({}));
         alert('❌ 저장 실패: ' + (errorData.error || 'Unknown error'));
-        setConfig((prev) => ({ ...prev, kimchiFxDeltaMethod: config.kimchiFxDeltaMethod }));
-        return;
+        return false;
       }
       setConfig((prev) => ({ ...prev, kimchiFxDeltaMethod: nextMethod }));
+      setKimchiFxDeltaMethodDraft(nextMethod);
+      return true;
     } catch (e) {
       alert('❌ 저장 실패: ' + (e.message || '네트워크 오류'));
-      setConfig((prev) => ({ ...prev, kimchiFxDeltaMethod: config.kimchiFxDeltaMethod }));
+      return false;
+    } finally {
+      setSavingKimchiFxDeltaMethod(false);
+    }
+  }
+
+  async function applyKimchiFxDeltaMethod() {
+    const ok = await saveKimchiFxDeltaMethod(kimchiFxDeltaMethodDraft);
+    if (ok) {
+      alert(`✅ Δ 계산 방식을 적용했습니다: ${kimchiFxDeltaMethodLabel(kimchiFxDeltaMethodDraft)}`);
     }
   }
 
@@ -1088,46 +1109,82 @@ export default function TradePage() {
               <span style={{ fontSize: '14px' }}>환율 구간 김프 보정 사용</span>
             </label>
             {config.kimchiFxDeltaEnabled && (
-              <div style={{ marginTop: '10px', display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '10px' }}>
-                <div style={{ fontSize: '13px', color: '#555', minWidth: '110px' }}>Δ 계산 방식</div>
-                <select
-                  value={config.kimchiFxDeltaMethod}
-                  disabled={!configLoaded}
-                  onChange={(e) => {
-                    const v = e.target.value;
-                    setConfig((prev) => ({ ...prev, kimchiFxDeltaMethod: v }));
-                    saveKimchiFxDeltaMethod(v);
-                  }}
-                  style={{
-                    flex: 1,
-                    minWidth: '200px',
-                    padding: '8px 10px',
-                    border: '1px solid #ddd',
-                    borderRadius: '4px',
-                    fontSize: '14px'
-                  }}
-                >
-                  <option value="equal_count_quintiles">equal_count_quintiles (구간표)</option>
-                  <option value="affine_fx_ratio">affine_fx_ratio (환율 비율식)</option>
-                </select>
-                <button
-                  type="button"
-                  disabled={!configLoaded}
-                  onClick={() => setKimchiFxTuningOpen(true)}
-                  style={{
-                    padding: '8px 14px',
-                    fontSize: '13px',
-                    backgroundColor: '#388e3c',
-                    color: '#fff',
-                    border: 'none',
-                    borderRadius: '4px',
-                    cursor: configLoaded ? 'pointer' : 'default',
-                    fontWeight: 'bold',
-                    whiteSpace: 'nowrap',
-                  }}
-                >
-                  세부 설정
-                </button>
+              <div style={{ marginTop: '10px' }}>
+                <div style={{ fontSize: '12px', color: '#2e7d32', marginBottom: '8px' }}>
+                  현재 적용: <strong>{kimchiFxDeltaMethodLabel(config.kimchiFxDeltaMethod)}</strong>
+                </div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '10px' }}>
+                  <div style={{ fontSize: '13px', color: '#555', minWidth: '110px' }}>Δ 계산 방식</div>
+                  <select
+                    value={kimchiFxDeltaMethodDraft}
+                    disabled={!configLoaded || savingKimchiFxDeltaMethod}
+                    onChange={(e) => setKimchiFxDeltaMethodDraft(e.target.value)}
+                    style={{
+                      flex: 1,
+                      minWidth: '200px',
+                      padding: '8px 10px',
+                      border: '1px solid #ddd',
+                      borderRadius: '4px',
+                      fontSize: '14px'
+                    }}
+                  >
+                    <option value="equal_count_quintiles">equal_count_quintiles (구간표)</option>
+                    <option value="affine_fx_ratio">affine_fx_ratio (환율 비율식)</option>
+                  </select>
+                  <button
+                    type="button"
+                    disabled={!configLoaded}
+                    onClick={() => setKimchiFxTuningOpen(true)}
+                    style={{
+                      padding: '8px 14px',
+                      fontSize: '13px',
+                      backgroundColor: '#388e3c',
+                      color: '#fff',
+                      border: 'none',
+                      borderRadius: '4px',
+                      cursor: configLoaded ? 'pointer' : 'default',
+                      fontWeight: 'bold',
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    세부 설정
+                  </button>
+                  <button
+                    type="button"
+                    disabled={
+                      !configLoaded ||
+                      savingKimchiFxDeltaMethod ||
+                      kimchiFxDeltaMethodDraft === config.kimchiFxDeltaMethod
+                    }
+                    onClick={applyKimchiFxDeltaMethod}
+                    style={{
+                      padding: '8px 14px',
+                      fontSize: '13px',
+                      backgroundColor:
+                        kimchiFxDeltaMethodDraft !== config.kimchiFxDeltaMethod
+                          ? '#1976d2'
+                          : '#b0bec5',
+                      color: '#fff',
+                      border: 'none',
+                      borderRadius: '4px',
+                      cursor:
+                        !configLoaded ||
+                        savingKimchiFxDeltaMethod ||
+                        kimchiFxDeltaMethodDraft === config.kimchiFxDeltaMethod
+                          ? 'default'
+                          : 'pointer',
+                      fontWeight: 'bold',
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    {savingKimchiFxDeltaMethod ? '적용 중…' : '적용'}
+                  </button>
+                </div>
+                {kimchiFxDeltaMethodDraft !== config.kimchiFxDeltaMethod && (
+                  <div style={{ fontSize: '11px', color: '#e65100', marginTop: '6px' }}>
+                    드롭다운만 변경됨 — 거래에 반영하려면 「적용」을 누르세요.
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -1138,6 +1195,7 @@ export default function TradePage() {
             onApplied={(method) => {
               if (method) {
                 setConfig((prev) => ({ ...prev, kimchiFxDeltaMethod: method }));
+                setKimchiFxDeltaMethodDraft(method);
               }
               alert('✅ kimchi-fx-delta.json에 적용했습니다.');
             }}
