@@ -110,14 +110,6 @@ else
     echo "ℹ️  빌드 필요한 파일 변경 없음, 빌드 스킵 (정적 파일만 변경된 경우 재시작만)"
 fi
 
-# letsmeet-dashboard 빌드 (letsmeet-dashboard/ 변경 시 또는 의존성 변경 시)
-if changed "(^letsmeet-dashboard/|^package\.json$)" || [ ! -d "letsmeet-dashboard/.next" ]; then
-    echo "🔨 LetsMeet 대시보드 빌드 중..."
-    (cd letsmeet-dashboard && npm install && npm run build) || echo "⚠️  letsmeet-dashboard 빌드 실패"
-else
-    echo "ℹ️  letsmeet-dashboard 변경 없음, 빌드 스킵"
-fi
-
 # Next.js 서버는 항상 재시작 (git pull 이후 코드 반영 목적)
 # 주의: pm2의 --name 옵션은 "--" 구분자보다 앞에 와야 함 (npm start의 "--" 때문에 순서 중요)
 echo "🔄 Next.js 서버 시작 중..."
@@ -126,7 +118,6 @@ pm2 delete letsmeet-dashboard 2>/dev/null || true
 
 cd "$ROOT_DIR" || exit 1
 pm2 start npm --name nextjs-server --cwd "$ROOT_DIR" -- start
-pm2 start npm --name letsmeet-dashboard --cwd "$ROOT_DIR/letsmeet-dashboard" -- start
 NEED_PM2_SAVE=1
 
 # 나머지 봇들은 변경된 경우에만 재시작
