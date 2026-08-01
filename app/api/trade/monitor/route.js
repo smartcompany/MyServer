@@ -78,6 +78,12 @@ export async function GET(request) {
         usdKrwRate: typeof orderState.usdKrwRate === 'number' ? orderState.usdKrwRate : null,
         kimchiFxDeltaPp:
           typeof orderState.kimchiFxDeltaPp === 'number' ? orderState.kimchiFxDeltaPp : null,
+        kimchiFxTrendBelowSma:
+          typeof orderState.kimchiFxTrendBelowSma === 'boolean'
+            ? orderState.kimchiFxTrendBelowSma
+            : null,
+        kimchiFxTrendSma:
+          typeof orderState.kimchiFxTrendSma === 'number' ? orderState.kimchiFxTrendSma : null,
         total: orderState.orders?.length || 0,
         buyPending: orderState.orders?.filter(o => o.status === 'buy_pending').length || 0,
         buyOrdered: orderState.orders?.filter(o => o.status === 'buy_ordered').length || 0,

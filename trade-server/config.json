@@ -6,6 +6,8 @@
   "minSellExchangeRate": null,
   "kimchiFxDeltaEnabled": false,
   "kimchiFxDeltaMethod": "equal_count_quintiles",
+  "kimchiFxTrendFilterEnabled": false,
+  "kimchiFxTrendLookback": 50,
   "isTradeByMoney": true,
   "stopTradingTimes": [
     {

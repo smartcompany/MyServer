@@ -68,6 +68,13 @@ try {
   console.error('⚠️ [upbit-trade] lib/kimchi-fx-delta.js 로드 실패:', e.message);
 }
 
+let kimchiFxTrendLib = null;
+try {
+  kimchiFxTrendLib = require(path.join(projectRoot, 'lib', 'kimchi-fx-trend.js'));
+} catch (e) {
+  console.error('⚠️ [upbit-trade] lib/kimchi-fx-trend.js 로드 실패:', e.message);
+}
+
 const ordersFilePath = path.join(tradeServerDir, 'orderState.json');
 const cashBalanceLogPath = path.join(tradeServerDir, 'cashBalance.json');
 const configFilePath = path.join(tradeServerDir, 'config.json');
@@ -148,6 +155,8 @@ const DEFAULT_ORDER_STATE = {
   tetherPrice: null,
   usdKrwRate: null,
   kimchiFxDeltaPp: null,
+  kimchiFxTrendBelowSma: null,
+  kimchiFxTrendSma: null,
 };
 
 function readOrderStateFromFile() {
@@ -727,8 +736,26 @@ function loadConfig() {
       minSellExchangeRate: null,
       kimchiFxDeltaEnabled: false,
       kimchiFxDeltaMethod: 'equal_count_quintiles',
+      kimchiFxTrendFilterEnabled: false,
+      kimchiFxTrendLookback: 50,
     };
   }
+}
+
+/** 환율 이평 추세 평가 (필터 OFF면 below=false). */
+function getFxTrendState(rate) {
+  if (
+    !kimchiFxTrendLib ||
+    typeof kimchiFxTrendLib.evaluateFxTrend !== 'function'
+  ) {
+    return {
+      enabled: false,
+      below: false,
+      sma: null,
+      lookbackDays: 50,
+    };
+  }
+  return kimchiFxTrendLib.evaluateFxTrend(loadConfig(), rate, projectRoot);
 }
 
 /** 김프 임계(%)를 USDT Signal과 동일하게 환율 구간 델타로 조정할 때 목표 김프(%) */
@@ -838,6 +865,7 @@ async function processBuyOrder(order, orderState, rate, tetherPrice = null) {
   const tradingCfg = loadConfig();
   const maxBuyExchangeRate = parseExchangeRateLimit(tradingCfg.maxBuyExchangeRate);
   const rateOk = rate != null && Number.isFinite(Number(rate));
+  const fxTrend = getFxTrendState(rate);
 
   const { buyTh, sellTh, deltaPp, applied } = pricingThresholdsForOrder(order, rate);
   const expactedBuyPrice = Math.round(rate * (1 + buyTh / 100));
@@ -889,14 +917,19 @@ async function processBuyOrder(order, orderState, rate, tetherPrice = null) {
         console.log(`[주문 ${order.id}] 매수 부분 체결: ${buyExecuted}/${orderedData.volume} (대기 중)`);
       }
 
-      // 매수 최대 환율: 이 이상이면 가격을 올리는 cancel_and_new 대신 주문 취소 후 buy_pending (환율 내려오면 재시도)
-      if (maxBuyExchangeRate != null && rateOk && Number(rate) >= maxBuyExchangeRate) {
+      // 매수 최대 환율 또는 환율 이평 하향: 지정가 취소 후 buy_pending
+      if (
+        (maxBuyExchangeRate != null && rateOk && Number(rate) >= maxBuyExchangeRate) ||
+        (fxTrend.enabled && fxTrend.below)
+      ) {
         const remainingVol = remainingOrderVolumeUsdt(orderedData, order);
         if (remainingVol > 0) {
+          const reason =
+            fxTrend.enabled && fxTrend.below
+              ? `환율 이평(${fxTrend.lookbackDays}일) 아래 — 현재 ${Number(rate).toFixed(2)} / SMA ${fxTrend.sma}`
+              : `매수 최대 환율(${maxBuyExchangeRate}) 도달·초과 — 현재 환율 ${Number(rate).toFixed(2)}원`;
           console.log(
-            `[주문 ${order.id}] 매수 최대 환율(${maxBuyExchangeRate}) 도달·초과 — 현재 환율 ${Number(rate).toFixed(
-              2,
-            )}원 → 지정가 취소 후 buy_pending, 잔여 ${remainingVol} USDT`,
+            `[주문 ${order.id}] ${reason} → 지정가 취소 후 buy_pending, 잔여 ${remainingVol} USDT`,
           );
           const cancelResult = await cancelOrder(order.uuid);
           if (cancelResult != null) {
@@ -904,7 +937,7 @@ async function processBuyOrder(order, orderState, rate, tetherPrice = null) {
             order.uuid = null;
             saveOrderState(orderState);
           } else {
-            console.error(`[주문 ${order.id}] 매수 최대 환율로 취소 시도했으나 CancelOrder 실패`);
+            console.error(`[주문 ${order.id}] 매수 제한으로 취소 시도했으나 CancelOrder 실패`);
           }
         }
       } else if (needToCancelOrder(orderedData, expactedBuyPrice, expactedSellPrice)) {
@@ -955,6 +988,7 @@ async function processSellOrder(order, orderState, rate, tetherPrice = null) {
   const tradingCfgSell = loadConfig();
   const minSellExchangeRateOrd = parseExchangeRateLimit(tradingCfgSell.minSellExchangeRate);
   const rateOkSell = rate != null && Number.isFinite(Number(rate));
+  const fxTrendSell = getFxTrendState(rate);
 
   const { buyTh: buyThSell, sellTh: sellThSell, deltaPp: deltaPpSell, applied: appliedSell } =
     pricingThresholdsForOrder(order, rate);
@@ -1012,8 +1046,26 @@ async function processSellOrder(order, orderState, rate, tetherPrice = null) {
         console.log(`[주문 ${order.id}] 매도 부분 체결: ${sellExecuted}/${orderedData.volume} (대기 중)`);
       }
 
-      // 매도 최저 환율: 이 이하면 가격을 내리는 cancel_and_new 대신 주문 취소 후 sell_pending
-      if (minSellExchangeRateOrd != null && rateOkSell && Number(rate) <= minSellExchangeRateOrd) {
+      // 매도 최저 환율: 이평 손절이 아니면 지정가 취소 후 sell_pending
+      // 이평 손절이면 지정가 취소 후 sell_pending → 다음 루프에서 현재가 근처로 매도 유도
+      if (fxTrendSell.enabled && fxTrendSell.below) {
+        const remainingSellVol = remainingOrderVolumeUsdt(orderedData, order);
+        if (remainingSellVol > 0) {
+          console.log(
+            `[주문 ${order.id}] 환율 이평 손절(${fxTrendSell.lookbackDays}일) — 현재 ${Number(rate).toFixed(
+              2,
+            )} / SMA ${fxTrendSell.sma} → 지정가 취소 후 sell_pending, 잔여 ${remainingSellVol} USDT`,
+          );
+          const cancelSellResult = await cancelOrder(order.uuid);
+          if (cancelSellResult != null) {
+            setSellPending(order, remainingSellVol, null);
+            order.uuid = null;
+            saveOrderState(orderState);
+          } else {
+            console.error(`[주문 ${order.id}] 환율 이평 손절로 취소 시도했으나 cancelOrder 실패`);
+          }
+        }
+      } else if (minSellExchangeRateOrd != null && rateOkSell && Number(rate) <= minSellExchangeRateOrd) {
         const remainingSellVol = remainingOrderVolumeUsdt(orderedData, order);
         if (remainingSellVol > 0) {
           console.log(
@@ -1074,6 +1126,7 @@ async function processPendingOrders(orderState, rate, tetherPrice) {
   const maxBuyExchangeRate = parseExchangeRateLimit(tradingConfig.maxBuyExchangeRate);
   const minSellExchangeRate = parseExchangeRateLimit(tradingConfig.minSellExchangeRate);
   const rateOk = rate != null && Number.isFinite(Number(rate));
+  const fxTrend = getFxTrendState(rate);
 
   for (const order of orderState.orders) {
     // 매도 대기 중인 주문에 대해 매도 주문 생성 (sell_pending → sell_ordered)
@@ -1094,22 +1147,36 @@ async function processPendingOrders(orderState, rate, tetherPrice) {
     if (expactedBuyPrice > tetherPrice) {
       expactedBuyPrice = tetherPrice;
     }
-    
+
     // 매도 가격은 현재 테더 가격보다 높아야 함 (현재가가 최저값)
-    if (expactedSellPrice < tetherPrice) {
+    // 이평 손절 시에는 현재가에 가깝게 체결되도록 매도가를 테더가로 맞춤
+    if (fxTrend.enabled && fxTrend.below) {
+      expactedSellPrice = Math.round(tetherPrice);
+    } else if (expactedSellPrice < tetherPrice) {
       expactedSellPrice = tetherPrice;
     }
-    
+
     if (order.status === 'sell_pending') {
       // volume은 이미 수량으로 계산되어 있음
       const volumeToSell = order.volume;
+      const trendExit = fxTrend.enabled && fxTrend.below;
 
-      if (minSellExchangeRate != null && rateOk && Number(rate) <= minSellExchangeRate) {
+      if (
+        !trendExit &&
+        minSellExchangeRate != null &&
+        rateOk &&
+        Number(rate) <= minSellExchangeRate
+      ) {
         console.log(
           `[주문 ${order.id}] 매도 스킵: 현재 USD/KRW 환율 ${Number(rate).toFixed(2)} ≤ 매도 최저 환율 ${minSellExchangeRate.toFixed(2)}`,
         );
       } else if (volumeToSell > 0) {
-        logKimchiFxPricingContext(order.id, '매도주문발주', {
+        if (trendExit) {
+          console.log(
+            `[주문 ${order.id}] 환율 이평 손절 매도 발주 — 현재 ${Number(rate).toFixed(2)} / SMA ${fxTrend.sma}`,
+          );
+        }
+        logKimchiFxPricingContext(order.id, trendExit ? '이평손절매도발주' : '매도주문발주', {
           rate,
           tetherPrice,
           buyRaw: buyThreshold,
@@ -1127,12 +1194,12 @@ async function processPendingOrders(orderState, rate, tetherPrice) {
         const sellOrder = await sellTether(expactedSellPrice, volumeToSell);
         if (sellOrder) {
           console.log(`[주문 ${order.id}] 매도 주문 성공, UUID: ${sellOrder.uuid}`);
-          setSellOrdered(order, sellOrder.uuid, sellOrder.price, sellOrder.volume); 
+          setSellOrdered(order, sellOrder.uuid, sellOrder.price, sellOrder.volume);
           saveOrderState(orderState);
         }
       }
     }
-    
+
     // 웹에서 추가한 매수 작업 처리 (buy_pending → buy_ordered)
     if (order.status === 'buy_pending') {
       // volume은 이미 수량으로 계산되어 있음
@@ -1141,6 +1208,10 @@ async function processPendingOrders(orderState, rate, tetherPrice) {
       if (maxBuyExchangeRate != null && rateOk && Number(rate) >= maxBuyExchangeRate) {
         console.log(
           `[주문 ${order.id}] 매수 스킵: 현재 USD/KRW 환율 ${Number(rate).toFixed(2)} ≥ 매수 최대 환율 ${maxBuyExchangeRate.toFixed(2)}`,
+        );
+      } else if (fxTrend.enabled && fxTrend.below) {
+        console.log(
+          `[주문 ${order.id}] 매수 스킵: 환율 이평(${fxTrend.lookbackDays}일) 아래 — 현재 ${Number(rate).toFixed(2)} / SMA ${fxTrend.sma}`,
         );
       } else if (volumeToBuy > 0) {
         logKimchiFxPricingContext(order.id, '매수주문발주', {
@@ -1160,7 +1231,7 @@ async function processPendingOrders(orderState, rate, tetherPrice) {
         );
         const buyOrder = await buyTether(expactedBuyPrice, volumeToBuy);
         if (buyOrder) {
-          setBuyOrdered(order, buyOrder.uuid, buyOrder.price, buyOrder.volume); 
+          setBuyOrdered(order, buyOrder.uuid, buyOrder.price, buyOrder.volume);
           console.log(`[주문 ${order.id}] 매수 주문 성공, UUID: ${buyOrder.uuid}`);
           saveOrderState(orderState);
         }
@@ -1360,6 +1431,9 @@ async function trade() {
           kimchiFxDeltaMethod: cfgSnap.kimchiFxDeltaMethod,
         }) ?? null;
     }
+    const fxTrendSnap = getFxTrendState(rate);
+    orderState.kimchiFxTrendBelowSma = fxTrendSnap.enabled ? fxTrendSnap.below : null;
+    orderState.kimchiFxTrendSma = fxTrendSnap.enabled ? fxTrendSnap.sma : null;
   }
   saveOrderState(orderState);
 }

@@ -11,6 +11,9 @@ const DEFAULT_STATE = {
   tetherPrice: null,
   usdKrwRate: null,
   kimchiFxDeltaPp: null,
+  /** 환율 이평 추세: 현재가 이평 아래면 true (필터 ON일 때만 의미) */
+  kimchiFxTrendBelowSma: null,
+  kimchiFxTrendSma: null,
 };
 
 // null 값을 제거하는 함수 (재귀적으로 객체와 배열 처리)

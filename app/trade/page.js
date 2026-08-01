@@ -43,6 +43,8 @@ export default function TradePage() {
     minSellExchangeRate: '',
     kimchiFxDeltaEnabled: false,
     kimchiFxDeltaMethod: 'equal_count_quintiles',
+    kimchiFxTrendFilterEnabled: false,
+    kimchiFxTrendLookback: '50',
     isTrading: false
   });
   const [stopTradingTimes, setStopTradingTimes] = useState([]);
@@ -225,6 +227,11 @@ export default function TradePage() {
             : '',
         kimchiFxDeltaEnabled: Boolean(data.kimchiFxDeltaEnabled),
         kimchiFxDeltaMethod: appliedMethod,
+        kimchiFxTrendFilterEnabled: Boolean(data.kimchiFxTrendFilterEnabled),
+        kimchiFxTrendLookback:
+          data.kimchiFxTrendLookback != null && data.kimchiFxTrendLookback !== ''
+            ? String(data.kimchiFxTrendLookback)
+            : '50',
         isTrading: Boolean(data.isTrading)
       });
       setKimchiFxDeltaMethodDraft(appliedMethod);
@@ -305,6 +312,71 @@ export default function TradePage() {
     } catch (e) {
       alert('❌ 저장 실패: ' + (e.message || '네트워크 오류'));
       setConfig((prev) => ({ ...prev, kimchiFxDeltaEnabled: !checked }));
+    }
+  }
+
+  async function saveKimchiFxTrendFilterEnabled(nextVal) {
+    const token = localStorage.getItem('token');
+    if (!configLoaded) {
+      alert('설정이 아직 로드되지 않았습니다. 잠시 후 다시 시도하세요.');
+      return;
+    }
+    const checked = Boolean(nextVal);
+    try {
+      const res = await fetch('/api/trade/config', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ' + token
+        },
+        body: JSON.stringify({
+          updates: [{ key: 'kimchiFxTrendFilterEnabled', value: checked }]
+        })
+      });
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        alert('❌ 저장 실패: ' + (errorData.error || 'Unknown error'));
+        setConfig((prev) => ({ ...prev, kimchiFxTrendFilterEnabled: !checked }));
+        return;
+      }
+      setConfig((prev) => ({ ...prev, kimchiFxTrendFilterEnabled: checked }));
+    } catch (e) {
+      alert('❌ 저장 실패: ' + (e.message || '네트워크 오류'));
+      setConfig((prev) => ({ ...prev, kimchiFxTrendFilterEnabled: !checked }));
+    }
+  }
+
+  async function saveKimchiFxTrendLookback() {
+    const token = localStorage.getItem('token');
+    if (!configLoaded) {
+      alert('설정이 아직 로드되지 않았습니다. 잠시 후 다시 시도하세요.');
+      return;
+    }
+    const n = parseInt(String(config.kimchiFxTrendLookback ?? '').trim(), 10);
+    if (!Number.isFinite(n) || n < 2 || n > 365) {
+      alert('추세 이평 일수는 2~365 사이 정수여야 합니다.');
+      return;
+    }
+    try {
+      const res = await fetch('/api/trade/config', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ' + token
+        },
+        body: JSON.stringify({
+          updates: [{ key: 'kimchiFxTrendLookback', value: n }]
+        })
+      });
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        alert('❌ 저장 실패: ' + (errorData.error || 'Unknown error'));
+        return;
+      }
+      setConfig((prev) => ({ ...prev, kimchiFxTrendLookback: String(n) }));
+      alert(`✅ 추세 이평 ${n}일로 저장했습니다.`);
+    } catch (e) {
+      alert('❌ 저장 실패: ' + (e.message || '네트워크 오류'));
     }
   }
 
@@ -981,6 +1053,29 @@ export default function TradePage() {
                       · 적용 Δ: {Number(monitorData.orders.kimchiFxDeltaPp).toFixed(2)}pp
                     </span>
                   )}
+                  {config.kimchiFxTrendFilterEnabled && (
+                    <span
+                      style={{
+                        marginLeft: '8px',
+                        color:
+                          monitorData.orders.kimchiFxTrendBelowSma === true
+                            ? '#c62828'
+                            : '#00695c',
+                      }}
+                    >
+                      · 이평
+                      {monitorData.orders.kimchiFxTrendSma != null
+                        ? ` ${Number(monitorData.orders.kimchiFxTrendSma).toLocaleString('ko-KR', {
+                            maximumFractionDigits: 1,
+                          })}`
+                        : ''}
+                      {monitorData.orders.kimchiFxTrendBelowSma === true
+                        ? ' (아래·매수제한/손절)'
+                        : monitorData.orders.kimchiFxTrendBelowSma === false
+                          ? ' (위)'
+                          : ''}
+                    </span>
+                  )}
                 </div>
               )}
               {monitorData.timestamp && (
@@ -1083,6 +1178,68 @@ export default function TradePage() {
             >
               환율 조건 저장
             </button>
+          </div>
+
+          <div style={{ marginBottom: '20px', padding: '15px', backgroundColor: '#e0f2f1', borderRadius: '4px' }}>
+            <div style={{ fontSize: '14px', fontWeight: 'bold', marginBottom: '8px', color: '#00695c' }}>
+              환율 이평 추세 필터·손절 (USDT Signal과 동일)
+            </div>
+            <p style={{ margin: '0 0 10px', fontSize: '12px', color: '#555', lineHeight: 1.5 }}>
+              기본은 꺼져 있습니다. 켜면 <code style={{ fontSize: '11px' }}>data/usd_krw_hour.json</code> 시간봉으로
+              N일×24봉 SMA를 계산해, 현재 환율이 이평 아래일 때 매수를 막고 보유 중이면 현재가 근처로 손절 매도합니다.
+            </p>
+            <label style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer', marginBottom: '10px' }}>
+              <input
+                type="checkbox"
+                checked={config.kimchiFxTrendFilterEnabled}
+                disabled={!configLoaded}
+                onChange={(e) => {
+                  const v = e.target.checked;
+                  setConfig((prev) => ({ ...prev, kimchiFxTrendFilterEnabled: v }));
+                  saveKimchiFxTrendFilterEnabled(v);
+                }}
+              />
+              <span style={{ fontSize: '14px' }}>환율 이평 추세 필터·손절 사용</span>
+            </label>
+            <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '10px' }}>
+              <div style={{ fontSize: '13px', color: '#555' }}>추세 이평(일)</div>
+              <input
+                type="number"
+                min={2}
+                max={365}
+                step={1}
+                value={config.kimchiFxTrendLookback}
+                disabled={!configLoaded}
+                onChange={(e) =>
+                  setConfig((prev) => ({ ...prev, kimchiFxTrendLookback: e.target.value }))
+                }
+                style={{
+                  width: '100px',
+                  padding: '8px 10px',
+                  border: '1px solid #ddd',
+                  borderRadius: '4px',
+                  fontSize: '14px',
+                }}
+                placeholder="예: 50"
+              />
+              <button
+                type="button"
+                disabled={!configLoaded}
+                onClick={saveKimchiFxTrendLookback}
+                style={{
+                  padding: '8px 14px',
+                  fontSize: '13px',
+                  backgroundColor: '#00897b',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '4px',
+                  cursor: 'pointer',
+                  fontWeight: 'bold',
+                }}
+              >
+                이평 일수 저장
+              </button>
+            </div>
           </div>
 
           <div style={{ marginBottom: '20px', padding: '15px', backgroundColor: '#e8f5e9', borderRadius: '4px' }}>
