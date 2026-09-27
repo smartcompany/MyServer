@@ -33,7 +33,6 @@ if (envResult.error) {
 }
 
 const axios = require('axios');
-const cheerio = require('cheerio');
 const querystring = require('querystring');
 const crypto = require('crypto');
 const jwt = require('jsonwebtoken');
@@ -56,7 +55,7 @@ if (!ACCESS_KEY || !SECRET_KEY) {
   console.error(`   .env 파일 경로: ${envPath}`);
 } 
 const SERVER_URL = 'https://api.upbit.com';
-const NAVER_EXCHANGE_RATE_URL = 'https://finance.naver.com/marketindex/exchangeDailyQuote.naver?marketindexCd=FX_USDKRW';
+const NAVER_EXCHANGE_RATE_URL = 'https://api.stock.naver.com/marketindex/exchange/FX_USDKRW';
 
 // projectRoot는 위에서 이미 정의됨
 const tradeServerDir = path.join(projectRoot, 'trade-server');
@@ -583,35 +582,27 @@ async function getActiveOrders() {
   }
 }
 
+function isValidExchangeRate(rate) {
+  const n = Number(rate);
+  return Number.isFinite(n) && n > 0;
+}
+
+function parseNaverUsdKrw(data) {
+  const info = data?.exchangeInfo;
+  const calc = Number(info?.calcPrice);
+  if (Number.isFinite(calc) && calc > 0) return calc;
+  const close = parseFloat(String(info?.closePrice ?? '').replace(/,/g, ''));
+  if (Number.isFinite(close) && close > 0) return close;
+  return null;
+}
+
 async function getExchangeRate() {
   try {
-    // 네이버 환율 페이지에서 직접 스크래핑
-    const response = await axios.get(`${NAVER_EXCHANGE_RATE_URL}&page=1`);
-    if (response.status === 200) {
-      const $ = cheerio.load(response.data);
-      const rows = $('table.tbl_exchange tbody tr');
-      
-      // 첫 번째 행이 오늘 날짜의 최신 환율
-      if (rows.length > 0) {
-        const firstRow = rows.first();
-        const tds = firstRow.find('td');
-        const rateStr = $(tds[1]).text().trim().replace(/,/g, '');
-        const rate = parseFloat(rateStr);
-        
-        if (!isNaN(rate)) {
-          return rate;
-        } else {
-          console.error('Error: 환율 파싱 실패 - 숫자로 변환할 수 없음:', rateStr);
-          return null;
-        }
-      } else {
-        console.error('Error: 환율 데이터를 찾을 수 없음');
-        return null;
-      }
-    } else {
-      console.error(`Error: ${response.status}, ${response.data}`);
-      return null;
-    }
+    const response = await axios.get(NAVER_EXCHANGE_RATE_URL);
+    const rate = parseNaverUsdKrw(response.data);
+    if (rate != null) return rate;
+    console.error('Error: 환율 데이터를 찾을 수 없음', response.data);
+    return null;
   } catch (error) {
     console.error('Error fetching exchange rate:', error.message);
     return null;
@@ -940,7 +931,12 @@ async function processBuyOrder(order, orderState, rate, tetherPrice = null) {
             console.error(`[주문 ${order.id}] 매수 제한으로 취소 시도했으나 CancelOrder 실패`);
           }
         }
-      } else if (needToCancelOrder(orderedData, expactedBuyPrice, expactedSellPrice)) {
+      } else if (
+        rateOk &&
+        Number.isFinite(expactedBuyPrice) &&
+        expactedBuyPrice > 0 &&
+        needToCancelOrder(orderedData, expactedBuyPrice, expactedSellPrice)
+      ) {
         // 가격 변동 체크 → 취소 없이 가격만 변경 (cancel_and_new)
         const newPrice = Math.round(expactedBuyPrice);
         const cancelNewResponse = await cancelAndNewOrder(order.uuid, {
@@ -1082,7 +1078,12 @@ async function processSellOrder(order, orderState, rate, tetherPrice = null) {
             console.error(`[주문 ${order.id}] 매도 최저 환율로 취소 시도했으나 cancelOrder 실패`);
           }
         }
-      } else if (needToCancelOrder(orderedData, expactedBuyPrice, expactedSellPrice)) {
+      } else if (
+        rateOkSell &&
+        Number.isFinite(expactedSellPrice) &&
+        expactedSellPrice > 0 &&
+        needToCancelOrder(orderedData, expactedBuyPrice, expactedSellPrice)
+      ) {
         try {
           const newPrice = Math.round(expactedSellPrice);
           console.log(`[주문 ${order.id}] 매도 가격 변경 시도 (cancel_and_new) → ${newPrice}원, 기존 UUID: ${order.uuid}`);
@@ -1125,8 +1126,13 @@ async function processPendingOrders(orderState, rate, tetherPrice) {
   const tradingConfig = loadConfig();
   const maxBuyExchangeRate = parseExchangeRateLimit(tradingConfig.maxBuyExchangeRate);
   const minSellExchangeRate = parseExchangeRateLimit(tradingConfig.minSellExchangeRate);
-  const rateOk = rate != null && Number.isFinite(Number(rate));
+  const rateOk = isValidExchangeRate(rate);
   const fxTrend = getFxTrendState(rate);
+
+  if (!rateOk) {
+    console.error('환율이 없어 대기 중인 매수·매도 주문 발주를 건너뜁니다.');
+    return;
+  }
 
   for (const order of orderState.orders) {
     // 매도 대기 중인 주문에 대해 매도 주문 생성 (sell_pending → sell_ordered)
@@ -1150,10 +1156,20 @@ async function processPendingOrders(orderState, rate, tetherPrice) {
 
     // 매도 가격은 현재 테더 가격보다 높아야 함 (현재가가 최저값)
     // 이평 손절 시에는 현재가에 가깝게 체결되도록 매도가를 테더가로 맞춤
+    // 환율이 없어 계산가가 0·NaN이면 현재가로 올리지 않는다 (시장가 체결 방지)
     if (fxTrend.enabled && fxTrend.below) {
       expactedSellPrice = Math.round(tetherPrice);
-    } else if (expactedSellPrice < tetherPrice) {
+    } else if (
+      Number.isFinite(expactedSellPrice) &&
+      expactedSellPrice > 0 &&
+      expactedSellPrice < tetherPrice
+    ) {
       expactedSellPrice = tetherPrice;
+    }
+
+    if (!Number.isFinite(expactedSellPrice) || expactedSellPrice <= 0) {
+      console.error(`[주문 ${order.id}] 매도가가 유효하지 않아 발주를 건너뜁니다: ${expactedSellPrice}`);
+      continue;
     }
 
     if (order.status === 'sell_pending') {
@@ -1397,6 +1413,19 @@ async function trade() {
   }
   
   const { accountInfo, rate, tetherPrice, kimchiPremium } = marketInfo;
+
+  if (!isValidExchangeRate(rate)) {
+    orderState.usdKrwRate = null;
+    orderState.kimchiFxDeltaPp = null;
+    if (tetherPrice != null && Number.isFinite(Number(tetherPrice))) {
+      orderState.tetherPrice = tetherPrice;
+    }
+    saveOrderState(orderState);
+    console.error(
+      '⏸️ 환율을 가져오지 못해 이번 루프의 주문 발주·가격 변경을 건너뜁니다. 이미 걸려 있는 지정가는 유지합니다.',
+    );
+    return;
+  }
 
   // 다중 주문 처리: 각 주문의 상태 확인 및 업데이트
   for (const order of orderState.orders) {

@@ -3,13 +3,11 @@ import jwt from 'jsonwebtoken';
 import { v4 as uuidv4 } from 'uuid';
 import { bybitPublicGet } from '../bybit';
 import axios from 'axios';
-import * as cheerio from 'cheerio';
 
 const UPBIT_ACC_KEY = process.env.UPBIT_ACC_KEY;
 const UPBIT_SEC_KEY = process.env.UPBIT_SEC_KEY;
 const UPBIT_SERVER = 'https://api.upbit.com';
-const NAVER_EXCHANGE_RATE_URL =
-  'https://finance.naver.com/marketindex/exchangeDailyQuote.naver?marketindexCd=FX_USDKRW';
+const NAVER_EXCHANGE_RATE_URL = 'https://api.stock.naver.com/marketindex/exchange/FX_USDKRW';
 
 function makeUpbitToken() {
   if (!UPBIT_ACC_KEY || !UPBIT_SEC_KEY) {
@@ -126,21 +124,15 @@ export async function GET(request) {
       result.priceError = `가격 조회 실패: ${e?.message || '네트워크 오류'}`;
     }
 
-    // 4) 환율 (USD/KRW) - 네이버 환율 페이지 사용
+    // 4) 환율 (USD/KRW) - 네이버 증권 JSON (하나은행 매매기준율)
     try {
-      const response = await axios.get(`${NAVER_EXCHANGE_RATE_URL}&page=1`);
-      if (response.status === 200) {
-        const $ = cheerio.load(response.data);
-        const rows = $('table.tbl_exchange tbody tr');
-        if (rows.length > 0) {
-          const firstRow = rows.first();
-          const tds = firstRow.find('td');
-          const rateStr = $(tds[1]).text().trim().replace(/,/g, '');
-          const rate = parseFloat(rateStr);
-          if (!isNaN(rate)) {
-            result.usdKrwRate = rate;
-          }
-        }
+      const response = await axios.get(NAVER_EXCHANGE_RATE_URL);
+      const info = response.data?.exchangeInfo;
+      const calc = Number(info?.calcPrice);
+      const close = parseFloat(String(info?.closePrice ?? '').replace(/,/g, ''));
+      const rate = Number.isFinite(calc) && calc > 0 ? calc : close;
+      if (Number.isFinite(rate) && rate > 0) {
+        result.usdKrwRate = rate;
       }
     } catch {
       // 환율이 없어도 나머지는 동작 가능

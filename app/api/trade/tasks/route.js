@@ -200,6 +200,13 @@ export async function POST(request) {
 
     const orderStateSnap = getOrderState();
     const cfgSnap = loadConfig() || {};
+    const usdKrwSnap = Number(orderStateSnap.usdKrwRate);
+    if (!Number.isFinite(usdKrwSnap) || usdKrwSnap <= 0) {
+      return Response.json(
+        { error: '환율을 가져오지 못해 작업을 추가할 수 없습니다. 환율이 확인된 뒤 다시 시도해주세요.' },
+        { status: 400 },
+      );
+    }
 
     // volume 계산
     let volume;

@@ -32,6 +32,14 @@ function kimchiFxDeltaMethodLabel(method) {
     : '구간표 (equal_count_quintiles)';
 }
 
+const MISSING_EXCHANGE_RATE_MESSAGE =
+  '환율을 가져오지 못해 작업을 추가할 수 없습니다. 환율이 확인된 뒤 다시 시도해주세요.';
+
+function hasUsdKrwRate(monitorData) {
+  const n = Number(monitorData?.orders?.usdKrwRate);
+  return Number.isFinite(n) && n > 0;
+}
+
 export default function TradePage() {
   const [loginArea, setLoginArea] = useState(true);
   const [mainArea, setMainArea] = useState(false);
@@ -722,6 +730,11 @@ export default function TradePage() {
       return;
     }
 
+    if (!hasUsdKrwRate(monitorData)) {
+      alert(MISSING_EXCHANGE_RATE_MESSAGE);
+      return;
+    }
+
     setAddingBuyTask(true);
 
     // 작업 추가
@@ -792,6 +805,11 @@ export default function TradePage() {
     
     if (isTradeByMoney && (tetherPrice == null || Number(tetherPrice) <= 0)) {
       alert('테더 가격을 아직 불러오지 못했습니다. 잠시 후 다시 시도해주세요.');
+      return;
+    }
+
+    if (!hasUsdKrwRate(monitorData)) {
+      alert(MISSING_EXCHANGE_RATE_MESSAGE);
       return;
     }
     
